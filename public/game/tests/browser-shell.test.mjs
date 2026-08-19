@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-test('browser shell has persistent Phaser host and DOM HUD surfaces', async () => {
+test('browser shell has a persistent world host and DOM HUD surfaces', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(html, /id="phaser-world"/);
+  assert.match(html, /id="world-surface"/);
+  assert.doesNotMatch(html, /phaser/i, 'Phaser was removed; no naming may survive it');
   assert.match(html, /id="world-hud"/);
   assert.match(html, /id="machine-view"/);
   assert.match(html, /id="civilization-view"/);
@@ -18,28 +19,27 @@ test('browser entrypoint wires game engine, DOM UI and world renderer', async ()
   assert.match(source, /requestAnimationFrame/);
 });
 
-test('production boot keeps the Canvas renderer independent from optional Phaser code', async () => {
+test('the Canvas renderer is the only renderer and loads no remote code', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /<script[^>]+src="https?:\/\//);
-  assert.match(world, /class FallbackWorld/);
-  assert.match(world, /fallback\s*=\s*new FallbackWorld/);
-});
-
-test('production shell keeps the deterministic Canvas renderer instead of an unverified Phaser handoff', async () => {
-  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  assert.doesNotMatch(html, /vendor\/phaser\.min\.js/);
-  assert.doesNotMatch(html, /phaser-ready/);
+  assert.match(world, /class CanvasWorld/);
+  assert.match(world, /world\s*=\s*new CanvasWorld/);
+  assert.doesNotMatch(world, /phaser/i, 'the Phaser branch must be gone, not merely unused');
 });
 
 test('world renderer separates cached scenery from throttled atmosphere and decision impulses', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /structuralWorldKey/);
-  assert.match(world, /skyLayer/);
-  assert.match(world, /terrainLayer/);
-  assert.match(world, /settlementLayer/);
-  assert.match(world, /atmosphereLayer/);
-  assert.match(world, /impulseLayer/);
+  // Cached scenery lives on the static canvas and is redrawn only on a structural key change.
+  assert.match(world, /private staticCanvas/);
+  assert.match(world, /private dynamicCanvas/);
+  assert.match(world, /drawSkyContent/);
+  assert.match(world, /drawTerrainContent/);
+  assert.match(world, /drawSettlementContent/);
+  // Atmosphere and impulses are redrawn every throttled frame instead.
+  assert.match(world, /drawDynamicContent/);
+  assert.match(world, /drawDecisionImpulse/);
   assert.match(world, /DYNAMIC_FRAME_MS\s*=\s*33/);
   assert.match(world, /prefers-reduced-motion/);
   assert.match(world, /worldImpulse/);
@@ -47,9 +47,9 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
 
 test('dynamic world state is sampled independently from cached structural scenery', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /const dynamicSnapshot\s*=\s*worldSnapshot\(civ,\s*width\)/);
+  assert.match(world, /const dynamicSnapshot\s*=\s*worldSnapshot\(civ,\s*this\.width\)/);
   assert.match(world, /const dynamicPresentation\s*=\s*worldPresentation\(civ\)/);
-  assert.match(world, /drawAtmosphere\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
+  assert.match(world, /drawDynamicContent\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
 });
 
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {
@@ -59,49 +59,17 @@ test('reduced-motion mode freezes ambient movement and uses a static decision si
   assert.match(world, /function drawDecisionImpulse[\s\S]{0,700}if \(reducedMotion\)/);
 });
 
-test('Phaser resizes after its previously hidden host becomes visible', async () => {
+test('renderer re-measures its host every frame so a hidden host recovers when shown', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /create\(this:\s*any\)[\s\S]{0,1200}this\.scale\.resize\(Math\.max\(320, host\.clientWidth\)/);
+  assert.match(world, /private loop[\s\S]{0,400}getBoundingClientRect\(\)/);
+  assert.match(world, /rect\.width !== this\.width \|\| rect\.height !== this\.height/);
 });
 
-test('renderer falls back to Canvas when Phaser construction fails', async () => {
-  const originals = Object.fromEntries(['window','document','ResizeObserver','requestAnimationFrame','cancelAnimationFrame','Phaser'].map(key => [key, globalThis[key]]));
-  const context = {};
-  const canvases = [];
-  const canvas = () => ({ className:'', style:{}, getContext:()=>context, addEventListener:()=>{}, setPointerCapture:()=>{}, remove:()=>{} });
-  globalThis.window = { addEventListener:()=>{}, removeEventListener:()=>{} };
-  globalThis.document = { createElement:()=>canvas() };
-  globalThis.ResizeObserver = class { observe(){} disconnect(){} };
-  globalThis.requestAnimationFrame = () => 7;
-  globalThis.cancelAnimationFrame = () => {};
-  globalThis.Phaser = { Game: class { constructor(){ throw new Error('WebGL unavailable'); } }, AUTO:0, Scale:{RESIZE:0,CENTER_BOTH:0} };
-  const host = { clientWidth:640, clientHeight:480, appendChild:node=>{canvases.push(node);}, replaceChildren:()=>{}, getBoundingClientRect:()=>({width:640,height:480}) };
-  const engine = { state:{phase:'civilization',civilization:{}}, onChange:()=>()=>{} };
-  try {
-    const { startWorldRenderer } = await import(`../dist/render/world.js?fallback-test=${Date.now()}`);
-    const controller = startWorldRenderer(engine,host);
-    assert.deepEqual(canvases.map(node=>node.className), ['fallback-canvas fallback-static','fallback-canvas fallback-dynamic']);
-    controller.destroy();
-  } finally {
-    for (const [key,value] of Object.entries(originals)) value===undefined ? delete globalThis[key] : globalThis[key]=value;
-  }
-});
-
-test('renderer contains delayed Phaser scene failures and activates fallback', async () => {
+test('renderer tears down its canvases and timing state when the civilization ends', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /const activateFallback/);
-  assert.match(world, /create\(this:\s*any\)\s*\{[\s\S]{0,220}try\s*\{/);
-  assert.match(world, /update\(this:\s*any,\s*time:\s*number\)\s*\{[\s\S]{0,220}try\s*\{/);
-  assert.match(world, /queueMicrotask\(activateFallback\)/);
-});
-
-test('renderer clears per-civilization caches and impulses on teardown', async () => {
-  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /function resetRenderState|const resetRenderState/);
-  assert.match(world, /lastStage\s*=\s*-1/);
-  assert.match(world, /activeFeedback\s*=\s*null/);
-  assert.match(world, /feedbackStartTime\s*=\s*0/);
-  assert.match(world, /fallback\?\.destroy\(\);[\s\S]{0,160}resetRenderState\(\)/);
+  assert.match(world, /destroy\(\):\s*void\s*\{[\s\S]{0,220}cancelAnimationFrame/);
+  assert.match(world, /this\.tracker\.reset\(\)/);
+  assert.match(world, /host\.replaceChildren\(\)/);
 });
 
 test('Canvas fallback keeps cached scenery separate from reactive effects', async () => {
@@ -191,4 +159,16 @@ test('Harvest projection names grade, credits, and Directive objective bonus', a
   assert.match(app, /HARVEST GRADE/);
   assert.match(app, /Cultivation Credit/);
   assert.match(app, /OBJECTIVE BONUS/);
+});
+
+test('save reset never depends on a native modal dialog', async () => {
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  // confirm() is suppressed in fullscreen, in installed fullscreen PWAs and in embedded frames,
+  // which are exactly the contexts this app ships in. The reset must confirm inside the page.
+  assert.doesNotMatch(main, /confirm\s*\(/);
+  assert.doesNotMatch(main, /alert\s*\(/);
+  assert.doesNotMatch(main, /prompt\s*\(/);
+  assert.match(main, /#reset-save/);
+  assert.match(main, /deleteSave\(\)/);
+  assert.match(main, /armed/i, 'reset must require a second, explicit in-page confirmation');
 });

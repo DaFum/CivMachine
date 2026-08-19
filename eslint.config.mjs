@@ -13,7 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // The independently compiled browser-game release has its own TypeScript
-    // build and regression suite. Its generated bundle also vendors Phaser.
+    // build and regression suite.
     "public/game/**",
   ]),
 ]);

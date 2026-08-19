@@ -1,6 +1,6 @@
-# Reality Consumption Engine — App Edition v1.3.1
+# Reality Consumption Engine — App Edition v1.4.0
 
-An installable, offline-capable browser incremental roguelite. Version 1.3.1
+An installable, offline-capable browser incremental roguelite. Version 1.4.0
 balances the active Civilization loop around meaningful tactical Control,
 multi-run machine progression, and distinct Controlled/Chaotic harvest roles.
 
@@ -20,7 +20,9 @@ multi-run machine progression, and distinct Controlled/Chaotic harvest roles.
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
 
-## v1.3.1 balance curve
+## v1.4.0 balance curve
+
+Balance is unchanged from v1.3.1; v1.4.0 only rebuilds the Civilization world renderer.
 
 - Accelerate costs 2 Control, so base intervention recharge cannot fund it after every decision.
 - The first qualified run normally funds one or two machine levels; early prices now start at 90–220 with 1.60–1.75 growth.
@@ -70,6 +72,6 @@ static content under `public/game/`, so it is served straight from the CDN.
 
 ## Save policy
 
-Version 1.3.1 continues the existing v2 browser save without migration or reset.
+Version 1.4.0 continues the existing v2 browser save without migration or reset.
 Earlier v1 saves remain ignored. Saves use `localStorage`; no offline progress is
 simulated while the app is closed.

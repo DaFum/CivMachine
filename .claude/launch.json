@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "next-shell",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "game-standalone",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["public/game/server.mjs"],
+      "port": 8080
+    }
+  ]
+}

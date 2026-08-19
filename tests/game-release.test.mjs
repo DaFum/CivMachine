@@ -22,16 +22,16 @@ test('bundled game exposes the playable surfaces', async () => {
 
   assert.match(html, /id="machine-view"/);
   assert.match(html, /id="civilization-view"/);
-  assert.match(html, /id="phaser-world"/);
+  assert.match(html, /id="world-surface"/);
 });
 
-test('game boots without optional Phaser or remote runtime scripts', async () => {
+test('game boots without any bundled framework or remote runtime scripts', async () => {
   const html = await readFile(
     new URL('../public/game/index.html', import.meta.url),
     'utf8',
   );
 
-  assert.doesNotMatch(html, /\.\/vendor\/phaser\.min\.js/);
+  assert.doesNotMatch(html, /phaser/i);
   assert.doesNotMatch(html, /<script[^>]+src="https?:\/\//);
 });
 
@@ -79,7 +79,7 @@ test('service worker precaches the shell, game, content and deterministic Canvas
 
   assert.match(worker, /['"]\/game\/index\.html['"]/);
   assert.match(worker, /['"]\/game\/dist\/data\/content\.generated\.js['"]/);
-  assert.doesNotMatch(worker, /['"]\/game\/vendor\/phaser\.min\.js['"]/);
+  assert.doesNotMatch(worker, /phaser/i);
   assert.match(worker, /['"]\/game\/dist\/data\/intervention-copy\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/intervention-scheduler\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/decision-feedback\.js['"]/);
@@ -91,17 +91,17 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /['"]\/game\/dist\/game\/upgrade-balance\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js\.map['"]/);
   assert.match(worker, /['"]\/game\/dist\/render\/world-presentation\.js['"]/);
-  assert.match(worker, /rce-app-v1\.3\.1['"]/);
+  assert.match(worker, /rce-app-v1\.4\.0['"]/);
   assert.match(worker, /caches\.delete/);
 });
 
-test('release metadata identifies browser app v1.3.1', async () => {
+test('release metadata identifies browser app v1.4.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const gamePackage = JSON.parse(await readFile(new URL('../public/game/package.json', import.meta.url), 'utf8'));
   const html = await readFile(new URL('../public/game/index.html', import.meta.url), 'utf8');
-  assert.equal(rootPackage.version, '1.3.1');
-  assert.equal(gamePackage.version, '1.3.1');
-  assert.match(html, /Browser v1\.3\.1/);
+  assert.equal(rootPackage.version, '1.4.0');
+  assert.equal(gamePackage.version, '1.4.0');
+  assert.match(html, /Browser v1\.4\.0/);
 });
 
 test('game surface protects mobile safe areas and dynamic viewport height', async () => {

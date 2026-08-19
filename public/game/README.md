@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.3.1
+# Reality Consumption Engine — App Edition v1.4.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer.
 
@@ -47,7 +47,7 @@ npm test
 ## Browser architecture
 
 - `src/game/` — deterministic simulation, progression, prestige, saves, intervention paths
-- `src/render/` — Phaser civilization renderer and Canvas fallback
+- `src/render/` — deterministic Canvas civilization renderer
 - `src/ui/` — responsive DOM HUD, panels, controls, intervention choices
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
@@ -84,7 +84,9 @@ npm test
 - device-pixel-ratio cap of 2 for the Canvas fallback
 - no offline progression
 
-## v1.3.1 balance curve
+## v1.4.0 balance curve
+
+Balance is unchanged from v1.3.1; v1.4.0 only rebuilds the Civilization world renderer.
 
 - Accelerate costs 2 Control and therefore cannot self-fund from ordinary intervention recharge.
 - Machine upgrades use a 90–220 early base-cost range and 1.60–1.75 growth; a first qualified run normally buys one or two levels.
@@ -94,8 +96,8 @@ npm test
 
 ## Renderer behavior
 
-The production boot uses the built-in deterministic Canvas renderer. Structural scenery is cached and rebuilt only when meaningful state bands change; atmosphere, settlement lights, traffic, and decision impulses update independently. The runtime remains compatible with an optional Phaser host, but the game never depends on it to display the Civilization world.
+The production boot uses the built-in deterministic Canvas renderer. Structural scenery is cached and rebuilt only when meaningful state bands change; atmosphere, settlement lights, traffic, and decision impulses update independently. There is no second renderer and no game framework: the Civilization world is drawn entirely with Canvas 2D.
 
 ## Save data
 
-Version 1.3.1 continues to use the existing v2 `localStorage` key without migration or reset. v1 browser saves and Godot saves remain unsupported. The game has no offline progression.
+Version 1.4.0 continues to use the existing v2 `localStorage` key without migration or reset. v1 browser saves and Godot saves remain unsupported. The game has no offline progression.
