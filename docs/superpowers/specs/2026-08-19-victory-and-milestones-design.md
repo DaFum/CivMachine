@@ -155,6 +155,7 @@ ProgressionState      + seenDominantPaths: string[]
                       + bestDepth: number
                       + bestGrade: HarvestGrade | ''
                       + maxDevelopment: number
+                      + maxEra: number
                       + objectivesCompleted: number
                       + longestRunSeconds: number
                       + maxEndgamesInRun: number
@@ -162,9 +163,10 @@ GameState.meta        + convergences: number
                       + victories: VictoryRecord[]   (most recent 5)
 ```
 
-The six statistics fields exist because several milestones need best-ever values across
-the save, which cannot be reconstructed from current state. They are written in `harvest`
-and in the path-choice handler, never per frame.
+The statistics fields exist because several milestones need best-ever values across the
+save, which cannot be reconstructed from current state — and because without them a
+milestone's progress bar would read zero whenever no civilization is running. They are
+written in `harvest` and in the path-choice handler, never per frame.
 
 `SAVE_VERSION` goes to **4**. Every existing save is discarded on load and all players
 start over. This is a deliberate, approved trade: no migration code, clean shape. It is
