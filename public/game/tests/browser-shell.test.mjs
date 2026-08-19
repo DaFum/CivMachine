@@ -49,7 +49,7 @@ test('dynamic world state is sampled independently from cached structural scener
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /const dynamicSnapshot\s*=\s*worldSnapshot\(civ,\s*width\)/);
   assert.match(world, /const dynamicPresentation\s*=\s*worldPresentation\(civ\)/);
-  assert.match(world, /drawAtmosphere\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
+  assert.match(world, /drawDynamicContent\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
 });
 
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
@@ -633,4 +634,17 @@ test('settlement layout never emits a structure kind the era forbids', () => {
       }
     }
   }
+});
+
+test('world module no longer carries its own layout or hash helpers', async () => {
+  const source = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.ok(!source.includes('function buildingLayout'), 'buildingLayout must move to settlements.ts');
+  assert.ok(!source.includes('function hash01'), 'hash01 must move to primitives.ts');
+  assert.ok(!source.includes('interface BuildingShape'), 'BuildingShape is replaced by Structure');
+  assert.ok(!source.includes('drawCanvasDecisionImpulse'), 'the impulse renderer must be unified via DrawSurface');
+  assert.ok(source.includes('canvasSurface('), 'the Canvas path must draw through DrawSurface');
+  assert.ok(source.includes('phaserSurface('), 'the Phaser path must draw through DrawSurface');
+  assert.ok(source.includes('drawCreature('), 'inhabitants must be rendered');
+  assert.ok(source.includes('drawBanner('), 'faction banners must be rendered');
+  assert.ok(source.includes('ConstructionTracker'), 'construction animation must be wired in');
 });
