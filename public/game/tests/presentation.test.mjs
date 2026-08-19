@@ -14,6 +14,7 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
+import { freshEngine } from './balance-harness.mjs';
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -668,4 +669,76 @@ test('banners stay inside the viewport however tall the skyline gets', () => {
 test('settlement crown is the tallest structure', () => {
   assert.equal(settlementCrown({ structures: [{ height: 10 }, { height: 42 }, { height: 7 }] }), 42);
   assert.equal(settlementCrown({ structures: [] }), 0);
+});
+
+test('the view model forecasts the cascade and the next depth band', () => {
+  const engine = freshEngine();
+  engine.state.machine.upgradeLevels.reality_lattice = 4;
+  engine.startCivilization(510);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+  civ.tactical.entropy = 20;
+  const vm = buildViewModel(engine);
+  assert.equal(vm.tactical.containmentRating, 4);
+  assert.ok(vm.tactical.entropyRate > 0);
+  assert.ok(vm.tactical.secondsToCascade > 0);
+  assert.equal(Number(vm.tactical.pressureMultiplier.toFixed(4)), Number((1 + 3000 / 6500).toFixed(4)));
+  assert.equal(vm.harvest.depth, 5);
+  assert.equal(vm.harvest.depthBand, 'transcendent');
+  assert.equal(vm.harvest.nextBand.grade, 'ascendant');
+  assert.equal(vm.harvest.nextBand.depthNeeded, 9);
+  assert.ok(vm.harvest.nextBand.yieldMultiplier > vm.harvest.controlled.multiplier);
+});
+
+test('the deepest band reports no next band', () => {
+  const engine = freshEngine();
+  engine.startCivilization(511);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 7000;
+  civ.era = 2;
+  civ.development = 4000;
+  assert.equal(buildViewModel(engine).harvest.nextBand, null);
+  assert.equal(buildViewModel(engine).harvest.depthBand, 'singular');
+});
+
+test('the machine reserve is presented with its escalated cost and reason', () => {
+  const engine = freshEngine();
+  engine.startCivilization(512);
+  const reserve = buildViewModel(engine).machineReserve;
+  assert.equal(reserve.length, 3);
+  assert.equal(reserve[0].id, 'containment_pulse');
+  assert.equal(reserve[0].enabled, false);
+  assert.ok(reserve[0].reason.length > 0);
+  assert.equal(reserve[0].usesLeft, 3);
+});
+
+test('the render key tracks reserve affordability as a boolean, not a balance', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 5000;
+  engine.startCivilization(513);
+  const before = civilizationRenderKey(buildViewModel(engine));
+  engine.state.machine.currencies.causal_mass = 5001;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before);
+  engine.state.machine.currencies.causal_mass = 1;
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before);
+});
+
+test('the render key tracks the depth band, never the depth itself', () => {
+  const engine = freshEngine();
+  engine.startCivilization(514);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+  const before = civilizationRenderKey(buildViewModel(engine));
+  civ.development = 401;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before, 'a ticking development must not change the key');
+  civ.development = 1600;
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before, 'crossing a band must change the key');
 });
