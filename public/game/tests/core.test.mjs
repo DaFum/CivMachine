@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewState, calculateHarvest, upgradeCost, eraForYears, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
+import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
 import { CivilizationPaths } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
@@ -1037,4 +1037,52 @@ test('the universe upgrade growth floor leaves the ladder walkable', () => {
   const ladder = [0, 1, 2, 3, 4].map(level => upgradeCost(stable.base_cost, stable.growth, level));
   assert.deepEqual(ladder, [4, 7, 12, 21, 38]);
   assert.equal(ladder.reduce((sum, cost) => sum + cost, 0), 82);
+});
+
+test('the residue award scales with credits earned, not civilization count', () => {
+  assert.equal(universeResidueAward(18, 8000, 1), 32);
+  assert.ok(universeResidueAward(36, 8000, 1) > universeResidueAward(18, 8000, 1));
+  assert.equal(universeResidueAward(0, 0, 1), 1);
+  assert.ok(universeResidueAward(18, 8000, 1.8) > universeResidueAward(18, 8000, 1));
+});
+
+test('the axiom award rewards universe investment', () => {
+  assert.equal(multiverseAxiomAward(4, 24), 10);
+  assert.ok(multiverseAxiomAward(4, 48) > multiverseAxiomAward(4, 24));
+  assert.equal(multiverseAxiomAward(0, 0), 1);
+});
+
+test('the harvest record carries the depth that produced it', () => {
+  const engine = withUpgrades(freshEngine(), { reality_lattice: 4 }, {});
+  runCivilization(engine, { seed: 4242, harvestAt: 'transcendent' });
+  const record = engine.state.machine.lastHarvest;
+  assert.equal(typeof record.depth, 'number');
+  assert.ok(record.depth > 0);
+  assert.equal(record.grade, depthBand(record.depth));
+  assert.ok(record.credits >= 1);
+});
+
+test('a Universe consumed with more credits returns more residue', () => {
+  const consume = credits => {
+    const engine = freshEngine();
+    engine.state.meta.progression.unlockedSystems.push('universe_prestige');
+    engine.state.machine.cultivationCreditsThisUniverse = credits;
+    engine.state.machine.currencies.causal_mass = 8000;
+    engine.consumeUniverse();
+    return engine.state.meta.universalResidue;
+  };
+  assert.equal(consume(18), universeResidueAward(18, 8000, 1));
+  assert.ok(consume(36) > consume(18));
+});
+
+test('the harvest era term extends into Apotheosis', () => {
+  const civ = GameEngine.createCivilizationForTest(861);
+  civ.development = 500;
+  civ.era = 2;
+  const bonuses = GameEngine.baseBonuses();
+  const transcendence = calculateHarvest(civ, false, bonuses);
+  civ.era = 3;
+  const apotheosis = calculateHarvest(civ, false, bonuses);
+  assert.ok(apotheosis.existence > transcendence.existence, 'Existence must keep scaling in Apotheosis');
+  assert.ok(apotheosis.paradox > transcendence.paradox, 'Paradox must keep scaling in Apotheosis');
 });
