@@ -6,6 +6,7 @@ import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/r
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
 import { PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
+import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
 
 test('world expands from sparse camps to an arcology world', () => {
   const civ = GameEngine.createCivilizationForTest(11);
@@ -201,4 +202,49 @@ test('render primitives are deterministic and cover every path', () => {
     assert.ok(id in PATH_ACCENTS, `${id} needs an accent color`);
     assert.ok(id in FACTION_SIGILS, `${id} needs a sigil`);
   }
+});
+
+test('draw surface adapters emit the same primitive sequence on both backends', () => {
+  const phaserCalls = [];
+  const graphics = new Proxy({}, { get: (_t, name) => (...args) => { phaserCalls.push([name, ...args]); } });
+  phaserSurface(graphics).fillStyle(0x112233, .5).fillRect(1, 2, 3, 4).line(5, 6, 7, 8).fillCircle(9, 10, 11);
+  assert.deepEqual(phaserCalls, [
+    ['fillStyle', 0x112233, .5],
+    ['fillRect', 1, 2, 3, 4],
+    ['lineBetween', 5, 6, 7, 8],
+    ['fillCircle', 9, 10, 11],
+  ]);
+
+  const canvasCalls = [];
+  const context = {
+    set fillStyle(value) { canvasCalls.push(['fillStyle', value]); },
+    set strokeStyle(value) { canvasCalls.push(['strokeStyle', value]); },
+    set lineWidth(value) { canvasCalls.push(['lineWidth', value]); },
+    fillRect: (...args) => canvasCalls.push(['fillRect', ...args]),
+    beginPath: () => canvasCalls.push(['beginPath']),
+    moveTo: (...args) => canvasCalls.push(['moveTo', ...args]),
+    lineTo: (...args) => canvasCalls.push(['lineTo', ...args]),
+    arc: (...args) => canvasCalls.push(['arc', ...args]),
+    fill: () => canvasCalls.push(['fill']),
+    stroke: () => canvasCalls.push(['stroke']),
+    closePath: () => canvasCalls.push(['closePath']),
+  };
+  const toColor = (value, alpha = 1) => `#${value.toString(16)}@${alpha}`;
+  canvasSurface(context, toColor).fillStyle(0x112233, .5).fillRect(1, 2, 3, 4).line(5, 6, 7, 8);
+  assert.deepEqual(canvasCalls, [
+    ['fillStyle', '#112233@0.5'],
+    ['fillRect', 1, 2, 3, 4],
+    ['beginPath'], ['moveTo', 5, 6], ['lineTo', 7, 8], ['stroke'],
+  ]);
+});
+
+test('canvas surface never emits a negative radius', () => {
+  const radii = [];
+  const context = {
+    set fillStyle(_v) {}, set strokeStyle(_v) {}, set lineWidth(_v) {},
+    beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, stroke() {}, fillRect() {},
+    arc: (_x, _y, r) => radii.push(r),
+  };
+  canvasSurface(context, () => '#000').fillCircle(0, 0, -5).strokeCircle(0, 0, -1);
+  assert.deepEqual(radii, [0, 0]);
 });
