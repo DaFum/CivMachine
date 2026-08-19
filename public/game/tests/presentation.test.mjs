@@ -11,6 +11,8 @@ import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.j
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner } from '../dist/render/structures.js';
+import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
+import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -517,4 +519,79 @@ test('banners draw a pole and a sigil for every faction sigil', () => {
     assert.ok(calls.some(([name]) => name === 'line'), `${sigil} drew no pole`);
     assert.ok(calls.length >= 4, `${sigil} drew ${calls.length} primitives`);
   }
+});
+
+test('agent plan respects the budget and binds agents to real places', () => {
+  const civ = lateCiv(61);
+  civ.era = 4; civ.development = 4000;
+  const snapshot = worldSnapshot(civ, 900);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  const plan = agentPlan(civ, snapshot, settlements);
+  assert.ok(agentPlanTotal(plan) <= 120, `total was ${agentPlanTotal(plan)}`);
+  assert.equal(plan.pedestrians.length, snapshot.agentBudget.pedestrians);
+  assert.ok(plan.pedestrians.every(p => p.settlementIndex >= 0 && p.settlementIndex < settlements.length));
+  assert.ok(plan.vehicles.every(v => Number.isFinite(v.fromX) && Number.isFinite(v.toX) && v.fromX !== v.toX));
+  assert.ok(plan.aircraft.every(a => a.altitude > 0));
+  assert.deepEqual(agentPlan(civ, snapshot, settlements), plan, 'plans are deterministic');
+});
+
+test('agent plan produces nothing that the world cannot support yet', () => {
+  const early = GameEngine.createCivilizationForTest(62);
+  const snapshot = worldSnapshot(early, 900);
+  const plan = agentPlan(early, snapshot, settlementLayout(early, snapshot.worldWidth, 400, snapshot));
+  assert.equal(plan.vehicles.length, 0, 'stage 0 has no traffic');
+  assert.equal(plan.aircraft.length, 0);
+  assert.equal(plan.orbital.length, 0);
+  assert.equal(plan.launches.length, 0);
+  assert.ok(plan.pedestrians.length > 0, 'even a camp is inhabited');
+});
+
+test('launches only exist where a spaceport was actually built', () => {
+  const civ = lateCiv(63);
+  civ.era = 4; civ.development = 4000;
+  const snapshot = worldSnapshot(civ, 900);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  const spaceportX = new Set(settlements.flatMap(s => s.structures.filter(st => st.kind === 'spaceport' || st.kind === 'orbital_anchor').map(st => st.x)));
+  const plan = agentPlan(civ, snapshot, settlements);
+  assert.ok(plan.launches.length <= 4);
+  for (const launch of plan.launches) assert.ok(spaceportX.has(launch.x), `launch at ${launch.x} has no pad`);
+});
+
+test('construction tracker only animates actual level increases', () => {
+  const tracker = new ConstructionTracker(1800);
+  tracker.sync([{ id: 'a', level: 1 }, { id: 'b', level: 2 }], 0);
+  assert.equal(tracker.activeCount, 0, 'the first observation must not animate the whole world');
+
+  tracker.sync([{ id: 'a', level: 1 }, { id: 'b', level: 2 }], 100);
+  assert.equal(tracker.activeCount, 0, 'an unchanged level must not animate');
+
+  tracker.sync([{ id: 'a', level: 3 }, { id: 'b', level: 2 }], 200);
+  assert.equal(tracker.activeCount, 1);
+  assert.ok(tracker.isBuilding('a', 200));
+  assert.ok(!tracker.isBuilding('b', 200));
+  assert.equal(tracker.progress('a', 200), 0);
+  assert.ok(Math.abs(tracker.progress('a', 1100) - .5) < 1e-9);
+  assert.equal(tracker.progress('b', 200), 1, 'idle structures report finished');
+
+  tracker.sync([{ id: 'a', level: 2 }], 300);
+  assert.equal(tracker.activeCount, 1, 'a level decrease must not open a window');
+
+  tracker.prune(1999);
+  assert.equal(tracker.activeCount, 1);
+  tracker.prune(2001);
+  assert.equal(tracker.activeCount, 0);
+  assert.equal(tracker.progress('a', 2001), 1);
+});
+
+test('construction tracker resets cleanly', () => {
+  assert.equal(CONSTRUCTION_MS, 1800);
+  assert.equal(CONSTRUCTION_REDUCED_MS, 400);
+  const tracker = new ConstructionTracker(1800);
+  tracker.sync([{ id: 'a', level: 1 }], 0);
+  tracker.sync([{ id: 'a', level: 4 }], 10);
+  assert.equal(tracker.activeCount, 1);
+  tracker.reset();
+  assert.equal(tracker.activeCount, 0);
+  tracker.sync([{ id: 'a', level: 9 }], 20);
+  assert.equal(tracker.activeCount, 0, 'after a reset the next observation is a fresh baseline');
 });
