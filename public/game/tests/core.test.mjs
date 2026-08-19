@@ -23,6 +23,8 @@ import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
 import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
+import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
+import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -1596,4 +1598,80 @@ test('dominant paths are recorded once each across runs', () => {
   engine.recordDominantPath('void_communion');
   engine.recordDominantPath('');
   assert.deepEqual(engine.state.meta.progression.seenDominantPaths, ['machine_faith', 'void_communion']);
+});
+
+function convergenceInput(overrides = {}) {
+  return {
+    milestonesCompleted: 21,
+    milestonesTotal: 28,
+    multiverses: 2,
+    axioms: [
+      { id: 'axiom_stability', level: 1, maxLevel: 5 },
+      { id: 'axiom_paradox_food', level: 1, maxLevel: 4 },
+      { id: 'axiom_recursive_memory', level: 1, maxLevel: 5 },
+      { id: 'axiom_impossible_birth', level: 1, maxLevel: 1 },
+      { id: 'axiom_compassionate_accounting', level: 1, maxLevel: 4 },
+      { id: 'axiom_multiple_choice', level: 1, maxLevel: 3 },
+    ],
+    bestGradeIndex: CONVERGENCE_ASCENDANT_INDEX,
+    convergences: 0,
+    ...overrides,
+  };
+}
+
+test('the convergence gate opens only when all four requirements are met', () => {
+  assert.equal(convergenceUnlocked(convergenceInput()), true);
+  assert.equal(convergenceUnlocked(convergenceInput({ milestonesCompleted: 20 })), false);
+  assert.equal(convergenceUnlocked(convergenceInput({ multiverses: 1 })), false);
+  assert.equal(convergenceUnlocked(convergenceInput({ bestGradeIndex: 2 })), false);
+  const shallowAxioms = convergenceInput().axioms.map((a, index) => (index === 0 ? { ...a, level: 0 } : a));
+  assert.equal(convergenceUnlocked(convergenceInput({ axioms: shallowAxioms })), false);
+});
+
+test('requirements expose current and target for the UI', () => {
+  const requirements = convergenceRequirements(convergenceInput({ milestonesCompleted: 19 }));
+  assert.equal(requirements.length, 4);
+  const milestones = requirements.find(r => r.id === 'milestones');
+  assert.equal(milestones.current, 19);
+  assert.equal(milestones.target, 21);
+  assert.equal(milestones.met, false);
+  assert.ok(milestones.label.length > 0);
+});
+
+test('convergence targets scale with each victory and clamp to the catalog', () => {
+  assert.deepEqual(convergenceTargets(0), { milestones: 21, multiverses: 2, axiomLevel: 1, depth: 14 });
+  assert.deepEqual(convergenceTargets(1), { milestones: 24, multiverses: 4, axiomLevel: 2, depth: 18 });
+  assert.deepEqual(convergenceTargets(3), { milestones: 30, multiverses: 8, axiomLevel: 4, depth: 26 });
+  const clamped = convergenceRequirements(convergenceInput({ convergences: 3, milestonesCompleted: 28 }));
+  assert.equal(clamped.find(r => r.id === 'milestones').target, 28);
+});
+
+test('the axiom requirement clamps per upgrade at its own maximum level', () => {
+  const axioms = convergenceInput().axioms.map(a => ({ ...a, level: 2 }));
+  const requirements = convergenceRequirements(convergenceInput({ convergences: 1, axioms, multiverses: 4, milestonesCompleted: 24 }));
+  assert.equal(requirements.find(r => r.id === 'axioms').met, true);
+});
+
+test('only a controlled harvest at target depth wins', () => {
+  assert.equal(evaluateConvergence(14, false, 0), 'won');
+  assert.equal(evaluateConvergence(13.9, false, 0), 'failed');
+  assert.equal(evaluateConvergence(40, true, 0), 'failed');
+  assert.equal(evaluateConvergence(14, false, 1), 'failed');
+  assert.equal(evaluateConvergence(18, false, 1), 'won');
+});
+
+test('the terminal run starts in Apotheosis and convergence bonuses stack', () => {
+  const setup = terminalCivilizationSetup();
+  assert.equal(setup.era, 3);
+  assert.equal(setup.years, ERA_YEAR_THRESHOLDS[3]);
+  assert.equal(setup.development, 340);
+  assert.equal(TERMINAL_ENTROPY_MULTIPLIER, 1.6);
+  assert.deepEqual(convergenceBonuses(0), { allHarvestMult: 1, containment: 0 });
+  assert.deepEqual(convergenceBonuses(2), { allHarvestMult: 1.5, containment: 4 });
+});
+
+test('the terminal entropy multiplier feeds the displayed rate', () => {
+  const plain = entropyRate(14000, 0, false);
+  assert.ok(Math.abs(entropyRate(14000, 0, true) - plain * 1.6) < 1e-9);
+  assert.ok(secondsToCascade(14000, 0, 0, true) < secondsToCascade(14000, 0, 0, false));
 });
