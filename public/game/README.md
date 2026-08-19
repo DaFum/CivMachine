@@ -81,7 +81,7 @@ npm test
 - local browser saves through `localStorage`
 - offline play after the first successful load through the app service worker
 - touch-safe portrait and landscape layouts with safe-area support
-- device-pixel-ratio cap of 2 for the Canvas fallback
+- device-pixel-ratio cap of 2 for the Canvas renderer
 - no offline progression
 
 ## v1.5.0 balance curve

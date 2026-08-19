@@ -16,6 +16,8 @@ import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
 import { freshEngine } from './balance-harness.mjs';
 
+const NEWLINE = String.fromCharCode(10);
+
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
   return surface;
@@ -750,4 +752,63 @@ test('the service worker precaches every new game module', async () => {
   }
   assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
   assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.5.0'"), 'CACHE_NAME must be bumped');
+});
+
+test('the construction tracker forgets structures the world no longer contains', () => {
+  const tracker = new ConstructionTracker(1000);
+  tracker.sync([{ id: 'a', level: 1 }, { id: 'b', level: 1 }], 0);
+  tracker.sync([{ id: 'a', level: 2 }, { id: 'b', level: 1 }], 10);
+  assert.equal(tracker.activeCount, 1, 'a raised level animates');
+  assert.equal(tracker.isBuilding('a', 20), true);
+
+  // 'a' leaves the world: its animation and its baseline must both go with it.
+  tracker.sync([{ id: 'b', level: 1 }], 30);
+  assert.equal(tracker.activeCount, 0, 'a departed structure must stop animating');
+  assert.equal(tracker.isBuilding('a', 40), false);
+
+  // 'a' returns at a higher level. Its stale baseline is gone, so this is a first sighting and
+  // establishes a baseline instead of animating a build that never happened.
+  tracker.sync([{ id: 'a', level: 9 }, { id: 'b', level: 1 }], 50);
+  assert.equal(tracker.isBuilding('a', 60), false, 'a returning structure must not replay a build');
+  assert.equal(tracker.activeCount, 0);
+
+  // From that baseline a genuine upgrade animates again.
+  tracker.sync([{ id: 'a', level: 10 }, { id: 'b', level: 1 }], 70);
+  assert.equal(tracker.isBuilding('a', 80), true);
+});
+
+test('the armed reset announces itself through a live region, not a relabelled button', async () => {
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /aria-live['"],\s*['"]assertive['"]/, 'the announcer must be an assertive live region');
+  assert.match(main, /role['"],\s*['"]status['"]/, 'the announcer must carry a status role');
+  assert.match(main, /className = 'visually-hidden'/, 'the announcer must be visually hidden');
+  assert.match(main, /resetAnnouncer\.textContent = `Erase save armed\./, 'arming must write the warning');
+  assert.match(main, /resetAnnouncer\.textContent = '';/, 'disarming must clear the warning');
+
+  const disarm = main.slice(main.indexOf('function disarmReset()'), main.indexOf('resetButton.addEventListener(\'click\''));
+  assert.ok(disarm.includes("resetAnnouncer.textContent = ''"), 'disarmReset itself must clear the region');
+
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.visually-hidden\{[^}]*clip-path:inset\(50%\)/, 'the stylesheet must define the hidden utility');
+  assert.match(styles, /\.visually-hidden\{[^}]*position:absolute/, 'the hidden utility must be taken out of flow');
+});
+
+test('reduced motion freezes decorative animation but not build progress', async () => {
+  const renderer = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  const lines = renderer.split(NEWLINE);
+
+  const sparkLine = lines.find(line => line.includes('hash01(spark'));
+  assert.ok(sparkLine, 'the construction spark line must exist');
+  assert.ok(sparkLine.includes('animationTime / 90'), 'construction sparks must seed from animationTime');
+  assert.ok(!sparkLine.includes('(time / 90'), 'no spark seed may still read the raw clock');
+
+  const trackerLines = lines.filter(line => line.includes('tracker.isBuilding(') || line.includes('tracker.progress('));
+  assert.ok(trackerLines.length >= 2, 'the tracker calls must exist');
+  for (const line of trackerLines) {
+    assert.ok(!line.includes('animationTime'), 'build progress must keep advancing on real time');
+  }
+
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const reduced = styles.slice(styles.indexOf('@media(prefers-reduced-motion:reduce)'));
+  assert.ok(reduced.includes('.icon-button.is-armed{animation:none}'), 'the armed reset button must stop pulsing');
 });
