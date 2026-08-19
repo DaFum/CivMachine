@@ -595,3 +595,25 @@ test('construction tracker resets cleanly', () => {
   tracker.sync([{ id: 'a', level: 9 }], 20);
   assert.equal(tracker.activeCount, 0, 'after a reset the next observation is a fresh baseline');
 });
+
+test('structural key reacts to species, factions and settlement classes but not to ticks', () => {
+  const civ = lateCiv(71);
+  const base = structuralWorldKey(civ, 800);
+  civ.development += 1;
+  assert.equal(structuralWorldKey(civ, 800), base, 'a one-point development tick must not rebuild the world');
+  civ.elapsedSeconds += 12; civ.years += 40;
+  assert.equal(structuralWorldKey(civ, 800), base, 'elapsed time must not rebuild the world');
+
+  const withSpecies = lateCiv(71);
+  withSpecies.traits.push('fungal_consensus');
+  assert.notEqual(structuralWorldKey(withSpecies, 800), base, 'a different species must rebuild the world');
+
+  const withFaction = lateCiv(71);
+  withFaction.pathState.affinity.machine_faith = 7;
+  withFaction.pathState.affinity.void_communion = 1;
+  assert.notEqual(structuralWorldKey(withFaction, 800), base, 'a faction split must rebuild the world');
+
+  const grown = lateCiv(71);
+  grown.era = 4; grown.development = 3000;
+  assert.notEqual(structuralWorldKey(grown, 800), base);
+});

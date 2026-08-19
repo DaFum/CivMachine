@@ -1,16 +1,8 @@
 import { developmentStage, worldSnapshot } from './world-model.js';
-const PATH_ACCENTS = {
-    machine_faith: 0xf0ca6f,
-    collective_mind: 0x77e3ff,
-    temporal_dominion: 0xffa45f,
-    reality_engineering: 0x68f0c5,
-    biological_transcendence: 0x8ee66b,
-    cosmic_resistance: 0xff6b7f,
-    bureaucratic_singularity: 0xe3b76f,
-    post_mortal_civilization: 0xdca4ff,
-    void_communion: 0xa86cf0,
-    recursive_simulation: 0x5ce1e6,
-};
+import { mixColor as mix, pathAccentFor } from './primitives.js';
+import { speciesProfile } from './species.js';
+import { factionSignature } from './factions.js';
+import { settlementClassSignature } from './settlements.js';
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const band = (value) => value < 25 ? 0 : value < 50 ? 1 : value < 75 ? 2 : 3;
 export function decisionImpulseKind(eventId) {
@@ -31,11 +23,6 @@ export function entropyThresholdColor(eventId) {
         return 0xf29a52;
     return 0xee6973;
 }
-function mix(from, to, amount) {
-    const t = clamp01(amount);
-    const channel = (shift) => Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t);
-    return (channel(16) << 16) | (channel(8) << 8) | channel(0);
-}
 export function worldPresentation(civ) {
     const stability = clamp01(civ.stats.stability / Math.max(1, civ.stats.stabilityMax));
     const danger = clamp01((55 - civ.stats.stability) / 55);
@@ -43,7 +30,7 @@ export function worldPresentation(civ) {
     const awareness = clamp01(civ.stats.awareness / 100);
     const attention = clamp01(civ.stats.attention / 100);
     const entropy = clamp01(civ.tactical.entropy / 100);
-    const accent = PATH_ACCENTS[civ.pathState.dominantPath] ?? 0x6fe7e1;
+    const accent = pathAccentFor(civ.pathState.dominantPath);
     const eraLight = clamp01((civ.era + developmentStage(civ) * .35) / 4.4);
     return {
         accent,
@@ -88,6 +75,9 @@ export function structuralWorldKey(civ, viewportWidth) {
         presentation.bands.awareness,
         presentation.bands.attention,
         presentation.bands.entropy,
+        speciesProfile(civ).archetype,
+        factionSignature(civ),
+        settlementClassSignature(civ, snapshot),
     ].join('|');
 }
 //# sourceMappingURL=world-presentation.js.map
