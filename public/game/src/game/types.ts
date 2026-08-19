@@ -97,6 +97,7 @@ export interface Civilization {
   tactical: TacticalState;
   directiveId: string;
   directiveObjective: DirectiveObjectiveState;
+  runInterventionUses: Record<string, number>;
 }
 
 export interface ProgressionState {

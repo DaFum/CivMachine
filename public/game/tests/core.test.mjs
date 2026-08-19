@@ -20,6 +20,7 @@ import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarve
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
+import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -1336,4 +1337,102 @@ test('no tactical policy stretches a no-upgrade run past four minutes', () => {
     const result = runCivilization(freshEngine(), { seed: 4321, policy });
     assert.ok(result.elapsed <= 240, `policy ${policy.join('+')} survived ${result.elapsed}s`);
   }
+});
+
+test('run intervention cost escalates with use and with depth', () => {
+  const pulse = runInterventionById('containment_pulse');
+  assert.equal(pulse.baseCost, 180);
+  assert.equal(RUN_INTERVENTIONS.length, 3);
+  assert.equal(runInterventionCost(pulse, 0, 0), 180);
+  assert.equal(runInterventionCost(pulse, 1, 0), 540);
+  assert.equal(runInterventionCost(pulse, 2, 0), 1620);
+  assert.equal(runInterventionCost(pulse, 0, 20), 1080);
+  assert.equal(runInterventionCost(pulse, 1, 20), 3240);
+  assert.equal(runInterventionCost(pulse, 2, 20), 9720);
+});
+
+test('a containment pulse removes Entropy and consumes a use', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 5000;
+  engine.startCivilization(420);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 60;
+  // The depth factor applies from the first use, so the quoted price already exceeds the base cost.
+  const quoted = engine.runInterventions().find(view => view.id === 'containment_pulse').cost;
+  assert.equal(quoted, runInterventionCost(runInterventionById('containment_pulse'), 0, civ.development / 80));
+  assert.ok(quoted >= 180);
+  assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  assert.equal(civ.tactical.entropy, 35);
+  assert.equal(engine.state.machine.currencies.causal_mass, 5000 - quoted);
+  assert.equal(runInterventionUses(civ, 'containment_pulse'), 1);
+});
+
+test('run interventions stop at three uses per run', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 1_000_000;
+  engine.startCivilization(421);
+  const civ = engine.state.civilization;
+  for (let index = 0; index < 3; index++) {
+    civ.tactical.entropy = 90;
+    assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  }
+  civ.tactical.entropy = 90;
+  assert.equal(engine.useRunIntervention('containment_pulse'), false);
+  assert.equal(engine.lastActionFailure, 'Containment Pulse is exhausted for this civilization.');
+  assert.equal(civ.tactical.entropy, 90);
+});
+
+test('an unaffordable run intervention changes nothing', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 10;
+  engine.startCivilization(422);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 60;
+  const snapshot = JSON.stringify(civ);
+  assert.equal(engine.useRunIntervention('containment_pulse'), false);
+  assert.equal(JSON.stringify(civ), snapshot);
+  assert.equal(engine.state.machine.currencies.causal_mass, 10);
+});
+
+test('run interventions stay locked behind their Insight gates', () => {
+  const engine = freshEngine();
+  engine.state.machine.currencies.causal_mass = 100_000;
+  engine.state.machine.currencies.cognition = 100_000;
+  engine.startCivilization(423);
+  const views = new Map(engine.runInterventions().map(view => [view.id, view]));
+  assert.equal(views.get('containment_pulse').enabled, false);
+  assert.match(views.get('containment_pulse').reason, /Machine Insight 4/);
+  engine.state.meta.progression.machineInsight = 4;
+  assert.equal(engine.runInterventions().find(view => view.id === 'containment_pulse').enabled, true);
+  assert.equal(engine.runInterventions().find(view => view.id === 'emergency_lattice').enabled, false);
+});
+
+test('spending every reserve intervention is a losing trade', () => {
+  const build = () => withUpgrades(
+    freshEngine(),
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  const bank = 200_000;
+  const seed = 4242;
+  const keys = ['causal_mass', 'cognition', 'paradox', 'existence'];
+  const without = build();
+  for (const key of keys) without.state.machine.currencies[key] = bank;
+  runCivilization(without, { seed });
+  const withReserve = build();
+  for (const key of keys) withReserve.state.machine.currencies[key] = bank;
+  runCivilization(withReserve, { seed, policy: ['safe', 'reserve'] });
+  const total = engine => keys.reduce((sum, key) => sum + engine.state.machine.currencies[key], 0);
+  assert.ok(total(withReserve) < total(without), `reserve spending must not pay for itself: ${total(withReserve)} vs ${total(without)}`);
+});
+
+test('a no-upgrade run with full reserve spending stays under seven minutes', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  for (const key of ['causal_mass', 'cognition', 'existence']) engine.state.machine.currencies[key] = 200_000;
+  const result = runCivilization(engine, { seed: 4324, policy: ['safe', 'vent', 'reserve'] });
+  assert.ok(result.elapsed <= 420, `survived ${result.elapsed}s`);
 });

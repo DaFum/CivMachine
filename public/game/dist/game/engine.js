@@ -9,7 +9,8 @@ import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, in
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
 import { advancePressure, cascadeDecay } from './pressure.js';
 import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './tactical-actions.js';
-import { applyHarvestQuality, calculateCultivationCredits, evaluateHarvestQuality } from './harvest-quality.js';
+import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality } from './harvest-quality.js';
+import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses } from './run-interventions.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from './run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from './upgrade-balance.js';
 export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE', 'APOTHEOSIS'];
@@ -74,7 +75,7 @@ export class GameEngine {
     deleteSave() { this.storage.removeItem(SAVE_KEY); this.state = createNewState(); this.messages = []; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); this.save(); this.emit(); }
     reset() { this.state = createNewState(); this.messages = []; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); this.save(); this.emit(); }
     static baseBonuses() { return { stabilityMax: 100, predictionLevel: 0, developmentMult: 1, causal_massMult: 1, cognitionMult: 1, paradoxMult: 1, existenceMult: 1, awarenessGainMult: 1, sanityLossMult: 1, attentionGainMult: 1, stabilityLossMult: 1, stabilityDecayMult: 1, eventDelay: 0, startingEra: 0, extraTraits: 0, allHarvestMult: 1, chaoticRetention: .4, containmentRating: 0, controlRecharge: 1, accelerateYears: 200, accelerateTimer: 8, gradeRewardMult: 1 }; }
-    static createCivilizationForTest(seed) { return { seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1, eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0, traits: [], institutions: [], flags: [], scheduledEvents: [], history: [], stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 }, harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }, harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 }, stabilityDecayMult: 1, eventDelayBonus: 0, predictionLevel: 0, pathState: CivilizationPaths.newState(), tactical: { entropy: 0, controlCapacity: 3, triggeredCrises: [], probedEventId: '', actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 } }, directiveId: '', directiveObjective: { id: '', completed: false } }; }
+    static createCivilizationForTest(seed) { return { seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1, eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0, traits: [], institutions: [], flags: [], scheduledEvents: [], history: [], stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 }, harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }, harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 }, stabilityDecayMult: 1, eventDelayBonus: 0, predictionLevel: 0, pathState: CivilizationPaths.newState(), tactical: { entropy: 0, controlCapacity: 3, triggeredCrises: [], probedEventId: '', actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 } }, directiveId: '', directiveObjective: { id: '', completed: false }, runInterventionUses: {} }; }
     currentCivilization() { return this.state.civilization; }
     tacticalAvailability(id) { const civ = this.state.civilization; return civ ? tacticalAvailability(civ, id) : { enabled: false, reason: 'Start a civilization first.', cost: TACTICAL_ACTIONS[id].cost }; }
     eventById(id) { return this.events.find(e => e.id === id) ?? null; }
@@ -299,6 +300,63 @@ export class GameEngine {
     currentEvent() { const civ = this.state.civilization; return civ?.pendingEvent ? this.eventById(civ.pendingEvent) : null; }
     forceEvent(id) { const civ = this.state.civilization; const e = this.eventById(id); if (!civ || !e)
         return false; this.decisionFeedback = null; this.lastActionFailure = ''; civ.tactical.probedEventId = ''; civ.pendingEvent = id; civ.eventTimer = 0; recordRecentIntervention(civ, id); CivilizationPaths.recordSelectedEvent(civ, e); this.save(); this.emit(); return true; }
+    runInterventions() {
+        const civ = this.state.civilization;
+        const depth = civ ? cultivationDepth(civ) : 0;
+        return RUN_INTERVENTIONS.map(definition => {
+            const uses = civ ? runInterventionUses(civ, definition.id) : 0;
+            const cost = runInterventionCost(definition, uses, depth);
+            const usesLeft = Math.max(0, definition.maxUses - uses);
+            let enabled = true, reason = '';
+            if (!civ) {
+                enabled = false;
+                reason = 'Start a civilization first.';
+            }
+            else if (this.machineInsight() < definition.insight) {
+                enabled = false;
+                reason = `Requires Machine Insight ${definition.insight}.`;
+            }
+            else if (usesLeft <= 0) {
+                enabled = false;
+                reason = `${definition.title} is exhausted for this civilization.`;
+            }
+            else if (this.currencyAmount(definition.currency) < cost) {
+                enabled = false;
+                reason = `Requires ${cost} ${definition.currency.replaceAll('_', ' ')}.`;
+            }
+            return { ...definition, cost, uses, usesLeft, enabled, reason };
+        });
+    }
+    useRunIntervention(id) {
+        const civ = this.state.civilization;
+        const view = this.runInterventions().find(entry => entry.id === id);
+        if (!civ || !view) {
+            this.lastActionFailure = 'Unknown machine intervention.';
+            this.emit();
+            return false;
+        }
+        if (!view.enabled) {
+            this.lastActionFailure = view.reason;
+            this.emit();
+            return false;
+        }
+        const definition = runInterventionById(id);
+        const before = captureDecisionSnapshot(civ);
+        this.spendCurrency(definition.currency, view.cost);
+        const label = applyRunIntervention(civ, definition);
+        const newEra = eraForYears(civ.years);
+        if (newEra !== civ.era)
+            this.enterEra(civ, newEra);
+        this.clampStats(civ);
+        this.lastActionFailure = '';
+        this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, { id: `reserve:${id}`, title: definition.title }, { label }, before, captureDecisionSnapshot(civ));
+        this.worldImpulse = this.decisionFeedback;
+        this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Machine reserve -> ${label}`);
+        this.post(`MACHINE RESERVE COMMITTED: ${definition.title} for ${view.cost} ${definition.currency.replaceAll('_', ' ')}.`);
+        this.save();
+        this.emit();
+        return true;
+    }
     useTacticalAction(id) {
         const civ = this.state.civilization;
         if (!civ) {
