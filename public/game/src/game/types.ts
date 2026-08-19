@@ -1,7 +1,7 @@
 export type ResourceKey = 'causal_mass' | 'cognition' | 'paradox' | 'existence';
 export type Layer = 'machine' | 'universe' | 'axiom';
 export type Phase = 'machine' | 'civilization';
-export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe';
+export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe' | 'vent';
 export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant' | 'singular';
 
 export interface Stats {

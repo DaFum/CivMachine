@@ -9,6 +9,7 @@ const tacticalKeys = {
     Digit1: 'stabilize', Numpad1: 'stabilize',
     Digit2: 'accelerate', Numpad2: 'accelerate',
     Digit3: 'probe', Numpad3: 'probe',
+    Digit4: 'vent', Numpad4: 'vent',
 };
 window.addEventListener('keydown', (event) => {
     const action = tacticalKeys[event.code];

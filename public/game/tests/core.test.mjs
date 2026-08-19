@@ -275,7 +275,7 @@ test('new saves initialize the tactical v3 civilization contract', () => {
     controlCapacity: 3,
     triggeredCrises: [],
     probedEventId: '',
-    actionUsage: { stabilize: 0, accelerate: 0, probe: 0 },
+    actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 },
   });
   assert.equal(civ.directiveId, '');
 });
@@ -1263,5 +1263,77 @@ test('a long run never serves one intervention over and over', () => {
   assert.ok((counts.get('routine_compliance_audit') ?? 0) <= 3, 'the fallback must stay exceptional');
   for (let index = 1; index < result.eventIds.length; index++) {
     assert.notEqual(result.eventIds[index], result.eventIds[index - 1], 'no intervention may repeat back to back');
+  }
+});
+
+test('Vent trades Stability for Entropy relief and harvestable Paradox', () => {
+  const engine = freshEngine();
+  engine.startCivilization(410);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 40;
+  // years must agree with the era: the engine re-derives it and entering an era refunds Control.
+  civ.years = 7000;
+  civ.era = 2;
+  assert.equal(engine.useTacticalAction('vent'), true);
+  assert.equal(civ.tactical.entropy, 22);
+  assert.equal(civ.stats.stability, civ.stats.stabilityMax - 10);
+  assert.equal(civ.stats.attention, 4);
+  assert.equal(civ.tactical.controlCapacity, 2);
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 14.4);
+});
+
+test('Vent removes only the Entropy that exists and pays out accordingly', () => {
+  const engine = freshEngine();
+  engine.startCivilization(411);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 10;
+  civ.era = 0;
+  assert.equal(engine.useTacticalAction('vent'), true);
+  assert.equal(civ.tactical.entropy, 0);
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 4);
+});
+
+test('Vent is unavailable below the minimum Entropy and changes nothing', () => {
+  const engine = freshEngine();
+  engine.startCivilization(412);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 5;
+  const snapshot = JSON.stringify(civ);
+  assert.equal(engine.useTacticalAction('vent'), false);
+  assert.equal(engine.lastActionFailure, 'Entropy is too low to vent.');
+  assert.equal(JSON.stringify(civ), snapshot);
+});
+
+test('Vent gives the credit-optimal playstyle a Paradox source', () => {
+  const build = () => withUpgrades(freshEngine(), { reality_lattice: 4 }, {});
+  const without = build();
+  runCivilization(without, { seed: 4141 });
+  const venting = build();
+  runCivilization(venting, { seed: 4141, policy: ['safe', 'vent'] });
+  const vented = venting.state.machine.lastHarvest.rewards;
+  const plain = without.state.machine.lastHarvest.rewards;
+  assert.ok(vented.paradox > plain.paradox * 1.4, `venting must lift Paradox: ${vented.paradox} vs ${plain.paradox}`);
+  const share = resources => resources.paradox / (resources.causal_mass + resources.cognition + resources.existence);
+  assert.ok(share(vented) > share(plain), 'venting must raise the Paradox share of a harvest');
+});
+
+test('Accelerate keeps its two-Control cost and sheds two Entropy', () => {
+  assert.equal(TACTICAL_ACTIONS.accelerate.cost, 2);
+  assert.equal(TACTICAL_ACTIONS.vent.cost, 1);
+  assert.equal(TACTICAL_ACTIONS.vent.shortcut, '4');
+  const engine = freshEngine();
+  engine.startCivilization(413);
+  const civ = engine.state.civilization;
+  civ.eventTimer = 100;
+  civ.pendingEvent = '';
+  assert.equal(engine.useTacticalAction('accelerate'), true);
+  assert.equal(civ.tactical.entropy, 5);
+});
+
+test('no tactical policy stretches a no-upgrade run past four minutes', () => {
+  const policies = [['safe'], ['safe', 'vent'], ['safe', 'stabilize'], ['safe', 'accelerate'], ['safe', 'vent', 'stabilize'], ['safe', 'vent', 'stabilize', 'accelerate']];
+  for (const policy of policies) {
+    const result = runCivilization(freshEngine(), { seed: 4321, policy });
+    assert.ok(result.elapsed <= 240, `policy ${policy.join('+')} survived ${result.elapsed}s`);
   }
 });

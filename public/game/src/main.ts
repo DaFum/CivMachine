@@ -7,10 +7,11 @@ const worldHost = document.querySelector('#world-surface') as HTMLElement;
 const world = startWorldRenderer(engine, worldHost);
 createGameUI(engine, world);
 
-const tacticalKeys:Readonly<Record<string,'stabilize'|'accelerate'|'probe'>>={
+const tacticalKeys:Readonly<Record<string,'stabilize'|'accelerate'|'probe'|'vent'>>={
   Digit1:'stabilize',Numpad1:'stabilize',
   Digit2:'accelerate',Numpad2:'accelerate',
   Digit3:'probe',Numpad3:'probe',
+  Digit4:'vent',Numpad4:'vent',
 };
 window.addEventListener('keydown',(event:KeyboardEvent)=>{
   const action=tacticalKeys[event.code];
