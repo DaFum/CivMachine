@@ -1569,3 +1569,31 @@ test('the snapshot takes the better of live and recorded values', () => {
   state.civilization.development = 900;
   assert.equal(milestoneSnapshot(state, false).development, 900);
 });
+
+test('a controlled harvest records the statistics milestones read', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(21);
+  civ.development = 420; civ.era = 2; civ.eventChoices = 6; civ.elapsedSeconds = 310;
+  civ.pathState.endgameStates = ['endgame_a', 'endgame_b'];
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  engine.harvest(false);
+  const p = engine.state.meta.progression;
+  assert.equal(p.maxDevelopment >= 420, true);
+  assert.equal(p.maxEra, 2);
+  assert.equal(p.longestRunSeconds, 310);
+  assert.equal(p.maxEndgamesInRun, 2);
+  assert.equal(p.bestGrade, 'transcendent');
+  assert.ok(p.bestDepth > 5);
+  assert.equal(p.milestones.development_340, true);
+  assert.equal(p.milestones.harvest_transcendent, true);
+});
+
+test('dominant paths are recorded once each across runs', () => {
+  const engine = freshEngine();
+  engine.recordDominantPath('machine_faith');
+  engine.recordDominantPath('machine_faith');
+  engine.recordDominantPath('void_communion');
+  engine.recordDominantPath('');
+  assert.deepEqual(engine.state.meta.progression.seenDominantPaths, ['machine_faith', 'void_communion']);
+});
