@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.5.0
+# Reality Consumption Engine — App Edition v1.6.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer.
 
@@ -52,6 +52,24 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.6.0 victory and milestones
+
+v1.6.0 gives the game an explicit win condition. Meta progress unlocks the **Great
+Convergence**: a terminal cultivation that starts in APOTHEOSIS, runs at 1.6x Entropy, pays
+no Cultivation Credits and no resources, and is won by a controlled harvest at Cultivation
+Depth 14 or deeper. Failing it costs nothing but the run.
+
+A 28-entry **Milestone Register** is now visible in the machine view. It holds the eleven
+milestones that previously awarded Machine Insight invisibly, plus seventeen new ones, each
+with its progress and its award.
+
+Every convergence is permanent and stacks: x1.25 harvest yield and +2 Containment per
+victory, with the next convergence demanding three more milestones, two more multiverses,
+one more level on every Axiom and four more Cultivation Depth.
+
+**Saves from v1.5.0 and earlier are not carried over.** `SAVE_VERSION` is now 4 and older
+saves are discarded on load.
 
 ## Ported game systems
 
