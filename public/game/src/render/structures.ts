@@ -1,6 +1,24 @@
 import type { DrawSurface } from './draw-surface.js';
 import { hash01, mixColor, type FactionSigil } from './primitives.js';
-import type { Structure, StructureKind } from './settlements.js';
+import type { Settlement, Structure, StructureKind } from './settlements.js';
+
+export const BANNER_CLEARANCE = 34;
+export const BANNER_POLE_MIN = 16;
+
+export function settlementCrown(settlement: Settlement): number {
+  return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
+}
+
+/**
+ * Banner geometry, shared by the cached and the animated layer. The top is clamped into view so a
+ * tall arcology skyline cannot push a settlement's banner off the upper edge; the pole shortens
+ * instead of the banner disappearing.
+ */
+export function bannerGeometry(settlement: Settlement, groundY: number, height: number): { x: number; topY: number; poleHeight: number } {
+  const anchorY = groundY - settlementCrown(settlement);
+  const topY = Math.max(height * .04, anchorY - BANNER_CLEARANCE);
+  return { x: settlement.centerX, topY, poleHeight: Math.max(BANNER_POLE_MIN, anchorY - topY) };
+}
 
 export function structureKindsForEra(era: number, stage: number): StructureKind[] {
   if (stage === 0) return ['dwelling', 'farm'];

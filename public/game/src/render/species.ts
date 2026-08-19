@@ -61,32 +61,39 @@ export function drawCreature(surface: DrawSurface, profile: SpeciesProfile, cast
   const size = Math.max(3, 7 * scale * CASTE_SCALE[caste] * profile.heightRatio);
   const swing = Math.sin(phase * Math.PI * 2) * size * .22;
   const bodyTop = groundY - size;
-  const bodyWidth = Math.max(1.4, size * (profile.archetype === 'lithic' || profile.archetype === 'mycelic' ? .52 : .34));
+  const bodyWidth = Math.max(2, size * (profile.archetype === 'lithic' || profile.archetype === 'mycelic' ? .52 : .36));
+  const outline = mixColor(profile.bodyColor, 0x000000, .55);
 
-  if (caste === 'augmented' || profile.glow > .3) surface.fillStyle(accent, .12 + profile.glow * .16).fillCircle(x, bodyTop + size * .4, size * .78);
+  // Contact shadow first: it anchors the figure to the ground and separates it from the road.
+  surface.fillStyle(0x000000, .28).fillCircle(x, groundY, bodyWidth * .62);
+  // The aura stays inside the silhouette. A wider glow washed the body out at real display size.
+  if (caste === 'augmented' || profile.glow > .3) surface.fillStyle(accent, .08 + profile.glow * .1).fillCircle(x, bodyTop + size * .45, size * .42);
 
   if (profile.archetype === 'fluidic') {
-    surface.fillStyle(profile.bodyColor, .92).fillPoly([
+    surface.fillStyle(profile.bodyColor, .94).fillPoly([
       [x - bodyWidth, groundY], [x - bodyWidth * .3 + swing, bodyTop + size * .4],
       [x + bodyWidth * .3 + swing, bodyTop], [x + bodyWidth, groundY],
     ]);
   } else {
-    surface.fillStyle(profile.bodyColor, profile.archetype === 'phasic' ? .62 : .94).fillRect(x - bodyWidth / 2, bodyTop + size * .3, bodyWidth, size * .7);
     const legs = Math.max(2, profile.limbs);
     for (let leg = 0; leg < legs; leg++) {
       const spread = (leg - (legs - 1) / 2) * bodyWidth * .7;
-      surface.lineStyle(Math.max(1, size * .13), profile.bodyColor, .88).line(x + spread * .4, groundY - size * .34, x + spread + (leg % 2 ? swing : -swing), groundY);
+      surface.lineStyle(Math.max(1.2, size * .15), outline, .9).line(x + spread * .4, groundY - size * .34, x + spread + (leg % 2 ? swing : -swing), groundY);
     }
+    surface.fillStyle(profile.bodyColor, profile.archetype === 'phasic' ? .78 : 1).fillRect(x - bodyWidth / 2, bodyTop + size * .3, bodyWidth, size * .7);
+    surface.lineStyle(1, outline, .7).strokeRect(x - bodyWidth / 2, bodyTop + size * .3, bodyWidth, size * .7);
   }
 
-  const headRadius = size * (profile.archetype === 'cerebral' ? .34 : .24);
-  surface.fillStyle(profile.bodyColor, .96).fillCircle(x, bodyTop + headRadius * .6, headRadius);
+  const headRadius = size * (profile.archetype === 'cerebral' ? .34 : .26);
+  surface.fillStyle(outline, .9).fillCircle(x, bodyTop + headRadius * .6, headRadius * 1.14);
+  surface.fillStyle(profile.bodyColor, 1).fillCircle(x, bodyTop + headRadius * .6, headRadius);
 
-  if (profile.features.includes('cap')) surface.fillStyle(mixColor(profile.bodyColor, 0xffffff, .3), .9).fillTriangle(x - size * .42, bodyTop + headRadius, x, bodyTop - size * .18, x + size * .42, bodyTop + headRadius);
-  if (profile.features.includes('antenna')) surface.lineStyle(Math.max(1, size * .1), accent, .7).line(x, bodyTop, x + swing * .6, bodyTop - size * .5);
-  if (profile.features.includes('crystal')) surface.fillStyle(accent, .5).fillTriangle(x - bodyWidth * .7, bodyTop + size * .34, x - bodyWidth * .2, bodyTop - size * .1, x + bodyWidth * .3, bodyTop + size * .34);
-  if (profile.features.includes('smoke')) surface.fillStyle(profile.bodyColor, .2).fillCircle(x - swing, bodyTop - size * .3, size * .4);
-  if (profile.features.includes('hollow')) surface.fillStyle(accent, .75).fillCircle(x, bodyTop + headRadius * .6, headRadius * .34);
-  if (caste === 'augmented') surface.lineStyle(Math.max(1, size * .08), accent, .55).strokeCircle(x, bodyTop - size * .12, headRadius * 1.5);
-  if (caste === 'labourer') surface.lineStyle(Math.max(1, size * .1), mixColor(profile.bodyColor, 0x000000, .35), .8).line(x + bodyWidth * .6, groundY - size * .5, x + bodyWidth * .6, groundY);
+  if (profile.features.includes('cap')) surface.fillStyle(mixColor(profile.bodyColor, 0xffffff, .3), .95).fillTriangle(x - size * .42, bodyTop + headRadius, x, bodyTop - size * .18, x + size * .42, bodyTop + headRadius);
+  if (profile.features.includes('antenna')) surface.lineStyle(Math.max(1, size * .1), accent, .8).line(x, bodyTop, x + swing * .6, bodyTop - size * .5);
+  if (profile.features.includes('crystal')) surface.fillStyle(accent, .6).fillTriangle(x - bodyWidth * .7, bodyTop + size * .34, x - bodyWidth * .2, bodyTop - size * .1, x + bodyWidth * .3, bodyTop + size * .34);
+  if (profile.features.includes('smoke')) surface.fillStyle(profile.bodyColor, .22).fillCircle(x - swing, bodyTop - size * .3, size * .34);
+  if (profile.features.includes('hollow')) surface.fillStyle(accent, .85).fillCircle(x, bodyTop + headRadius * .6, headRadius * .38);
+  // The halo only reads above ~7px; below that it collapsed into a blob around the head.
+  if (caste === 'augmented' && size >= 7) surface.lineStyle(1, accent, .6).strokeCircle(x, bodyTop - size * .16, headRadius * .95);
+  if (caste === 'labourer') surface.lineStyle(Math.max(1, size * .1), outline, .85).line(x + bodyWidth * .6, groundY - size * .5, x + bodyWidth * .6, groundY);
 }

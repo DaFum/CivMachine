@@ -4,7 +4,7 @@ import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPr
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface } from './draw-surface.js';
 import { settlementLayout } from './settlements.js';
-import { drawBanner, drawStructure } from './structures.js';
+import { bannerGeometry, drawBanner, drawStructure } from './structures.js';
 import { casteFor, drawCreature, speciesProfile } from './species.js';
 import { agentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
@@ -13,7 +13,9 @@ const DYNAMIC_FRAME_MS = 33;
 const devicePixelRatio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 const CONSTRUCTION_DURATION = reducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
-const GROUND_RATIO = .72;
+// Ground sits low enough that the strip below it stays a framed foreground band rather than
+// a quarter of the viewport filled with nothing.
+const GROUND_RATIO = .78;
 function buildScene(civ, width, height) {
     const snapshot = worldSnapshot(civ, width);
     const presentation = worldPresentation(civ);
@@ -52,9 +54,6 @@ function drawTerrainContent(surface, scene, height) {
     }
     surface.fillStyle(presentation.colors.nearTerrain, .82).fillRect(0, horizon, worldWidth, height - horizon);
 }
-function settlementCrown(settlement) {
-    return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
-}
 function drawSettlementContent(surface, scene, height) {
     const { civ, snapshot, presentation, settlements } = scene;
     const worldWidth = snapshot.worldWidth;
@@ -87,12 +86,20 @@ function drawSettlementContent(surface, scene, height) {
         for (const structure of settlement.structures) {
             drawStructure(surface, structure, ground, presentation.colors.settlement, presentation.accent, presentation.colors.window, civ.seed);
         }
+        // A faction-colored plinth marks who holds the settlement even in the cached layer.
         if (stage > 0) {
-            const crown = settlementCrown(settlement);
-            surface.lineStyle(1.6, mixColor(factionColor(scene, settlement), 0x000000, .45), .9)
-                .line(settlement.centerX, ground - crown - 34, settlement.centerX, ground - crown);
+            surface.fillStyle(factionColor(scene, settlement), .5).fillRect(settlement.centerX - settlement.radius * .22, ground - 3, settlement.radius * .44, 3);
         }
     }
+    // Foreground bank: without it the strip below the road was flat, empty fill.
+    const bankTop = height - Math.max(14, (height - ground) * .34);
+    const bankColor = mixColor(presentation.colors.nearTerrain, 0x000000, .5);
+    surface.fillStyle(bankColor, 1).fillRect(0, bankTop, worldWidth, height - bankTop);
+    for (let i = 0; i * 96 < worldWidth; i++) {
+        const x = i * 96;
+        surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - 5 - hash01(civ.seed + i * 7) * 12, x + 96, bankTop + 2);
+    }
+    surface.lineStyle(1, presentation.accent, .12).line(0, bankTop, worldWidth, bankTop);
 }
 function drawPathMotif(surface, civ, worldWidth, height, ground, time, accent) {
     const path = CivilizationPaths.ensure(civ).dominantPath;
@@ -214,7 +221,7 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
         const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
         const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
         const length = 5 + snapshot.stage * 1.5;
-        const y = ground + 8 + vehicle.lane * 4;
+        const y = ground + 10 + vehicle.lane * 7;
         surface.fillStyle(vehicle.seed % 2 ? presentation.accent : presentation.colors.window, .72).fillRect(x, y, length, 2.5);
         if (civ.era >= 2)
             surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
@@ -245,9 +252,9 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     for (const settlement of settlements) {
         if (snapshot.stage === 0)
             continue;
-        const crown = settlementCrown(settlement);
+        const banner = bannerGeometry(settlement, ground, height);
         const owner = settlement.factionIndex >= 0 ? scene.roster[settlement.factionIndex] : null;
-        drawBanner(surface, settlement.centerX, ground - crown - 34, 34, owner?.color ?? UNALIGNED_COLOR, owner?.sigil ?? 'node', reducedMotion ? 0 : (animationTime % 2600) / 2600);
+        drawBanner(surface, banner.x, banner.topY, banner.poleHeight, owner?.color ?? UNALIGNED_COLOR, owner?.sigil ?? 'node', reducedMotion ? 0 : (animationTime % 2600) / 2600);
         for (const structure of settlement.structures) {
             if (!tracker.isBuilding(structure.id, time))
                 continue;

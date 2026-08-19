@@ -11,7 +11,7 @@ import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
-import { structureKindsForEra, drawStructure, drawBanner } from '../dist/render/structures.js';
+import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
 
@@ -645,4 +645,27 @@ test('every render module is precached by the service worker', async () => {
     assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
   }
   assert.ok(!source.includes("'rce-app-v1.3.1'"), 'CACHE_NAME must be bumped for this release');
+});
+
+test('banners stay inside the viewport however tall the skyline gets', () => {
+  const settlement = (crown, centerX = 300) => ({ id: 's0', centerX, radius: 40, settlementClass: 'city', factionIndex: 0, structures: [{ id: 'a', x: centerX, width: 20, height: crown, kind: 'dwelling', level: 3 }] });
+  const height = 520;
+  const ground = height * .78;
+
+  const low = bannerGeometry(settlement(60), ground, height);
+  assert.equal(low.topY, ground - 60 - 34, 'a short settlement keeps the full clearance');
+  assert.equal(low.poleHeight, 34);
+
+  for (const crown of [60, 200, 340, ground - 4, ground + 200]) {
+    const banner = bannerGeometry(settlement(crown), ground, height);
+    assert.ok(banner.topY >= height * .04, `crown ${crown} pushed the banner to ${banner.topY}`);
+    assert.ok(banner.topY + banner.poleHeight <= ground + 1, `crown ${crown} put the pole below ground`);
+    assert.ok(banner.poleHeight >= BANNER_POLE_MIN, `crown ${crown} collapsed the pole to ${banner.poleHeight}`);
+    assert.equal(banner.x, 300);
+  }
+});
+
+test('settlement crown is the tallest structure', () => {
+  assert.equal(settlementCrown({ structures: [{ height: 10 }, { height: 42 }, { height: 7 }] }), 42);
+  assert.equal(settlementCrown({ structures: [] }), 0);
 });

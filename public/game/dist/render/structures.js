@@ -1,4 +1,19 @@
 import { hash01, mixColor } from './primitives.js';
+export const BANNER_CLEARANCE = 34;
+export const BANNER_POLE_MIN = 16;
+export function settlementCrown(settlement) {
+    return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
+}
+/**
+ * Banner geometry, shared by the cached and the animated layer. The top is clamped into view so a
+ * tall arcology skyline cannot push a settlement's banner off the upper edge; the pole shortens
+ * instead of the banner disappearing.
+ */
+export function bannerGeometry(settlement, groundY, height) {
+    const anchorY = groundY - settlementCrown(settlement);
+    const topY = Math.max(height * .04, anchorY - BANNER_CLEARANCE);
+    return { x: settlement.centerX, topY, poleHeight: Math.max(BANNER_POLE_MIN, anchorY - topY) };
+}
 export function structureKindsForEra(era, stage) {
     if (stage === 0)
         return ['dwelling', 'farm'];
