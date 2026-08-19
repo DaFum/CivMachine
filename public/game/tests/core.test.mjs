@@ -1711,10 +1711,12 @@ test('the terminal run pays no credits and no resources', () => {
   const engine = unlockedConvergenceEngine();
   engine.startConvergenceRun(5);
   engine.state.civilization.development = 400;
+  engine.state.machine.cultivationCreditsThisUniverse = 7;
+  engine.state.machine.currencies.causal_mass = 250;
   const before = { ...engine.state.machine.currencies };
   engine.harvest(false);
   assert.deepEqual(engine.state.machine.currencies, before);
-  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 0);
+  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 7);
   assert.equal(engine.state.phase, 'machine');
   assert.equal(engine.state.meta.convergences, 0);
   assert.equal(engine.convergenceUnlocked(), true);
@@ -1746,10 +1748,20 @@ test('a deep controlled harvest in the terminal run wins and pays a stacking bon
 test('a cascade in the terminal run fails without losing the unlock', () => {
   const engine = unlockedConvergenceEngine();
   engine.startConvergenceRun(7);
-  engine.state.civilization.development = 1200;
-  engine.state.civilization.stats.stability = 0;
-  engine.harvest(true);
+  const civ = engine.state.civilization;
+  // Depth alone would win; only the cascade must decide the outcome, and it has to arrive through
+  // the tick path rather than a hand-called harvest.
+  civ.development = 1200;
+  civ.eventChoices = 5;
+  civ.stats.stability = 1;
+  civ.tactical.entropy = 100;
+  let guard = 0;
+  while (engine.state.phase === 'civilization') {
+    if (++guard > 4000) throw new Error('the cascade never resolved');
+    engine.tick(0.25);
+  }
   assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.state.machine.lastHarvest.chaotic, true);
   assert.equal(engine.state.meta.convergences, 0);
   assert.equal(engine.convergenceUnlocked(), true);
 });
@@ -1757,5 +1769,48 @@ test('a cascade in the terminal run fails without losing the unlock', () => {
 test('reaching the gate completes the convergence_gate milestone', () => {
   const engine = unlockedConvergenceEngine();
   engine.refreshConvergenceMilestones();
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('a dominance change from a tactical action counts toward the path milestones', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(53);
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  civ.pathState.affinity.void_communion = 9;
+  civ.stats.stability = 40; // Stabilize is refused at full Reality Stability.
+  assert.equal(engine.useTacticalAction('stabilize'), true, engine.lastActionFailure);
+  assert.deepEqual(engine.state.meta.progression.seenDominantPaths, ['void_communion']);
+});
+
+test('the convergence gate milestone is awarded before the terminal run starts', () => {
+  const engine = unlockedConvergenceEngine();
+  assert.notEqual(engine.state.meta.progression.milestones.convergence_gate, true);
+  engine.startConvergenceRun(9);
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('a normal harvest that opens the gate awards it without waiting for a prestige', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.state.meta.progression.bestGrade = '';
+  assert.equal(engine.convergenceUnlocked(), false);
+  const civ = GameEngine.createCivilizationForTest(61);
+  civ.development = 800; civ.era = 2; civ.eventChoices = 5;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  engine.harvest(false);
+  assert.equal(engine.state.meta.progression.bestGrade, 'ascendant');
+  assert.equal(engine.convergenceUnlocked(), true);
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('installing the last Axiom opens the gate on the spot', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.state.meta.progression.machineInsight = 40;
+  delete engine.state.meta.axiomLevels.axiom_multiple_choice;
+  assert.equal(engine.convergenceUnlocked(), false);
+  engine.state.meta.axioms = 50;
+  assert.equal(engine.purchaseUpgrade('axiom', 'axiom_multiple_choice'), true);
+  assert.equal(engine.convergenceUnlocked(), true);
   assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
 });

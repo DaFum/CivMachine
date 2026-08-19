@@ -128,7 +128,7 @@ allocates nothing in the common case where nothing completes. It therefore runs 
 
 Two new pure modules, inside the existing `data/ → game/ → ui/ + render/` layering:
 
-```
+```text
 game/milestones.ts    MILESTONE_CATALOG (declarative)
                       evaluateMilestones(state) -> { newlyCompleted[], insightAwarded }
                       milestoneProgress(state)  -> display data
@@ -141,14 +141,17 @@ game/convergence.ts   convergenceRequirements(state) -> four conditions with is/
 ```
 
 `progression.ts` keeps the Insight bookkeeping and the unlock rules and delegates
-milestone evaluation to `milestones.ts`. The engine calls both only at the four points
-where it already calls `Progression.record*`: `tick`, `harvest`, `consumeUniverse`,
-`consumeMultiverse`. Two new engine methods are added: `startConvergenceRun()` and
-`acknowledgeVictory()`.
+milestone evaluation to `milestones.ts`. The engine calls them at the points where it
+already calls `Progression.record*` — `tick`, `harvest`, `consumeUniverse`,
+`consumeMultiverse` — and additionally refreshes the convergence gate wherever a gate
+input can change: after a harvest records a new best grade, after an Axiom purchase, and
+on entry to `startConvergenceRun`. Otherwise the `convergence_gate` milestone and its
+Insight would be withheld until the next prestige. Two new engine methods are added:
+`startConvergenceRun()` and `acknowledgeVictory()`.
 
 ## State changes
 
-```
+```text
 Phase                 + 'victory'
 Civilization          + terminal: boolean
 ProgressionState      + seenDominantPaths: string[]

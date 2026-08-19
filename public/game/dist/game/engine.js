@@ -102,7 +102,8 @@ export class GameEngine {
     canPurchaseUpgrade(layer, id) { const d = this.upgradeById(layer, id); if (!d || !Progression.canUseUpgrade(this.state, layer, id))
         return false; return this.upgradeLevel(layer, id) < Number(d.max_level) && this.currencyAmount(String(d.currency)) >= this.upgradeCost(layer, id); }
     purchaseUpgrade(layer, id) { if (!this.canPurchaseUpgrade(layer, id))
-        return false; const d = this.upgradeById(layer, id); const cost = this.upgradeCost(layer, id); this.spendCurrency(String(d.currency), cost); this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1; this.post(`Modification authorized: ${d.name} level ${this.levels(layer)[id]}.`); this.save(); this.emit(); return true; }
+        return false; const d = this.upgradeById(layer, id); const cost = this.upgradeCost(layer, id); this.spendCurrency(String(d.currency), cost); this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1; this.post(`Modification authorized: ${d.name} level ${this.levels(layer)[id]}.`); if (layer === 'axiom')
+        this.refreshConvergenceMilestones(); this.save(); this.emit(); return true; }
     visibleUpgradeEntries(layer) { return visibleUpgradeEntries(this.state, layer, this.catalog(layer)); }
     visibleResources() { return Progression.visibleResourceKeys(this.state); }
     nextPreviews() { return nextSystemPreviews(this.state); }
@@ -392,8 +393,10 @@ export class GameEngine {
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const dominant = CivilizationPaths.resolveDominance(civ);
-        if (dominant)
+        if (dominant) {
+            this.recordDominantPath(dominant);
             this.post(`DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(dominant).toUpperCase()}`);
+        }
         this.lastActionFailure = '';
         this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, { id: `tactical:${id}`, title: outcome.title }, { label: outcome.label }, before, captureDecisionSnapshot(civ));
         this.worldImpulse = this.decisionFeedback;
@@ -465,7 +468,7 @@ export class GameEngine {
         if (!this.state.machine.activeMutations.includes(mutationId))
             this.state.machine.activeMutations.push(mutationId);
     } this.state.machine.civilizationsTotal++; this.state.machine.civilizationsThisUniverse++; this.state.machine.cultivationCreditsThisUniverse += details.credits; const record = { chaotic, rewards: { ...rewards }, mutation_id: mutationId, seed: civ.seed, years: Math.trunc(civ.years), era: civ.era, development: civ.development, traits: [...civ.traits], directive_id: civ.directiveId, grade: details.grade, depth: details.depth, credits: details.credits, objective_completed: details.objectiveCompleted, reward_multiplier: details.rewardMultiplier }; this.state.machine.lastHarvest = record; for (const m of Progression.recordHarvest(this.state, record))
-        this.post(m); this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(mixSeed(civ.seed + this.state.machine.civilizationsTotal), false); this.post(`${chaotic ? 'CHAOTIC' : 'CONTROLLED'} ${details.grade.toUpperCase()} HARVEST complete. +${details.credits} Cultivation Credits.`); if (details.objectiveCompleted)
+        this.post(m); this.refreshConvergenceMilestones(); this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(mixSeed(civ.seed + this.state.machine.civilizationsTotal), false); this.post(`${chaotic ? 'CHAOTIC' : 'CONTROLLED'} ${details.grade.toUpperCase()} HARVEST complete. +${details.credits} Cultivation Credits.`); if (details.objectiveCompleted)
         this.post('DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.'); this.post(`Yield: Causal ${rewards.causal_mass}, Cognition ${rewards.cognition}, Paradox ${rewards.paradox}, Existence ${rewards.existence}.`); if (mutationId)
         this.post(`Machine mutation acquired: ${this.mutations.find((x) => x.id === mutationId)?.name ?? mutationId}.`); this.save(); this.emit(); return rewards; }
     finishTerminalRun(civ, chaotic, details) {
@@ -510,7 +513,8 @@ export class GameEngine {
     lastVictory() { return this.state.meta.victories[0] ?? null; }
     refreshConvergenceMilestones() { for (const m of Progression.recordMilestones(this.state, this.convergenceUnlocked()))
         this.post(m); }
-    startConvergenceRun(requestedSeed = 0) { if (this.state.phase !== 'machine' || !this.convergenceUnlocked()) {
+    startConvergenceRun(requestedSeed = 0) { if (this.state.phase === 'machine')
+        this.refreshConvergenceMilestones(); if (this.state.phase !== 'machine' || !this.convergenceUnlocked()) {
         this.lastActionFailure = 'The Great Convergence is not authorized.';
         this.emit();
         return false;
