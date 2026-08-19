@@ -470,6 +470,9 @@ class CanvasWorld implements WorldController {
   destroy(): void { cancelAnimationFrame(this.raf); this.tracker.reset(); this.staticCanvas.remove(); this.dynamicCanvas.remove(); }
 }
 
+/**
+ * Placeholder docstring for startWorldRenderer.
+ */
 export function startWorldRenderer(engine: GameEngine, host: HTMLElement): WorldController {
   let world: CanvasWorld | null = null;
 

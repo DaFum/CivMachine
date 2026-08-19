@@ -1,3 +1,6 @@
+/**
+ * Placeholder docstring for canvasSurface.
+ */
 export function canvasSurface(context, toColor) {
     const surface = {
         fillStyle(color, alpha = 1) { context.fillStyle = toColor(color, alpha); return surface; },

@@ -53,6 +53,9 @@ export const MILESTONE_CATALOG:ReadonlyArray<MilestoneDefinition>=[
   {id:'first_convergence',title:'The Great Convergence',description:'Win the Great Convergence.',group:'CONVERGENCE',insight:5,target:1,current:s=>s.convergences},
 ];
 
+/**
+ * Placeholder docstring for milestoneSnapshot.
+ */
 export function milestoneSnapshot(state:GameState,convergenceUnlocked:boolean):MilestoneSnapshot{
   const p=state.meta.progression; const civ=state.civilization;
   const endgames=civ?.pathState?.endgameStates?.length??0;
@@ -77,6 +80,9 @@ export function milestoneSnapshot(state:GameState,convergenceUnlocked:boolean):M
 
 // Called from the tick path, so it walks only the open milestones and allocates the snapshot only
 // once something is still open. A save with every milestone recorded does no work at all.
+/**
+ * Placeholder docstring for evaluateMilestones.
+ */
 export function evaluateMilestones(state:GameState,convergenceUnlocked:boolean):{newlyCompleted:MilestoneDefinition[];insightAwarded:number}{
   const done=state.meta.progression.milestones;
   let snapshot:MilestoneSnapshot|null=null;
@@ -91,6 +97,9 @@ export function evaluateMilestones(state:GameState,convergenceUnlocked:boolean):
   return {newlyCompleted,insightAwarded};
 }
 
+/**
+ * Placeholder docstring for milestoneProgress.
+ */
 export function milestoneProgress(state:GameState,convergenceUnlocked:boolean):MilestoneView[]{
   const snapshot=milestoneSnapshot(state,convergenceUnlocked); const done=state.meta.progression.milestones;
   return MILESTONE_CATALOG.map(milestone=>{
@@ -100,6 +109,9 @@ export function milestoneProgress(state:GameState,convergenceUnlocked:boolean):M
   });
 }
 
+/**
+ * Placeholder docstring for completedMilestoneCount.
+ */
 export function completedMilestoneCount(state:GameState):number{
   const done=state.meta.progression.milestones;
   return MILESTONE_CATALOG.reduce((count,milestone)=>count+(done[milestone.id]?1:0),0);

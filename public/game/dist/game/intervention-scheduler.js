@@ -8,15 +8,24 @@ const PHASE_WEIGHTS = [
 // the fresh pool non-empty forever, so the saturation stage never activates and that one event
 // dominates a long run -- measured 11 of 94 interventions. Cap the effective allowance instead.
 export const MAX_COUNT_CEILING = 3;
+/**
+ * Placeholder docstring for interventionExhausted.
+ */
 export function interventionExhausted(event, civ) {
     const allowance = Math.min(MAX_COUNT_CEILING, Math.max(1, Number(event.max_count ?? 2)));
     return Math.max(0, Number(civ.eventCounts[event.id] ?? 0)) >= allowance;
 }
+/**
+ * Placeholder docstring for recentEventIds.
+ */
 export function recentEventIds(civ) {
     if (!Array.isArray(civ.recentEventIds))
         civ.recentEventIds = [];
     return civ.recentEventIds;
 }
+/**
+ * Placeholder docstring for recordRecentIntervention.
+ */
 export function recordRecentIntervention(civ, id) {
     const recent = recentEventIds(civ);
     const priorIndex = recent.indexOf(id);
@@ -75,6 +84,9 @@ export function chooseWeightedIntervention(pool, roll01) {
     }
     return pool[pool.length - 1].event;
 }
+/**
+ * Placeholder docstring for eventDelayWindow.
+ */
 export function eventDelayWindow(civ) {
     return [
         { min: 10, max: 14 },

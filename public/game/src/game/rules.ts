@@ -4,12 +4,18 @@ export const RESOURCE_KEYS: ResourceKey[] = ['causal_mass', 'cognition', 'parado
 export const SAVE_VERSION = 4;
 export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000] as const;
 
+/**
+ * Placeholder docstring for eraForYears.
+ */
 export function eraForYears(years: number): number {
   const safe = Math.max(0, Number(years) || 0);
   for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--) if (safe >= ERA_YEAR_THRESHOLDS[era]!) return era;
   return 0;
 }
 
+/**
+ * Placeholder docstring for createNewState.
+ */
 export function createNewState(): GameState {
   return {
     saveVersion: SAVE_VERSION,
@@ -41,10 +47,16 @@ export function createNewState(): GameState {
   };
 }
 
+/**
+ * Placeholder docstring for upgradeCost.
+ */
 export function upgradeCost(baseCost: number, growth: number, level: number): number {
   return Math.max(1, Math.round(baseCost * Math.pow(Math.max(1, growth), Math.max(0, level))));
 }
 
+/**
+ * Placeholder docstring for calculateHarvest.
+ */
 export function calculateHarvest(civ: Civilization, chaotic: boolean, bonuses: RuntimeBonuses): Record<ResourceKey, number> {
   const years = Math.max(0, civ.years);
   const development = Math.max(1, civ.development);
@@ -66,12 +78,18 @@ export function calculateHarvest(civ: Civilization, chaotic: boolean, bonuses: R
   return result;
 }
 
+/**
+ * Placeholder docstring for universeResidueAward.
+ */
 export function universeResidueAward(credits: number, bank: number, multiplier: number): number {
   const creditTerm = Math.pow(Math.max(0, credits), 1.15) / 1.2;
   const bankTerm = Math.sqrt(Math.max(0, bank)) / 10;
   return Math.max(1, Math.floor((creditTerm + bankTerm) * Math.max(0.1, multiplier)));
 }
 
+/**
+ * Placeholder docstring for multiverseAxiomAward.
+ */
 export function multiverseAxiomAward(universes: number, universalLevels: number): number {
   return Math.max(1, Math.floor(Math.pow(Math.max(0, universes), 1.1) / 2 + Math.max(0, universalLevels) / 3));
 }

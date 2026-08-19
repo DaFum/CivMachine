@@ -23,6 +23,9 @@ export interface ConvergenceRequirement { id:string; label:string; current:numbe
 
 const count=(value:number)=>Math.max(0,Math.trunc(Number(value)||0));
 
+/**
+ * Placeholder docstring for convergenceTargets.
+ */
 export function convergenceTargets(convergences:number){
   const n=count(convergences);
   return {
@@ -33,6 +36,9 @@ export function convergenceTargets(convergences:number){
   };
 }
 
+/**
+ * Placeholder docstring for convergenceRequirements.
+ */
 export function convergenceRequirements(input:ConvergenceInput):ConvergenceRequirement[]{
   const targets=convergenceTargets(input.convergences);
   const milestoneTarget=Math.min(input.milestonesTotal,targets.milestones);
@@ -47,19 +53,31 @@ export function convergenceRequirements(input:ConvergenceInput):ConvergenceRequi
   return entries;
 }
 
+/**
+ * Placeholder docstring for convergenceUnlocked.
+ */
 export function convergenceUnlocked(input:ConvergenceInput):boolean{
   return convergenceRequirements(input).every(entry=>entry.met);
 }
 
+/**
+ * Placeholder docstring for terminalCivilizationSetup.
+ */
 export function terminalCivilizationSetup(){
   return {era:TERMINAL_ERA,years:ERA_YEAR_THRESHOLDS[TERMINAL_ERA],development:TERMINAL_DEVELOPMENT};
 }
 
+/**
+ * Placeholder docstring for evaluateConvergence.
+ */
 export function evaluateConvergence(depth:number,chaotic:boolean,convergences:number):'won'|'failed'{
   if(chaotic)return 'failed';
   return (Number(depth)||0)>=convergenceTargets(convergences).depth?'won':'failed';
 }
 
+/**
+ * Placeholder docstring for convergenceBonuses.
+ */
 export function convergenceBonuses(convergences:number){
   const n=count(convergences);
   return {allHarvestMult:1+CONVERGENCE_HARVEST_BONUS*n,containment:CONVERGENCE_CONTAINMENT_BONUS*n};

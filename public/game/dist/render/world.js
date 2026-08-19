@@ -496,6 +496,9 @@ class CanvasWorld {
     }
     destroy() { cancelAnimationFrame(this.raf); this.tracker.reset(); this.staticCanvas.remove(); this.dynamicCanvas.remove(); }
 }
+/**
+ * Placeholder docstring for startWorldRenderer.
+ */
 export function startWorldRenderer(engine, host) {
     let world = null;
     const ensure = () => {

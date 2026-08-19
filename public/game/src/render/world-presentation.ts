@@ -10,6 +10,9 @@ const band = (value: number): number => value < 25 ? 0 : value < 50 ? 1 : value 
 
 export type DecisionImpulseKind = 'containment' | 'time-streak' | 'scan' | 'fracture' | 'decision';
 
+/**
+ * Placeholder docstring for decisionImpulseKind.
+ */
 export function decisionImpulseKind(eventId:string):DecisionImpulseKind {
   if(eventId==='tactical:stabilize')return 'containment';
   if(eventId==='tactical:accelerate')return 'time-streak';
@@ -18,12 +21,18 @@ export function decisionImpulseKind(eventId:string):DecisionImpulseKind {
   return 'decision';
 }
 
+/**
+ * Placeholder docstring for entropyThresholdColor.
+ */
 export function entropyThresholdColor(eventId:string):number {
   if(eventId.endsWith('_25'))return 0xf2d06b;
   if(eventId.endsWith('_50'))return 0xf29a52;
   return 0xee6973;
 }
 
+/**
+ * Placeholder docstring for worldPresentation.
+ */
 export function worldPresentation(civ: Civilization) {
   const stability = clamp01(civ.stats.stability / Math.max(1, civ.stats.stabilityMax));
   const danger = clamp01((55 - civ.stats.stability) / 55);
@@ -61,6 +70,9 @@ export function worldPresentation(civ: Civilization) {
   };
 }
 
+/**
+ * Placeholder docstring for structuralWorldKey.
+ */
 export function structuralWorldKey(civ: Civilization, viewportWidth: number): string {
   const snapshot = worldSnapshot(civ, viewportWidth);
   const presentation = worldPresentation(civ);

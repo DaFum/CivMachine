@@ -12,10 +12,16 @@ export interface OrbitalSpec { altitude: number; speed: number; phase: number; }
 export interface LaunchSpec { x: number; period: number; offset: number; }
 export interface AgentPlan { pedestrians: PedestrianSpec[]; vehicles: VehicleSpec[]; aircraft: AircraftSpec[]; orbital: OrbitalSpec[]; launches: LaunchSpec[]; }
 
+/**
+ * Placeholder docstring for agentPlanTotal.
+ */
 export function agentPlanTotal(plan: AgentPlan): number {
   return plan.pedestrians.length + plan.vehicles.length + plan.aircraft.length + plan.orbital.length + plan.launches.length;
 }
 
+/**
+ * Placeholder docstring for agentPlan.
+ */
 export function agentPlan(civ: Civilization, snapshot: Snapshot, settlements: Settlement[]): AgentPlan {
   const budget = snapshot.agentBudget;
   const seed = civ.seed;

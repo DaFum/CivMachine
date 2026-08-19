@@ -28,13 +28,22 @@ export const FACTION_SIGILS: Record<string, FactionSigil> = {
   recursive_simulation: 'spiral',
 };
 
+/**
+ * Placeholder docstring for pathAccentFor.
+ */
 export function pathAccentFor(pathId: string): number { return PATH_ACCENTS[pathId] ?? DEFAULT_ACCENT; }
 
+/**
+ * Placeholder docstring for hash01.
+ */
 export function hash01(n: number): number {
   const value = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
   return value - Math.floor(value);
 }
 
+/**
+ * Placeholder docstring for mixColor.
+ */
 export function mixColor(from: number, to: number, amount: number): number {
   const t = Math.max(0, Math.min(1, amount));
   const channel = (shift: number): number => Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t);

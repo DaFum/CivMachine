@@ -1,6 +1,9 @@
 import { CivilizationPaths } from '../game/paths.js';
 import { DEFAULT_ACCENT, FACTION_SIGILS, pathAccentFor } from './primitives.js';
 export const UNALIGNED_COLOR = 0x71808f;
+/**
+ * Placeholder docstring for factionRoster.
+ */
 export function factionRoster(civ) {
     const state = CivilizationPaths.ensure(civ);
     const ranked = CivilizationPaths.ranked(civ, 10);
@@ -18,6 +21,9 @@ export function factionRoster(civ) {
         sigil: FACTION_SIGILS[id] ?? 'node',
     }));
 }
+/**
+ * Placeholder docstring for factionSignature.
+ */
 export function factionSignature(civ) {
     const roster = factionRoster(civ);
     if (!roster.length)

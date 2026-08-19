@@ -13,6 +13,9 @@ export const TERMINAL_DEVELOPMENT = 340;
 // module stays free of the harvest catalog and can be reasoned about on its own.
 export const CONVERGENCE_ASCENDANT_INDEX = 3;
 const count = (value) => Math.max(0, Math.trunc(Number(value) || 0));
+/**
+ * Placeholder docstring for convergenceTargets.
+ */
 export function convergenceTargets(convergences) {
     const n = count(convergences);
     return {
@@ -22,6 +25,9 @@ export function convergenceTargets(convergences) {
         depth: CONVERGENCE_BASE_DEPTH + CONVERGENCE_DEPTH_STEP * n,
     };
 }
+/**
+ * Placeholder docstring for convergenceRequirements.
+ */
 export function convergenceRequirements(input) {
     const targets = convergenceTargets(input.convergences);
     const milestoneTarget = Math.min(input.milestonesTotal, targets.milestones);
@@ -36,17 +42,29 @@ export function convergenceRequirements(input) {
         entry.met = entry.current >= entry.target;
     return entries;
 }
+/**
+ * Placeholder docstring for convergenceUnlocked.
+ */
 export function convergenceUnlocked(input) {
     return convergenceRequirements(input).every(entry => entry.met);
 }
+/**
+ * Placeholder docstring for terminalCivilizationSetup.
+ */
 export function terminalCivilizationSetup() {
     return { era: TERMINAL_ERA, years: ERA_YEAR_THRESHOLDS[TERMINAL_ERA], development: TERMINAL_DEVELOPMENT };
 }
+/**
+ * Placeholder docstring for evaluateConvergence.
+ */
 export function evaluateConvergence(depth, chaotic, convergences) {
     if (chaotic)
         return 'failed';
     return (Number(depth) || 0) >= convergenceTargets(convergences).depth ? 'won' : 'failed';
 }
+/**
+ * Placeholder docstring for convergenceBonuses.
+ */
 export function convergenceBonuses(convergences) {
     const n = count(convergences);
     return { allHarvestMult: 1 + CONVERGENCE_HARVEST_BONUS * n, containment: CONVERGENCE_CONTAINMENT_BONUS * n };

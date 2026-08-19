@@ -1,7 +1,13 @@
 import { hash01 } from './primitives.js';
+/**
+ * Placeholder docstring for agentPlanTotal.
+ */
 export function agentPlanTotal(plan) {
     return plan.pedestrians.length + plan.vehicles.length + plan.aircraft.length + plan.orbital.length + plan.launches.length;
 }
+/**
+ * Placeholder docstring for agentPlan.
+ */
 export function agentPlan(civ, snapshot, settlements) {
     const budget = snapshot.agentBudget;
     const seed = civ.seed;

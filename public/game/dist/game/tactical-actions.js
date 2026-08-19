@@ -49,6 +49,9 @@ const ACTION_PATHS = {
     vent: ['void_communion', 'post_mortal_civilization'],
 };
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+/**
+ * Placeholder docstring for tacticalAvailability.
+ */
 export function tacticalAvailability(civ, id) {
     const definition = TACTICAL_ACTIONS[id];
     if (civ.tactical.controlCapacity < definition.cost) {
@@ -71,6 +74,9 @@ export function tacticalAvailability(civ, id) {
     }
     return { enabled: true, reason: '', cost: definition.cost };
 }
+/**
+ * Placeholder docstring for applyTacticalAction.
+ */
 export function applyTacticalAction(civ, id, bonuses) {
     const availability = tacticalAvailability(civ, id);
     if (!availability.enabled)

@@ -2,6 +2,9 @@ import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
+/**
+ * Placeholder docstring for settlementClassFor.
+ */
 export function settlementClassFor(structureCount, stage, era) {
     if (stage === 0)
         return structureCount >= 4 ? 'village' : 'camp';
@@ -17,6 +20,9 @@ export function settlementClassFor(structureCount, stage, era) {
     return 'arcology';
 }
 // The capital is weighted heavily so a developed world always contains one large settlement.
+/**
+ * Placeholder docstring for settlementSizes.
+ */
 export function settlementSizes(civ, snapshot) {
     const count = snapshot.settlementCount;
     const weights = Array.from({ length: count }, (_, i) => i === 0 ? 1.9 : .55 + hash01(civ.seed * 29 + i * 13) * .9);
@@ -34,6 +40,9 @@ export function settlementSizes(civ, snapshot) {
     }
     return sizes;
 }
+/**
+ * Placeholder docstring for settlementClassSignature.
+ */
 export function settlementClassSignature(civ, snapshot) {
     const counts = new Map();
     for (const size of settlementSizes(civ, snapshot)) {
@@ -69,6 +78,9 @@ function kindFor(index, count, settlementClass, era, stage, seed, allowed) {
         return 'industry';
     return 'dwelling';
 }
+/**
+ * Placeholder docstring for settlementLayout.
+ */
 export function settlementLayout(civ, worldWidth, height, snapshot) {
     const stage = snapshot.stage;
     const sizes = settlementSizes(civ, snapshot);

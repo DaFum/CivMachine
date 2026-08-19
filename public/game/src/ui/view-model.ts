@@ -57,6 +57,9 @@ function nextDepthBand(depth: number) {
   };
 }
 
+/**
+ * Placeholder docstring for buildViewModel.
+ */
 export function buildViewModel(engine: GameEngine) {
   const state = engine.state;
   const resources = engine.visibleResources().map(id => ({
@@ -193,6 +196,9 @@ export function buildViewModel(engine: GameEngine) {
   };
 }
 
+/**
+ * Placeholder docstring for civilizationRenderKey.
+ */
 export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): string {
   const civilization = vm.civilization;
   if (vm.phase !== 'civilization' || !civilization) return vm.phase;

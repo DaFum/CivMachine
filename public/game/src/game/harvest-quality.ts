@@ -38,22 +38,34 @@ export const DEPTH_BANDS: ReadonlyArray<{ grade: HarvestGrade; minDepth: number 
   { grade: 'singular', minDepth: 16 },
 ];
 
+/**
+ * Placeholder docstring for endgameStatesReached.
+ */
 export function endgameStatesReached(civ: Civilization): number {
   const states = civ.pathState?.endgameStates;
   if (Array.isArray(states)) return states.length;
   return civ.pathState?.endgameState ? 1 : 0;
 }
 
+/**
+ * Placeholder docstring for cultivationDepth.
+ */
 export function cultivationDepth(civ: Civilization): number {
   return Math.max(0, civ.development) / DEPTH_DEVELOPMENT_SCALE + DEPTH_ENDGAME_BONUS * endgameStatesReached(civ);
 }
 
+/**
+ * Placeholder docstring for depthBand.
+ */
 export function depthBand(depth: number): HarvestGrade {
   let grade: HarvestGrade = 'premature';
   for (const band of DEPTH_BANDS) if (depth >= band.minDepth) grade = band.grade;
   return grade;
 }
 
+/**
+ * Placeholder docstring for evaluateHarvestQuality.
+ */
 export function evaluateHarvestQuality(civ: Civilization, _chaotic = false): HarvestQuality {
   const depth = cultivationDepth(civ);
   const grade = civ.eventChoices < 3 || civ.era <= 0 ? 'premature' : depthBand(depth);
@@ -66,6 +78,9 @@ export function evaluateHarvestQuality(civ: Civilization, _chaotic = false): Har
   };
 }
 
+/**
+ * Placeholder docstring for calculateCultivationCredits.
+ */
 export function calculateCultivationCredits(
   quality: HarvestQuality,
   chaotic = false,
@@ -76,6 +91,9 @@ export function calculateCultivationCredits(
   return Math.max(0, chaotic ? Math.floor(base * CHAOTIC_CREDIT_RETENTION) : base);
 }
 
+/**
+ * Placeholder docstring for applyHarvestQuality.
+ */
 export function applyHarvestQuality(
   rawRewards: Record<ResourceKey, number>,
   quality: HarvestQuality,
@@ -92,6 +110,9 @@ export function applyHarvestQuality(
 
 export const HARVEST_GRADE_ORDER: ReadonlyArray<HarvestGrade> = DEPTH_BANDS.map(band => band.grade);
 
+/**
+ * Placeholder docstring for gradeIndex.
+ */
 export function gradeIndex(grade: HarvestGrade | ''): number {
   return grade ? HARVEST_GRADE_ORDER.indexOf(grade) : -1;
 }

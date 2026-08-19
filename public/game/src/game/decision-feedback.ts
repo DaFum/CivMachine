@@ -29,6 +29,9 @@ function additions(after:string[],before:string[],kind:'trait'|'institution'|'fl
   return after.filter(id=>!known.has(id)).map(id=>({kind,label:humanize(id)}));
 }
 
+/**
+ * Placeholder docstring for captureDecisionSnapshot.
+ */
 export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
   return {
     metrics: {
@@ -51,6 +54,9 @@ export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
   };
 }
 
+/**
+ * Placeholder docstring for buildDecisionFeedback.
+ */
 export function buildDecisionFeedback(
   sequence:number,
   event:{id:string;title:string},

@@ -14,6 +14,9 @@ export interface DrawSurface {
   fillPoly(points: ReadonlyArray<readonly [number, number]>): DrawSurface;
 }
 
+/**
+ * Placeholder docstring for canvasSurface.
+ */
 export function canvasSurface(context: any, toColor: (value: number, alpha?: number) => string): DrawSurface {
   const surface: DrawSurface = {
     fillStyle(color, alpha = 1) { context.fillStyle = toColor(color, alpha); return surface; },

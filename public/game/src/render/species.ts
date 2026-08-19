@@ -35,8 +35,14 @@ const SEED_ARCHETYPES: ReadonlyArray<ArchetypeSpec> = [
 
 const CASTES: Record<string, Caste> = { camp: 'labourer', village: 'labourer', town: 'citizen', city: 'citizen', metropolis: 'augmented', arcology: 'augmented' };
 
+/**
+ * Placeholder docstring for casteFor.
+ */
 export function casteFor(settlementClass: string): Caste { return CASTES[settlementClass] ?? 'citizen'; }
 
+/**
+ * Placeholder docstring for speciesProfile.
+ */
 export function speciesProfile(civ: Civilization): SpeciesProfile {
   const traits = new Set(civ.traits);
   let spec: ArchetypeSpec | undefined;
@@ -57,6 +63,9 @@ export function speciesProfile(civ: Civilization): SpeciesProfile {
 
 const CASTE_SCALE: Record<Caste, number> = { labourer: .82, citizen: 1, augmented: 1.14 };
 
+/**
+ * Placeholder docstring for drawCreature.
+ */
 export function drawCreature(surface: DrawSurface, profile: SpeciesProfile, caste: Caste, x: number, groundY: number, scale: number, phase: number, accent: number): void {
   const size = Math.max(3, 7 * scale * CASTE_SCALE[caste] * profile.heightRatio);
   const swing = Math.sin(phase * Math.PI * 2) * size * .22;

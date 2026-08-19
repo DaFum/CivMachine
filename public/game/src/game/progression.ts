@@ -37,10 +37,16 @@ export class Progression {
 
 export interface VisibleUpgradeEntry { definition:any; status:'available'|'locked'; reason:string; }
 
+/**
+ * Placeholder docstring for progressionRulesForLayer.
+ */
 export function progressionRulesForLayer(layer:Layer): Record<string,{insight:number;resource?:string}> {
   return layer==='machine'?MACHINE:layer==='universe'?UNIVERSE:AXIOM;
 }
 
+/**
+ * Placeholder docstring for upgradeUnlockReason.
+ */
 export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):string {
   const rules=progressionRulesForLayer(layer); const rule=rules[id]; if(!rule)return 'Unknown progression requirement.';
   if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return 'Consume the first Universe.';
@@ -50,6 +56,9 @@ export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):strin
   return req.length?req.join(' and '):'Available after current progression refresh.';
 }
 
+/**
+ * Placeholder docstring for visibleUpgradeEntries.
+ */
 export function visibleUpgradeEntries(state:GameState,layer:Layer,catalog:readonly any[]):VisibleUpgradeEntry[] {
   if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return [];
   if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return [];
@@ -59,6 +68,9 @@ export function visibleUpgradeEntries(state:GameState,layer:Layer,catalog:readon
   locked.sort((a,b)=>a.threshold-b.threshold); available.push(...locked.slice(0,2).map(({threshold:_t,...entry})=>entry)); return available;
 }
 
+/**
+ * Placeholder docstring for nextSystemPreviews.
+ */
 export function nextSystemPreviews(state:GameState):Array<{id:string;name:string;condition:string}> {
   const candidates=[
     ['directives','Directive System','Complete 2 Controlled Harvests and reach Machine Insight 3.',3],

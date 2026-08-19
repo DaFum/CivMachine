@@ -2,6 +2,9 @@ import { CONTENT } from '../data/content.generated.js';
 import { CivilizationPaths } from './paths.js';
 const L = CONTENT.lore;
 const pick = (values, index) => values[((index % values.length) + values.length) % values.length] ?? values[0] ?? 'Unknown';
+/**
+ * Placeholder docstring for speciesProfile.
+ */
 export function speciesProfile(civ) {
     const t = civ.traits;
     let body = 'biped';
@@ -20,6 +23,9 @@ export function speciesProfile(civ) {
     const name = pick(L.species_prefixes, civ.seed + t.length * 9) + pick(L.species_suffixes, civ.seed * 2 + t.length * 5 + 3);
     return { name, bodyType: body, culture: pick(L.cultures, civ.seed * 7 + 19), motif: t.includes('sentient_moon') ? 'moon sigils and tidal halos' : t.includes('ritual_engineering') ? 'engraved machines and ceremonial lights' : body === 'fungal' ? 'spore crowns and root lanterns' : body === 'avian' ? 'crest feathers and sky glyphs' : body === 'cephalopod' ? 'ink veils and fluid geometry' : 'banner cloth and bio-luminescent trim' };
 }
+/**
+ * Placeholder docstring for factionProfile.
+ */
 export function factionProfile(civ) {
     const ps = CivilizationPaths.ensure(civ);
     const path = ps.dominantPath;

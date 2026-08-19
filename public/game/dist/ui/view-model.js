@@ -55,6 +55,9 @@ function nextDepthBand(depth) {
         yieldMultiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * upcoming.minDepth,
     };
 }
+/**
+ * Placeholder docstring for buildViewModel.
+ */
 export function buildViewModel(engine) {
     const state = engine.state;
     const resources = engine.visibleResources().map(id => ({
@@ -190,6 +193,9 @@ export function buildViewModel(engine) {
         messages: engine.messages.slice(0, 30),
     };
 }
+/**
+ * Placeholder docstring for civilizationRenderKey.
+ */
 export function civilizationRenderKey(vm) {
     const civilization = vm.civilization;
     if (vm.phase !== 'civilization' || !civilization)

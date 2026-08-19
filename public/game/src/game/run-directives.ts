@@ -17,6 +17,9 @@ function nextRandom(state: number): { state: number; value: number } {
   return { state: next, value: next / 4294967296 };
 }
 
+/**
+ * Placeholder docstring for buildDirectiveOffers.
+ */
 export function buildDirectiveOffers(knownIds: readonly string[], seed: number, count = 3): string[] {
   const pool = [...new Set(knownIds.map(String))].sort();
   let state = seed >>> 0 || 0x52434531;
@@ -74,10 +77,16 @@ export const DIRECTIVE_OBJECTIVES: Readonly<Record<string, DirectiveObjectiveDef
   },
 };
 
+/**
+ * Placeholder docstring for objectiveForDirective.
+ */
 export function objectiveForDirective(directiveId: string): DirectiveObjectiveDefinition | null {
   return DIRECTIVE_OBJECTIVES[directiveId] ?? null;
 }
 
+/**
+ * Placeholder docstring for evaluateDirectiveObjective.
+ */
 export function evaluateDirectiveObjective(civ: Civilization): boolean {
   const objective = objectiveForDirective(civ.directiveId);
   return Boolean(objective?.isComplete(civ));

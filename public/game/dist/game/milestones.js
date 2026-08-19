@@ -30,6 +30,9 @@ export const MILESTONE_CATALOG = [
     { id: 'convergence_gate', title: 'Convergence Authorized', description: 'Meet every requirement of the Great Convergence.', group: 'CONVERGENCE', insight: 3, target: 1, current: s => s.convergenceUnlocked },
     { id: 'first_convergence', title: 'The Great Convergence', description: 'Win the Great Convergence.', group: 'CONVERGENCE', insight: 5, target: 1, current: s => s.convergences },
 ];
+/**
+ * Placeholder docstring for milestoneSnapshot.
+ */
 export function milestoneSnapshot(state, convergenceUnlocked) {
     const p = state.meta.progression;
     const civ = state.civilization;
@@ -54,6 +57,9 @@ export function milestoneSnapshot(state, convergenceUnlocked) {
 }
 // Called from the tick path, so it walks only the open milestones and allocates the snapshot only
 // once something is still open. A save with every milestone recorded does no work at all.
+/**
+ * Placeholder docstring for evaluateMilestones.
+ */
 export function evaluateMilestones(state, convergenceUnlocked) {
     const done = state.meta.progression.milestones;
     let snapshot = null;
@@ -73,6 +79,9 @@ export function evaluateMilestones(state, convergenceUnlocked) {
     }
     return { newlyCompleted, insightAwarded };
 }
+/**
+ * Placeholder docstring for milestoneProgress.
+ */
 export function milestoneProgress(state, convergenceUnlocked) {
     const snapshot = milestoneSnapshot(state, convergenceUnlocked);
     const done = state.meta.progression.milestones;
@@ -82,6 +91,9 @@ export function milestoneProgress(state, convergenceUnlocked) {
         return { id: milestone.id, title: milestone.title, description: milestone.description, group: milestone.group, insight: milestone.insight, current, target: milestone.target, completed };
     });
 }
+/**
+ * Placeholder docstring for completedMilestoneCount.
+ */
 export function completedMilestoneCount(state) {
     const done = state.meta.progression.milestones;
     return MILESTONE_CATALOG.reduce((count, milestone) => count + (done[milestone.id] ? 1 : 0), 0);

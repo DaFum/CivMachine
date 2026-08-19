@@ -1,6 +1,9 @@
 import { hash01, mixColor } from './primitives.js';
 export const BANNER_CLEARANCE = 34;
 export const BANNER_POLE_MIN = 16;
+/**
+ * Placeholder docstring for settlementCrown.
+ */
 export function settlementCrown(settlement) {
     return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
 }
@@ -14,6 +17,9 @@ export function bannerGeometry(settlement, groundY, height) {
     const topY = Math.max(height * .04, anchorY - BANNER_CLEARANCE);
     return { x: settlement.centerX, topY, poleHeight: Math.max(BANNER_POLE_MIN, anchorY - topY) };
 }
+/**
+ * Placeholder docstring for structureKindsForEra.
+ */
 export function structureKindsForEra(era, stage) {
     if (stage === 0)
         return ['dwelling', 'farm'];
@@ -26,6 +32,9 @@ export function structureKindsForEra(era, stage) {
         kinds.push('orbital_anchor');
     return kinds;
 }
+/**
+ * Placeholder docstring for drawStructure.
+ */
 export function drawStructure(surface, structure, groundY, bodyColor, accent, windowColor, seed) {
     const left = structure.x - structure.width / 2;
     const top = groundY - structure.height;
@@ -108,6 +117,9 @@ const SIGIL_DRAW = {
     nest: (s, x, y, size, color) => { for (let i = 0; i < 4; i++)
         s.fillStyle(color, .7 - i * .12).fillCircle(x + (i % 2 ? size * .22 : -size * .22), y + (i < 2 ? -size * .16 : size * .16), size * .15); },
 };
+/**
+ * Placeholder docstring for drawBanner.
+ */
 export function drawBanner(surface, x, topY, poleHeight, color, sigil, wave) {
     const bottomY = topY + poleHeight;
     surface.lineStyle(1.6, mixColor(color, 0x000000, .45), .9).line(x, topY, x, bottomY);

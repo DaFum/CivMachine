@@ -6,6 +6,9 @@ export const UNALIGNED_COLOR = 0x71808f;
 
 export interface Faction { pathId: string; label: string; color: number; share: number; sigil: FactionSigil; }
 
+/**
+ * Placeholder docstring for factionRoster.
+ */
 export function factionRoster(civ: Civilization): Faction[] {
   const state = CivilizationPaths.ensure(civ);
   const ranked = CivilizationPaths.ranked(civ, 10);
@@ -23,6 +26,9 @@ export function factionRoster(civ: Civilization): Faction[] {
   }));
 }
 
+/**
+ * Placeholder docstring for factionSignature.
+ */
 export function factionSignature(civ: Civilization): string {
   const roster = factionRoster(civ);
   if (!roster.length) return 'unaligned';

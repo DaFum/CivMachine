@@ -22,6 +22,9 @@ export interface PressureAdvance {
   queuedCrises: string[];
 }
 
+/**
+ * Placeholder docstring for pressureMultiplier.
+ */
 export function pressureMultiplier(years: number): number {
   return 1 + Math.max(0, Number(years) || 0) / PRESSURE_YEAR_SCALE;
 }
@@ -30,10 +33,16 @@ function relief(containment: number): number {
   return 1 + CONTAINMENT_RELIEF * Math.max(0, Number(containment) || 0);
 }
 
+/**
+ * Placeholder docstring for entropyRate.
+ */
 export function entropyRate(years: number, containment: number, terminal = false): number {
   return PRESSURE_BASE * pressureMultiplier(years) / relief(containment) * (terminal ? TERMINAL_ENTROPY_MULTIPLIER : 1);
 }
 
+/**
+ * Placeholder docstring for secondsToCascade.
+ */
 export function secondsToCascade(years: number, entropy: number, containment: number, terminal = false): number {
   const remaining = Math.max(0, 100 - (Number(entropy) || 0));
   if (remaining <= 0) return 0;
@@ -44,6 +53,9 @@ export function secondsToCascade(years: number, entropy: number, containment: nu
   return (-b + Math.sqrt(b * b + 4 * k * c)) / (2 * k);
 }
 
+/**
+ * Placeholder docstring for advancePressure.
+ */
 export function advancePressure(
   civ: Civilization,
   bonuses: { containmentRating: number },
@@ -64,6 +76,9 @@ export function advancePressure(
   return { before, after, rate, queuedCrises };
 }
 
+/**
+ * Placeholder docstring for cascadeDecay.
+ */
 export function cascadeDecay(entropy: number, stabilityMax: number): number {
   return entropy >= 100 ? CASCADE_DECAY_FRACTION * Math.max(1, Number(stabilityMax) || 1) : 0;
 }

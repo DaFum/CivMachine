@@ -21,15 +21,24 @@ export const DEPTH_BANDS = [
     { grade: 'ascendant', minDepth: 9 },
     { grade: 'singular', minDepth: 16 },
 ];
+/**
+ * Placeholder docstring for endgameStatesReached.
+ */
 export function endgameStatesReached(civ) {
     const states = civ.pathState?.endgameStates;
     if (Array.isArray(states))
         return states.length;
     return civ.pathState?.endgameState ? 1 : 0;
 }
+/**
+ * Placeholder docstring for cultivationDepth.
+ */
 export function cultivationDepth(civ) {
     return Math.max(0, civ.development) / DEPTH_DEVELOPMENT_SCALE + DEPTH_ENDGAME_BONUS * endgameStatesReached(civ);
 }
+/**
+ * Placeholder docstring for depthBand.
+ */
 export function depthBand(depth) {
     let grade = 'premature';
     for (const band of DEPTH_BANDS)
@@ -37,6 +46,9 @@ export function depthBand(depth) {
             grade = band.grade;
     return grade;
 }
+/**
+ * Placeholder docstring for evaluateHarvestQuality.
+ */
 export function evaluateHarvestQuality(civ, _chaotic = false) {
     const depth = cultivationDepth(civ);
     const grade = civ.eventChoices < 3 || civ.era <= 0 ? 'premature' : depthBand(depth);
@@ -49,12 +61,18 @@ export function evaluateHarvestQuality(civ, _chaotic = false) {
         depth,
     };
 }
+/**
+ * Placeholder docstring for calculateCultivationCredits.
+ */
 export function calculateCultivationCredits(quality, chaotic = false, objectiveCompleted = false) {
     if (quality.grade === 'premature')
         return 0;
     const base = quality.credits + (objectiveCompleted ? 1 : 0);
     return Math.max(0, chaotic ? Math.floor(base * CHAOTIC_CREDIT_RETENTION) : base);
 }
+/**
+ * Placeholder docstring for applyHarvestQuality.
+ */
 export function applyHarvestQuality(rawRewards, quality, options = {}) {
     const rewardMultiplier = quality.multiplier
         * Math.max(0.1, options.gradeRewardMult ?? 1)
@@ -67,6 +85,9 @@ export function applyHarvestQuality(rawRewards, quality, options = {}) {
     return { rewards, rewardMultiplier };
 }
 export const HARVEST_GRADE_ORDER = DEPTH_BANDS.map(band => band.grade);
+/**
+ * Placeholder docstring for gradeIndex.
+ */
 export function gradeIndex(grade) {
     return grade ? HARVEST_GRADE_ORDER.indexOf(grade) : -1;
 }

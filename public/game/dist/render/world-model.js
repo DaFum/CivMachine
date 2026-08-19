@@ -1,3 +1,6 @@
+/**
+ * Placeholder docstring for developmentStage.
+ */
 export function developmentStage(civ) {
     const score = civ.development + civ.era * 120 + civ.institutions.length * 30 + civ.eventChoices * 6;
     if (score < 70)
@@ -10,9 +13,15 @@ export function developmentStage(civ) {
         return 3;
     return 4;
 }
+/**
+ * Placeholder docstring for worldWidthMultiplier.
+ */
 export function worldWidthMultiplier(civ) {
     return [1.5, 1.9, 2.5, 3.2, 4.0][developmentStage(civ)] ?? 1.5;
 }
+/**
+ * Placeholder docstring for worldSnapshot.
+ */
 export function worldSnapshot(civ, viewportWidth) {
     const stage = developmentStage(civ);
     const institutionCount = civ.institutions.length;

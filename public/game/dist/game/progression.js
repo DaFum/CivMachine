@@ -67,9 +67,15 @@ export class Progression {
     static recordMultiverse(state) { const out = []; this.discover(state, 'axioms', 'Axioms', out); return this.recordMilestones(state, false, out); }
     static visibleResourceKeys(state) { return state.meta.progression.discoveredResources.slice(); }
 }
+/**
+ * Placeholder docstring for progressionRulesForLayer.
+ */
 export function progressionRulesForLayer(layer) {
     return layer === 'machine' ? MACHINE : layer === 'universe' ? UNIVERSE : AXIOM;
 }
+/**
+ * Placeholder docstring for upgradeUnlockReason.
+ */
 export function upgradeUnlockReason(state, layer, id) {
     const rules = progressionRulesForLayer(layer);
     const rule = rules[id];
@@ -86,6 +92,9 @@ export function upgradeUnlockReason(state, layer, id) {
         req.push(`discover ${rule.resource.replaceAll('_', ' ')}`);
     return req.length ? req.join(' and ') : 'Available after current progression refresh.';
 }
+/**
+ * Placeholder docstring for visibleUpgradeEntries.
+ */
 export function visibleUpgradeEntries(state, layer, catalog) {
     if (layer === 'universe' && !Progression.systemUnlocked(state, 'universe_upgrades'))
         return [];
@@ -105,6 +114,9 @@ export function visibleUpgradeEntries(state, layer, catalog) {
     available.push(...locked.slice(0, 2).map(({ threshold: _t, ...entry }) => entry));
     return available;
 }
+/**
+ * Placeholder docstring for nextSystemPreviews.
+ */
 export function nextSystemPreviews(state) {
     const candidates = [
         ['directives', 'Directive System', 'Complete 2 Controlled Harvests and reach Machine Insight 3.', 3],

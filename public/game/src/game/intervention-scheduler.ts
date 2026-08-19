@@ -30,6 +30,9 @@ const PHASE_WEIGHTS: ReadonlyArray<Readonly<Record<string, number>>> = [
 // dominates a long run -- measured 11 of 94 interventions. Cap the effective allowance instead.
 export const MAX_COUNT_CEILING = 3;
 
+/**
+ * Placeholder docstring for interventionExhausted.
+ */
 export function interventionExhausted(
   event: SchedulerEvent & { max_count?: number },
   civ: Civilization,
@@ -38,11 +41,17 @@ export function interventionExhausted(
   return Math.max(0, Number(civ.eventCounts[event.id] ?? 0)) >= allowance;
 }
 
+/**
+ * Placeholder docstring for recentEventIds.
+ */
 export function recentEventIds(civ: Civilization): string[] {
   if (!Array.isArray(civ.recentEventIds)) civ.recentEventIds = [];
   return civ.recentEventIds;
 }
 
+/**
+ * Placeholder docstring for recordRecentIntervention.
+ */
 export function recordRecentIntervention(civ: Civilization, id: string): void {
   const recent = recentEventIds(civ);
   const priorIndex = recent.indexOf(id);
@@ -108,6 +117,9 @@ export function chooseWeightedIntervention<T extends SchedulerEvent>(
   return pool[pool.length - 1]!.event;
 }
 
+/**
+ * Placeholder docstring for eventDelayWindow.
+ */
 export function eventDelayWindow(civ: Civilization): { min: number; max: number } {
   return [
     { min: 10, max: 14 },

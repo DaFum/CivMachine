@@ -1,5 +1,8 @@
 import type { Civilization } from '../game/types.js';
 
+/**
+ * Placeholder docstring for developmentStage.
+ */
 export function developmentStage(civ: Civilization): number {
   const score = civ.development + civ.era * 120 + civ.institutions.length * 30 + civ.eventChoices * 6;
   if (score < 70) return 0;
@@ -9,10 +12,16 @@ export function developmentStage(civ: Civilization): number {
   return 4;
 }
 
+/**
+ * Placeholder docstring for worldWidthMultiplier.
+ */
 export function worldWidthMultiplier(civ: Civilization): number {
   return [1.5, 1.9, 2.5, 3.2, 4.0][developmentStage(civ)] ?? 1.5;
 }
 
+/**
+ * Placeholder docstring for worldSnapshot.
+ */
 export function worldSnapshot(civ: Civilization, viewportWidth: number) {
   const stage = developmentStage(civ);
   const institutionCount = civ.institutions.length;

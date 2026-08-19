@@ -6,6 +6,9 @@ function nextRandom(state) {
     next >>>= 0;
     return { state: next, value: next / 4294967296 };
 }
+/**
+ * Placeholder docstring for buildDirectiveOffers.
+ */
 export function buildDirectiveOffers(knownIds, seed, count = 3) {
     const pool = [...new Set(knownIds.map(String))].sort();
     let state = seed >>> 0 || 0x52434531;
@@ -61,9 +64,15 @@ export const DIRECTIVE_OBJECTIVES = {
         isComplete: civ => civ.era >= 2 && civ.elapsedSeconds <= 300 && civ.eventChoices >= 8,
     },
 };
+/**
+ * Placeholder docstring for objectiveForDirective.
+ */
 export function objectiveForDirective(directiveId) {
     return DIRECTIVE_OBJECTIVES[directiveId] ?? null;
 }
+/**
+ * Placeholder docstring for evaluateDirectiveObjective.
+ */
 export function evaluateDirectiveObjective(civ) {
     const objective = objectiveForDirective(civ.directiveId);
     return Boolean(objective?.isComplete(civ));

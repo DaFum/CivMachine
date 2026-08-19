@@ -25,10 +25,16 @@ export const RUN_INTERVENTIONS: readonly RunInterventionDefinition[] = [
   { id: 'temporal_graft', title: 'Temporal Graft', label: 'Graft borrowed centuries', summary: '+600 years and +30 Development', currency: 'existence', baseCost: 220, maxUses: 3, insight: 9 },
 ];
 
+/**
+ * Placeholder docstring for runInterventionById.
+ */
 export function runInterventionById(id: string): RunInterventionDefinition | null {
   return RUN_INTERVENTIONS.find(definition => definition.id === id) ?? null;
 }
 
+/**
+ * Placeholder docstring for runInterventionUses.
+ */
 export function runInterventionUses(civ: Civilization, id: string): number {
   if (!civ.runInterventionUses) civ.runInterventionUses = {};
   return Math.max(0, Number(civ.runInterventionUses[id] ?? 0));
@@ -37,12 +43,18 @@ export function runInterventionUses(civ: Civilization, id: string): number {
 // Spending banked resources to survive longer produces more resources, which is a positive feedback
 // loop. Escalation alone does not close it, because yield grows quadratically with depth, so the
 // price also rises with how deep the civilization already is.
+/**
+ * Placeholder docstring for runInterventionCost.
+ */
 export function runInterventionCost(definition: RunInterventionDefinition, uses: number, depth: number): number {
   const escalation = Math.pow(RUN_INTERVENTION_COST_GROWTH, Math.max(0, uses));
   const depthFactor = 1 + Math.max(0, depth) / RUN_INTERVENTION_DEPTH_SCALE;
   return Math.round(definition.baseCost * escalation * depthFactor);
 }
 
+/**
+ * Placeholder docstring for applyRunIntervention.
+ */
 export function applyRunIntervention(civ: Civilization, definition: RunInterventionDefinition): string {
   if (definition.id === 'containment_pulse') {
     civ.tactical.entropy = Math.max(0, civ.tactical.entropy - CONTAINMENT_PULSE_RELIEF);
@@ -57,6 +69,9 @@ export function applyRunIntervention(civ: Civilization, definition: RunIntervent
   return definition.label;
 }
 
+/**
+ * Placeholder docstring for runInterventionDepth.
+ */
 export function runInterventionDepth(civ: Civilization): number {
   return cultivationDepth(civ);
 }

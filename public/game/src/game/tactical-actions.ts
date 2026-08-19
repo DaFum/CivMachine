@@ -77,6 +77,9 @@ const ACTION_PATHS: Readonly<Record<TacticalActionId, readonly [string, string]>
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
+/**
+ * Placeholder docstring for tacticalAvailability.
+ */
 export function tacticalAvailability(civ: Civilization, id: TacticalActionId): TacticalAvailability {
   const definition = TACTICAL_ACTIONS[id];
   if (civ.tactical.controlCapacity < definition.cost) {
@@ -100,6 +103,9 @@ export function tacticalAvailability(civ: Civilization, id: TacticalActionId): T
   return { enabled: true, reason: '', cost: definition.cost };
 }
 
+/**
+ * Placeholder docstring for applyTacticalAction.
+ */
 export function applyTacticalAction(
   civ: Civilization,
   id: TacticalActionId,

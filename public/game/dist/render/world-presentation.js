@@ -5,6 +5,9 @@ import { factionSignature } from './factions.js';
 import { settlementClassSignature } from './settlements.js';
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const band = (value) => value < 25 ? 0 : value < 50 ? 1 : value < 75 ? 2 : 3;
+/**
+ * Placeholder docstring for decisionImpulseKind.
+ */
 export function decisionImpulseKind(eventId) {
     if (eventId === 'tactical:stabilize')
         return 'containment';
@@ -16,6 +19,9 @@ export function decisionImpulseKind(eventId) {
         return 'fracture';
     return 'decision';
 }
+/**
+ * Placeholder docstring for entropyThresholdColor.
+ */
 export function entropyThresholdColor(eventId) {
     if (eventId.endsWith('_25'))
         return 0xf2d06b;
@@ -23,6 +29,9 @@ export function entropyThresholdColor(eventId) {
         return 0xf29a52;
     return 0xee6973;
 }
+/**
+ * Placeholder docstring for worldPresentation.
+ */
 export function worldPresentation(civ) {
     const stability = clamp01(civ.stats.stability / Math.max(1, civ.stats.stabilityMax));
     const danger = clamp01((55 - civ.stats.stability) / 55);
@@ -58,6 +67,9 @@ export function worldPresentation(civ) {
         },
     };
 }
+/**
+ * Placeholder docstring for structuralWorldKey.
+ */
 export function structuralWorldKey(civ, viewportWidth) {
     const snapshot = worldSnapshot(civ, viewportWidth);
     const presentation = worldPresentation(civ);

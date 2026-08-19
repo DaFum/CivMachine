@@ -14,6 +14,9 @@ export const CLASS_ORDER: readonly SettlementClass[] = ['camp', 'village', 'town
 export interface Structure { id: string; x: number; width: number; height: number; kind: StructureKind; level: number; }
 export interface Settlement { id: string; centerX: number; radius: number; settlementClass: SettlementClass; factionIndex: number; structures: Structure[]; }
 
+/**
+ * Placeholder docstring for settlementClassFor.
+ */
 export function settlementClassFor(structureCount: number, stage: number, era: number): SettlementClass {
   if (stage === 0) return structureCount >= 4 ? 'village' : 'camp';
   const score = structureCount + stage * 2 + era;
@@ -25,6 +28,9 @@ export function settlementClassFor(structureCount: number, stage: number, era: n
 }
 
 // The capital is weighted heavily so a developed world always contains one large settlement.
+/**
+ * Placeholder docstring for settlementSizes.
+ */
 export function settlementSizes(civ: Civilization, snapshot: Snapshot): number[] {
   const count = snapshot.settlementCount;
   const weights = Array.from({ length: count }, (_, i) => i === 0 ? 1.9 : .55 + hash01(civ.seed * 29 + i * 13) * .9);
@@ -39,6 +45,9 @@ export function settlementSizes(civ: Civilization, snapshot: Snapshot): number[]
   return sizes;
 }
 
+/**
+ * Placeholder docstring for settlementClassSignature.
+ */
 export function settlementClassSignature(civ: Civilization, snapshot: Snapshot): string {
   const counts = new Map<SettlementClass, number>();
   for (const size of settlementSizes(civ, snapshot)) {
@@ -67,6 +76,9 @@ function kindFor(index: number, count: number, settlementClass: SettlementClass,
   return 'dwelling';
 }
 
+/**
+ * Placeholder docstring for settlementLayout.
+ */
 export function settlementLayout(civ: Civilization, worldWidth: number, height: number, snapshot: Snapshot): Settlement[] {
   const stage = snapshot.stage;
   const sizes = settlementSizes(civ, snapshot);

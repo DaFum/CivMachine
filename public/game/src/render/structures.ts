@@ -5,6 +5,9 @@ import type { Settlement, Structure, StructureKind } from './settlements.js';
 export const BANNER_CLEARANCE = 34;
 export const BANNER_POLE_MIN = 16;
 
+/**
+ * Placeholder docstring for settlementCrown.
+ */
 export function settlementCrown(settlement: Settlement): number {
   return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
 }
@@ -20,6 +23,9 @@ export function bannerGeometry(settlement: Settlement, groundY: number, height: 
   return { x: settlement.centerX, topY, poleHeight: Math.max(BANNER_POLE_MIN, anchorY - topY) };
 }
 
+/**
+ * Placeholder docstring for structureKindsForEra.
+ */
 export function structureKindsForEra(era: number, stage: number): StructureKind[] {
   if (stage === 0) return ['dwelling', 'farm'];
   const kinds: StructureKind[] = ['dwelling', 'farm', 'temple', 'monument'];
@@ -29,6 +35,9 @@ export function structureKindsForEra(era: number, stage: number): StructureKind[
   return kinds;
 }
 
+/**
+ * Placeholder docstring for drawStructure.
+ */
 export function drawStructure(surface: DrawSurface, structure: Structure, groundY: number, bodyColor: number, accent: number, windowColor: number, seed: number): void {
   const left = structure.x - structure.width / 2;
   const top = groundY - structure.height;
@@ -108,6 +117,9 @@ const SIGIL_DRAW: Record<FactionSigil, (surface: DrawSurface, x: number, y: numb
   nest: (s, x, y, size, color) => { for (let i = 0; i < 4; i++) s.fillStyle(color, .7 - i * .12).fillCircle(x + (i % 2 ? size * .22 : -size * .22), y + (i < 2 ? -size * .16 : size * .16), size * .15); },
 };
 
+/**
+ * Placeholder docstring for drawBanner.
+ */
 export function drawBanner(surface: DrawSurface, x: number, topY: number, poleHeight: number, color: number, sigil: FactionSigil, wave: number): void {
   const bottomY = topY + poleHeight;
   surface.lineStyle(1.6, mixColor(color, 0x000000, .45), .9).line(x, topY, x, bottomY);

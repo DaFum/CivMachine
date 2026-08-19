@@ -10,9 +10,15 @@ export const RUN_INTERVENTIONS = [
     { id: 'emergency_lattice', title: 'Emergency Lattice', label: 'Force the lattice back up', summary: 'Stability to 60% of maximum', currency: 'cognition', baseCost: 200, maxUses: 3, insight: 6 },
     { id: 'temporal_graft', title: 'Temporal Graft', label: 'Graft borrowed centuries', summary: '+600 years and +30 Development', currency: 'existence', baseCost: 220, maxUses: 3, insight: 9 },
 ];
+/**
+ * Placeholder docstring for runInterventionById.
+ */
 export function runInterventionById(id) {
     return RUN_INTERVENTIONS.find(definition => definition.id === id) ?? null;
 }
+/**
+ * Placeholder docstring for runInterventionUses.
+ */
 export function runInterventionUses(civ, id) {
     if (!civ.runInterventionUses)
         civ.runInterventionUses = {};
@@ -21,11 +27,17 @@ export function runInterventionUses(civ, id) {
 // Spending banked resources to survive longer produces more resources, which is a positive feedback
 // loop. Escalation alone does not close it, because yield grows quadratically with depth, so the
 // price also rises with how deep the civilization already is.
+/**
+ * Placeholder docstring for runInterventionCost.
+ */
 export function runInterventionCost(definition, uses, depth) {
     const escalation = Math.pow(RUN_INTERVENTION_COST_GROWTH, Math.max(0, uses));
     const depthFactor = 1 + Math.max(0, depth) / RUN_INTERVENTION_DEPTH_SCALE;
     return Math.round(definition.baseCost * escalation * depthFactor);
 }
+/**
+ * Placeholder docstring for applyRunIntervention.
+ */
 export function applyRunIntervention(civ, definition) {
     if (definition.id === 'containment_pulse') {
         civ.tactical.entropy = Math.max(0, civ.tactical.entropy - CONTAINMENT_PULSE_RELIEF);
@@ -42,6 +54,9 @@ export function applyRunIntervention(civ, definition) {
     civ.runInterventionUses[definition.id] = runInterventionUses(civ, definition.id) + 1;
     return definition.label;
 }
+/**
+ * Placeholder docstring for runInterventionDepth.
+ */
 export function runInterventionDepth(civ) {
     return cultivationDepth(civ);
 }

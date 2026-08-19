@@ -27,6 +27,9 @@ function decisionFeedback(feedback) {
     const changes = metrics || affinities ? `<div class="decision-deltas">${metrics}${affinities}</div>` : '<p class="no-delta">No measurable state change.</p>';
     return `<section class="panel decision-feedback tone-${esc(feedback.tone)}" aria-live="polite" aria-atomic="true"><div class="panel-kicker">DECISION RESOLVED // EXACT OUTCOME</div><div class="decision-heading"><div><h2>${esc(feedback.choiceLabel)}</h2><p>${esc(feedback.eventTitle)}</p></div><span>${feedback.metrics.length} METRIC${feedback.metrics.length === 1 ? '' : 'S'} CHANGED</span></div>${changes}${additions ? `<div class="decision-additions">${additions}</div>` : ''}</section>`;
 }
+/**
+ * Placeholder docstring for createGameUI.
+ */
 export function createGameUI(engine, world) {
     const resourceBar = document.querySelector('#resource-bar');
     const metaBar = document.querySelector('#meta-bar');

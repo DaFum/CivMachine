@@ -16,6 +16,9 @@ function additions(after, before, kind) {
     const known = new Set(before);
     return after.filter(id => !known.has(id)).map(id => ({ kind, label: humanize(id) }));
 }
+/**
+ * Placeholder docstring for captureDecisionSnapshot.
+ */
 export function captureDecisionSnapshot(civ) {
     return {
         metrics: {
@@ -37,6 +40,9 @@ export function captureDecisionSnapshot(civ) {
         pathFlags: [...civ.pathState.choiceFlags],
     };
 }
+/**
+ * Placeholder docstring for buildDecisionFeedback.
+ */
 export function buildDecisionFeedback(sequence, event, choice, before, after) {
     const metrics = [];
     let positive = false, negative = false;
