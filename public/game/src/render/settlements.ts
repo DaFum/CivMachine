@@ -1,6 +1,7 @@
 import type { Civilization } from '../game/types.js';
 import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
+import { structureKindsForEra } from './structures.js';
 import type { worldSnapshot } from './world-model.js';
 
 type Snapshot = ReturnType<typeof worldSnapshot>;
@@ -47,19 +48,22 @@ export function settlementClassSignature(civ: Civilization, snapshot: Snapshot):
   return CLASS_ORDER.filter(name => counts.has(name)).map(name => `${name}:${counts.get(name)}`).join('/');
 }
 
-function kindFor(index: number, count: number, settlementClass: SettlementClass, era: number, stage: number, seed: number): StructureKind {
+// Every candidate is filtered through the era gate, so structureKindsForEra stays the single
+// authority on what an era may contain and the two cannot drift apart.
+function kindFor(index: number, count: number, settlementClass: SettlementClass, era: number, stage: number, seed: number, allowed: ReadonlySet<StructureKind>): StructureKind {
   const rank = CLASS_ORDER.indexOf(settlementClass);
   const mid = Math.floor(count / 2);
-  if (stage === 0) return count >= 3 && index === count - 1 ? 'farm' : 'dwelling';
-  if (era >= 3 && rank >= 4 && index === 0) return 'orbital_anchor';
-  if (era >= 2 && rank >= 3 && index === count - 1) return 'spaceport';
-  if (era >= 2 && count >= 10 && index === mid - 1) return 'reactor';
-  if (count >= 3 && index === mid) return 'temple';
-  if (era >= 1 && count >= 6 && index === mid + 1) return 'academy';
-  if (stage >= 2 && count >= 8 && index === 1) return 'monument';
+  const pick = (kind: StructureKind): StructureKind => allowed.has(kind) ? kind : 'dwelling';
+  if (stage === 0) return count >= 3 && index === count - 1 ? pick('farm') : 'dwelling';
+  if (rank >= 4 && index === 0 && allowed.has('orbital_anchor')) return 'orbital_anchor';
+  if (rank >= 3 && index === count - 1 && allowed.has('spaceport')) return 'spaceport';
+  if (count >= 10 && index === mid - 1 && allowed.has('reactor')) return 'reactor';
+  if (count >= 3 && index === mid) return pick('temple');
+  if (count >= 6 && index === mid + 1 && allowed.has('academy')) return 'academy';
+  if (stage >= 2 && count >= 8 && index === 1) return pick('monument');
   const distance = count <= 1 ? 0 : Math.abs((index + .5) / count - .5) * 2;
-  if (distance > .7) return 'farm';
-  if (era >= 1 && distance > .5 && hash01(seed + index * 37) > .45) return 'industry';
+  if (distance > .7) return pick('farm');
+  if (distance > .5 && allowed.has('industry') && hash01(seed + index * 37) > .45) return 'industry';
   return 'dwelling';
 }
 
@@ -68,6 +72,7 @@ export function settlementLayout(civ: Civilization, worldWidth: number, height: 
   const sizes = settlementSizes(civ, snapshot);
   const roster = factionRoster(civ);
   const scale = [.24, .46, .7, .96, 1.28][stage] ?? .24;
+  const allowed = new Set<StructureKind>(structureKindsForEra(civ.era, stage));
   const settlements: Settlement[] = [];
   let globalIndex = 0;
 
@@ -87,7 +92,7 @@ export function settlementLayout(civ: Civilization, worldWidth: number, height: 
         id: `s${index}:${i}`,
         x: centerX - radius + radius * 2 * (i + .5) / count,
         width, height: structureHeight,
-        kind: kindFor(i, count, settlementClass, civ.era, stage, civ.seed + index * 101),
+        kind: kindFor(i, count, settlementClass, civ.era, stage, civ.seed + index * 101, allowed),
         level,
       });
       globalIndex++;

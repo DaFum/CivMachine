@@ -617,3 +617,20 @@ test('structural key reacts to species, factions and settlement classes but not 
   grown.era = 4; grown.development = 3000;
   assert.notEqual(structuralWorldKey(grown, 800), base);
 });
+
+test('settlement layout never emits a structure kind the era forbids', () => {
+  for (const era of [0, 1, 2, 3, 4]) {
+    for (const development of [1, 200, 600, 3000]) {
+      const civ = GameEngine.createCivilizationForTest(81 + era);
+      civ.era = era; civ.development = development; civ.eventChoices = 15;
+      civ.institutions.push('Consensus Lattice', 'Reality Works Authority');
+      const snapshot = worldSnapshot(civ, 900);
+      const allowed = new Set(structureKindsForEra(era, snapshot.stage));
+      for (const settlement of settlementLayout(civ, snapshot.worldWidth, 400, snapshot)) {
+        for (const structure of settlement.structures) {
+          assert.ok(allowed.has(structure.kind), `era ${era} stage ${snapshot.stage} produced ${structure.kind}`);
+        }
+      }
+    }
+  }
+});
