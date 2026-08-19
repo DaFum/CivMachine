@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewState, calculateHarvest, upgradeCost } from '../dist/game/rules.js';
-import { CivilizationPaths } from '../dist/game/paths.js';
+import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
+import { CivilizationPaths, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
-import { GameEngine } from '../dist/game/engine.js';
+import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
-import { applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
+import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
+import { APOTHEOSIS_EVENTS } from '../dist/data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../dist/data/entropy-crises.js';
 import {
   buildInterventionPool,
@@ -14,58 +15,13 @@ import {
   recordRecentIntervention,
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
-import { advancePressure, entropyRate } from '../dist/game/pressure.js';
-import { calculateCultivationCredits, evaluateHarvestQuality } from '../dist/game/harvest-quality.js';
+import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, secondsToCascade } from '../dist/game/pressure.js';
+import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
-
-function freshEngine() {
-  return new GameEngine({
-    autosave: false,
-    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-  });
-}
-
-function safestChoiceIndex(event) {
-  let best = 0;
-  let bestScore = -Infinity;
-  for (let index = 0; index < event.choices.length; index++) {
-    const effects = event.choices[index].effects ?? {};
-    const score = Number(effects.stability ?? 0) * 3
-      + Number(effects.sanity ?? 0) * 2
-      - Number(effects.awareness ?? 0) * 1.25
-      - Number(effects.attention ?? 0) * 1.5
-      - Number(effects.entropy ?? 0) * 2
-      + Number(effects.development ?? 0) * 0.04;
-    if (score > bestScore) { best = index; bestScore = score; }
-  }
-  return best;
-}
-
-function simulatedSurvival(seed, containmentBuild = false) {
-  const engine = freshEngine();
-  if (containmentBuild) {
-    engine.state.machine.upgradeLevels = {
-      reality_lattice: 1,
-      awareness_scrubber: 1,
-      sanity_protocol: 1,
-      cosmic_muffling: 1,
-    };
-  }
-  engine.startCivilization(seed);
-  let elapsed = 0;
-  while (engine.state.phase === 'civilization' && elapsed < 600) {
-    const event = engine.currentEvent();
-    if (event) {
-      engine.chooseEvent(safestChoiceIndex(event));
-      continue;
-    }
-    engine.tick(0.25);
-    elapsed += 0.25;
-  }
-  return elapsed;
-}
+import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
+import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -112,7 +68,7 @@ function simulatedBalanceRun(seed, { accelerateWheneverAvailable = false, collap
 
   while (engine.state.phase === 'civilization' && elapsed < 600) {
     const civ = engine.state.civilization;
-    if (!collapse && civ.era >= 1 && civ.eventChoices >= 3) break;
+    if (!collapse && civ.eventChoices >= 3 && evaluateHarvestQuality(civ, false).grade !== 'premature') break;
     const event = engine.currentEvent();
     if (event) {
       engine.chooseEvent(safestChoiceIndex(event));
@@ -183,6 +139,7 @@ test('scheduler excludes the six most recent interventions', () => {
   const pool = buildInterventionPool(events, civ, {
     pathMultiplier: () => 1,
     stateMultiplier: () => 1,
+    exhausted: () => false,
   });
 
   assert.deepEqual(pool.map(item => item.event.id), ['event_g']);
@@ -198,6 +155,7 @@ test('scheduler makes a deterministic weighted selection for an identical roll',
   const options = {
     pathMultiplier: event => event.id === 'aligned_event' ? 4.5 : 1,
     stateMultiplier: () => 1,
+    exhausted: () => false,
   };
   const firstPool = buildInterventionPool(events, civ, options);
   const secondPool = buildInterventionPool(events, civ, options);
@@ -305,9 +263,9 @@ test('new browser save starts with layered progression', () => {
   assert.equal(Progression.canUseUpgrade(state, 'machine', 'prediction_core'), false);
 });
 
-test('new saves initialize the tactical v2 civilization contract', () => {
+test('new saves initialize the tactical v3 civilization contract', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 2);
+  assert.equal(state.saveVersion, 3);
   assert.equal(state.machine.cultivationCreditsThisUniverse, 0);
   assert.deepEqual(state.machine.runBuild.directiveOfferIds, []);
   assert.equal(state.machine.runBuild.nextCivilizationSeed, 0);
@@ -318,12 +276,12 @@ test('new saves initialize the tactical v2 civilization contract', () => {
     controlCapacity: 3,
     triggeredCrises: [],
     probedEventId: '',
-    actionUsage: { stabilize: 0, accelerate: 0, probe: 0 },
+    actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 },
   });
   assert.equal(civ.directiveId, '');
 });
 
-test('v2 intentionally ignores the legacy v1 save key', () => {
+test('v3 intentionally ignores the legacy v1 save key', () => {
   const legacy = createNewState();
   legacy.saveVersion = 1;
   const storage = new Map([
@@ -334,14 +292,51 @@ test('v2 intentionally ignores the legacy v1 save key', () => {
     setItem: (key, value) => storage.set(key, value),
     removeItem: key => storage.delete(key),
   }});
-  assert.equal(engine.state.saveVersion, 2);
+  assert.equal(engine.state.saveVersion, 3);
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
-test('containment deficit accelerates entropy while rating suppresses it', () => {
-  assert.equal(entropyRate(0, 0, 1), 0.32);
-  assert.ok(entropyRate(1, 0, 1) > 0.8);
-  assert.ok(entropyRate(2, 4, 1) < 0.31);
+test('the entropy rate rises with years and falls with containment levels', () => {
+  assert.equal(Number(entropyRate(0, 0).toFixed(4)), 0.48);
+  assert.equal(Number(entropyRate(6500, 0).toFixed(4)), 0.96);
+  assert.equal(Number(entropyRate(0, 4).toFixed(4)), 0.1846);
+  assert.equal(Number(entropyRate(6500, 28).toFixed(4)), 0.0787);
+  assert.equal(Number(pressureMultiplier(6500).toFixed(4)), 2);
+  assert.ok(entropyRate(20000, 28) < entropyRate(20000, 14));
+  for (let containment = 0; containment < 28; containment++) {
+    assert.ok(entropyRate(6500, containment + 1) < entropyRate(6500, containment), `level ${containment + 1} must matter`);
+  }
+});
+
+test('secondsToCascade matches numeric integration of the rate', () => {
+  for (const containment of [0, 1, 4, 8, 14, 20, 28]) {
+    const closed = secondsToCascade(0, 0, containment);
+    let entropy = 0;
+    let years = 0;
+    let elapsed = 0;
+    const step = 0.05;
+    while (entropy < 100 && elapsed < 4000) {
+      entropy += entropyRate(years, containment) * step;
+      years += 25 * step;
+      elapsed += step;
+    }
+    assert.ok(Math.abs(closed - elapsed) / elapsed < 0.01, `containment ${containment}: closed ${closed} vs numeric ${elapsed}`);
+  }
+});
+
+test('the survival curve hits the published targets', () => {
+  const expected = [[0, 159.4], [1, 208.3], [2, 252.4], [4, 331.0], [8, 462.9], [14, 624.6], [20, 761.1], [28, 918.7]];
+  for (const [containment, target] of expected) {
+    const actual = secondsToCascade(0, 0, containment);
+    assert.ok(Math.abs(actual - target) <= 0.5, `containment ${containment}: ${actual}s, expected ${target}s`);
+  }
+});
+
+test('cascade decay is proportional to maximum Stability', () => {
+  assert.equal(cascadeDecay(99.9, 100), 0);
+  assert.equal(Number(cascadeDecay(100, 100).toFixed(4)), 7);
+  assert.equal(Number(cascadeDecay(100, 425).toFixed(2)), 29.75);
+  assert.equal(100 / cascadeDecay(100, 100), 425 / cascadeDecay(100, 425));
 });
 
 test('pressure queues every crossed crisis exactly once', () => {
@@ -537,16 +532,23 @@ test('active cadence stays fast across eras', () => {
   assert.deepEqual(eventDelayWindow(civ), { min: 7, max: 10 });
 });
 
-test('deterministic pressure keeps unupgraded runs short and rewards Containment builds', () => {
-  const seeds = Array.from({ length: 60 }, (_, index) => 10_000 + index * 97);
-  const noUpgrade = seeds.map(seed => simulatedSurvival(seed, false));
-  const containment = seeds.map(seed => simulatedSurvival(seed, true));
-  const noUpgradeMedian = percentile(noUpgrade, 0.5);
-  const noUpgradeP95 = percentile(noUpgrade, 0.95);
-  const containmentMedian = percentile(containment, 0.5);
-  assert.ok(noUpgradeMedian >= 150 && noUpgradeMedian <= 240, `no-upgrade median ${noUpgradeMedian}s`);
-  assert.ok(noUpgradeP95 < 300, `no-upgrade p95 ${noUpgradeP95}s`);
-  assert.ok(containmentMedian >= 300 && containmentMedian <= 480, `Containment median ${containmentMedian}s`);
+test('the survival curve separates no-upgrade runs from contained builds', () => {
+  const seeds = Array.from({ length: 24 }, (_, index) => 10_000 + index * 97);
+  const measure = (machineLevels, universeLevels) => percentile(
+    seeds.map(seed => runCivilization(withUpgrades(freshEngine(), machineLevels, universeLevels), { seed }).elapsed),
+    0.5,
+  );
+  const bare = measure({}, {});
+  const four = measure({ reality_lattice: 1, awareness_scrubber: 1, sanity_protocol: 1, cosmic_muffling: 1 }, {});
+  const full = measure(
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  assert.ok(bare >= 150 && bare <= 185, `no-upgrade median ${bare}s`);
+  assert.ok(four >= 300 && four <= 360, `containment 4 median ${four}s`);
+  // The analytic curve puts containment 28 at 918.7s. The safety policy prefers choices with a
+  // negative entropy effect, which buys roughly 5% more, so the band tops out above the integral.
+  assert.ok(full >= 900 && full <= 1020, `containment 28 median ${full}s`);
 });
 
 test('premature harvest gives reduced resources and zero credits', () => {
@@ -579,34 +581,79 @@ test('a Directive cannot turn a Premature harvest into a credited harvest', () =
   assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 0);
 });
 
-test('qualified grades award two, three, or four Cultivation Credits', () => {
+test('cultivation depth derives from development and completed path arcs', () => {
   const civ = GameEngine.createCivilizationForTest(82);
-  civ.eventChoices = 4;
-  civ.era = 1;
-  assert.deepEqual(evaluateHarvestQuality(civ, false), { grade: 'established', multiplier: .75, credits: 2 });
-  civ.era = 2;
-  assert.equal(evaluateHarvestQuality(civ, false).credits, 3);
-  civ.pathState.endgameState = 'endgame_machine_faith';
-  assert.equal(evaluateHarvestQuality(civ, false).credits, 4);
+  civ.development = 80;
+  assert.equal(cultivationDepth(civ), 1);
+  civ.development = 400;
+  assert.equal(cultivationDepth(civ), 5);
+  civ.pathState.endgameStates = ['endgame_machine_faith', 'endgame_void_communion'];
+  assert.equal(cultivationDepth(civ), 8);
 });
 
-test('chaotic harvests lose exactly one qualified Cultivation Credit', () => {
-  const qualities = [
-    { grade: 'premature', multiplier: 0.2, credits: 0 },
-    { grade: 'established', multiplier: 0.75, credits: 2 },
-    { grade: 'transcendent', multiplier: 1, credits: 3 },
-    { grade: 'ascendant', multiplier: 1.2, credits: 4 },
-  ];
+test('depth bands cover the five grades at their published boundaries', () => {
+  assert.equal(depthBand(0), 'premature');
+  assert.equal(depthBand(1.49), 'premature');
+  assert.equal(depthBand(1.5), 'established');
+  assert.equal(depthBand(3.99), 'established');
+  assert.equal(depthBand(4), 'transcendent');
+  assert.equal(depthBand(8.99), 'transcendent');
+  assert.equal(depthBand(9), 'ascendant');
+  assert.equal(depthBand(15.99), 'ascendant');
+  assert.equal(depthBand(16), 'singular');
+  assert.equal(depthBand(40), 'singular');
+  assert.equal(HARVEST_GRADE_LABELS.singular, 'Singular');
+});
 
-  assert.deepEqual(qualities.map(quality => [
-    calculateCultivationCredits(quality, false, false),
-    calculateCultivationCredits(quality, true, false),
-  ]), [[0, 0], [2, 1], [3, 2], [4, 3]]);
+test('harvest quality scales continuously with depth', () => {
+  const civ = GameEngine.createCivilizationForTest(83);
+  civ.eventChoices = 4;
+  civ.era = 1;
+  civ.development = 400;
+  const quality = evaluateHarvestQuality(civ, false);
+  assert.equal(quality.grade, 'transcendent');
+  assert.equal(quality.depth, 5);
+  assert.equal(Number(quality.multiplier.toFixed(4)), 1.35);
+  assert.equal(quality.credits, 3);
+  civ.development = 1920;
+  const deep = evaluateHarvestQuality(civ, false);
+  assert.equal(deep.grade, 'singular');
+  assert.equal(deep.credits, 14);
+  assert.equal(Number(deep.multiplier.toFixed(2)), 5.53);
+});
 
-  assert.deepEqual(qualities.map(quality => [
-    calculateCultivationCredits(quality, false, true),
-    calculateCultivationCredits(quality, true, true),
-  ]), [[0, 0], [3, 2], [4, 3], [5, 4]]);
+test('the credit curve is capped at twenty', () => {
+  const civ = GameEngine.createCivilizationForTest(84);
+  civ.eventChoices = 9;
+  civ.era = 3;
+  civ.development = 100_000;
+  assert.equal(evaluateHarvestQuality(civ, false).credits, 20);
+});
+
+test('a premature harvest stays premature at any depth', () => {
+  const civ = GameEngine.createCivilizationForTest(85);
+  civ.development = 4000;
+  civ.era = 0;
+  civ.eventChoices = 9;
+  const zeroEra = evaluateHarvestQuality(civ, false);
+  assert.equal(zeroEra.grade, 'premature');
+  assert.equal(zeroEra.multiplier, 0.2);
+  assert.equal(zeroEra.credits, 0);
+  civ.era = 2;
+  civ.eventChoices = 2;
+  assert.equal(evaluateHarvestQuality(civ, false).grade, 'premature');
+});
+
+test('a chaotic harvest keeps sixty percent of its credits', () => {
+  const quality = { grade: 'singular', multiplier: 5.53, credits: 14, depth: 24 };
+  assert.equal(calculateCultivationCredits(quality, false, false), 14);
+  assert.equal(calculateCultivationCredits(quality, true, false), 8);
+  assert.equal(calculateCultivationCredits(quality, false, true), 15);
+  assert.equal(calculateCultivationCredits(quality, true, true), 9);
+  const premature = { grade: 'premature', multiplier: 0.2, credits: 0, depth: 0.4 };
+  assert.equal(calculateCultivationCredits(premature, false, true), 0);
+  const shallow = { grade: 'established', multiplier: 0.63, credits: 1, depth: 1.7 };
+  assert.equal(calculateCultivationCredits(shallow, true, false), 0);
 });
 
 test('chaotic resource yield uses forty percent retention and a 1.50 Paradox multiplier', () => {
@@ -683,15 +730,17 @@ test('Directive completion boosts rewards by fifteen percent and grants one cred
   const civ = engine.state.civilization;
   civ.era = 1;
   civ.eventChoices = 3;
+  civ.development = 400;
   civ.stats.stability = 90;
   civ.tactical.entropy = 40;
   const preview = engine.previewHarvestDetails(false);
   assert.equal(preview.objectiveCompleted, true);
-  assert.equal(preview.credits, 3);
-  assert.equal(preview.rewardMultiplier, 0.75 * 1.15);
+  assert.equal(preview.depth, 5);
+  assert.equal(preview.credits, 4);
+  assert.equal(Number(preview.rewardMultiplier.toFixed(6)), Number((1.35 * 1.15).toFixed(6)));
   engine.harvest(false);
   assert.equal(engine.state.machine.lastHarvest.objective_completed, true);
-  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 3);
+  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 4);
 });
 
 test('chaotic Credit penalty is identical in harvest preview and committed record', () => {
@@ -704,10 +753,11 @@ test('chaotic Credit penalty is identical in harvest preview and committed recor
   const civ = engine.state.civilization;
   civ.era = 1;
   civ.eventChoices = 3;
+  civ.development = 400;
   civ.stats.stability = 90;
   civ.tactical.entropy = 40;
 
-  assert.equal(engine.previewHarvestDetails(false).credits, 3);
+  assert.equal(engine.previewHarvestDetails(false).credits, 4);
   assert.equal(engine.previewHarvestDetails(true).credits, 2);
   engine.harvest(true);
   assert.equal(engine.state.machine.lastHarvest.credits, 2);
@@ -735,7 +785,7 @@ test('v1.3.1 machine curve uses the approved balanced prices and growth', () => 
   const actual = Object.fromEntries(balancedMachineUpgrades(CONTENT.machine_upgrades)
     .map(definition => [definition.id, [definition.base_cost, definition.growth]]));
   assert.deepEqual(actual, {
-    reality_lattice: [90, 1.62],
+    reality_lattice: [60, 1.55],
     prediction_core: [90, 1.60],
     cultivation_accelerator: [120, 1.68],
     historical_compressor: [120, 1.68],
@@ -749,7 +799,7 @@ test('v1.3.1 machine curve uses the approved balanced prices and growth', () => 
     temporal_injector: [220, 1.75],
   });
 
-  assert.ok(balancedUniverseUpgrades(CONTENT.universe_upgrades).every(definition => definition.growth >= 1.9));
+  assert.ok(balancedUniverseUpgrades(CONTENT.universe_upgrades).every(definition => definition.growth === 1.75));
   assert.ok(balancedAxiomUpgrades(CONTENT.axiom_upgrades).every(definition => definition.growth >= 2.15));
 });
 
@@ -824,22 +874,37 @@ test('Temporal Injector improves Accelerate while Stable Constants and Bureaucra
   assert.equal(bonuses.accelerateYears, 450);
   assert.equal(bonuses.accelerateTimer, 16);
   assert.equal(bonuses.eventDelay, 0);
-  assert.ok(bonuses.entropyGainMult < 1);
+  assert.equal(bonuses.containmentRating, 2);
   assert.equal(bonuses.controlRecharge, 3);
 });
 
-test('a normal first run can afford at least one available machine upgrade', () => {
+test('a first run played to its cascade funds at least one machine upgrade', () => {
   const engine = freshEngine();
-  engine.startCivilization(20260819);
-  while (engine.state.phase === 'civilization') {
-    const civ = engine.state.civilization;
-    if (civ.era >= 1 && civ.eventChoices >= 3) break;
-    const event = engine.currentEvent();
-    if (event) engine.chooseEvent(safestChoiceIndex(event));
-    else engine.tick(0.25);
-  }
-  engine.harvest(false);
+  runCivilization(engine, { seed: 20260819 });
+  assert.equal(engine.state.machine.lastHarvest.grade, 'established');
   assert.ok(engine.visibleUpgradeEntries('machine').some(entry => entry.status === 'available' && engine.canPurchaseUpgrade('machine', entry.definition.id)));
+  assert.equal(engine.canPurchaseUpgrade('machine', 'reality_lattice'), true);
+});
+
+test('harvesting the instant Expansion begins is worse than playing the run out', () => {
+  const rush = freshEngine();
+  rush.startCivilization(20260819);
+  while (rush.state.phase === 'civilization') {
+    const civ = rush.state.civilization;
+    if (civ.era >= 1 && civ.eventChoices >= 3) break;
+    const event = rush.currentEvent();
+    if (event) rush.chooseEvent(safestChoiceIndex(event));
+    else rush.tick(0.25);
+  }
+  rush.harvest(false);
+  const played = freshEngine();
+  runCivilization(played, { seed: 20260819 });
+  assert.equal(rush.state.machine.lastHarvest.grade, 'premature');
+  assert.ok(
+    rush.state.machine.lastHarvest.rewards.causal_mass < played.state.machine.lastHarvest.rewards.causal_mass,
+    'the rush must yield less than the completed run',
+  );
+  assert.equal(rush.canPurchaseUpgrade('machine', 'reality_lattice'), false);
 });
 
 test('path dominance requires five affinity and a two-point lead', () => {
@@ -916,4 +981,459 @@ test('simulation batches UI notifications instead of replacing controls every fr
   assert.equal(notifications, 0);
   engine.tick(1 / 60);
   assert.equal(notifications, 1);
+});
+
+test('eraForYears is the single source of truth for the four eras', () => {
+  assert.equal(eraForYears(0), 0);
+  assert.equal(eraForYears(2499), 0);
+  assert.equal(eraForYears(2500), 1);
+  assert.equal(eraForYears(6499), 1);
+  assert.equal(eraForYears(6500), 2);
+  assert.equal(eraForYears(13999), 2);
+  assert.equal(eraForYears(14000), 3);
+  assert.equal(eraForYears(999999), 3);
+  assert.equal(eraForYears(-50), 0);
+  assert.deepEqual([...ERA_YEAR_THRESHOLDS], [0, 2500, 6500, 14000]);
+  assert.equal(ERA_NAMES.length, 4);
+  assert.equal(ERA_NAMES[3], 'APOTHEOSIS');
+});
+
+test('containment sums upgrade levels across both layers', () => {
+  const engine = freshEngine();
+  assert.equal(engine.runtimeBonuses().containmentRating, 0);
+  engine.state.machine.upgradeLevels.reality_lattice = 3;
+  assert.equal(engine.runtimeBonuses().containmentRating, 3);
+  engine.state.machine.upgradeLevels.awareness_scrubber = 2;
+  engine.state.machine.upgradeLevels.sanity_protocol = 1;
+  engine.state.machine.upgradeLevels.cosmic_muffling = 1;
+  engine.state.meta.universeUpgradeLevels.stable_constants = 5;
+  assert.equal(engine.runtimeBonuses().containmentRating, 12);
+  assert.equal(engine.runtimeBonuses().entropyGainMult, undefined);
+});
+
+test('Reality Lattice is reachable from the first cascade harvest', () => {
+  const engine = freshEngine();
+  const lattice = engine.upgradeById('machine', 'reality_lattice');
+  assert.equal(lattice.base_cost, 60);
+  assert.equal(lattice.growth, 1.55);
+  assert.deepEqual(
+    [0, 1, 2, 3].map(level => upgradeCost(lattice.base_cost, lattice.growth, level)),
+    [60, 93, 144, 223],
+  );
+});
+
+test('Wide Lattice preserves Reality Lattice levels through Universe consumption', () => {
+  const engine = freshEngine();
+  engine.state.machine.upgradeLevels.reality_lattice = 5;
+  engine.state.machine.upgradeLevels.awareness_scrubber = 3;
+  engine.state.meta.universeUpgradeLevels.wide_lattice = 2;
+  engine.state.meta.progression.unlockedSystems.push('universe_prestige');
+  engine.state.machine.cultivationCreditsThisUniverse = 18;
+  assert.equal(engine.consumeUniverse(), true);
+  assert.equal(engine.state.machine.upgradeLevels.reality_lattice, 2);
+  assert.equal(engine.state.machine.upgradeLevels.awareness_scrubber, undefined);
+});
+
+test('the universe upgrade growth floor leaves the ladder walkable', () => {
+  const engine = freshEngine();
+  const stable = engine.upgradeById('universe', 'stable_constants');
+  assert.equal(stable.growth, 1.75);
+  const ladder = [0, 1, 2, 3, 4].map(level => upgradeCost(stable.base_cost, stable.growth, level));
+  assert.deepEqual(ladder, [4, 7, 12, 21, 38]);
+  assert.equal(ladder.reduce((sum, cost) => sum + cost, 0), 82);
+});
+
+test('the residue award scales with credits earned, not civilization count', () => {
+  assert.equal(universeResidueAward(18, 8000, 1), 32);
+  assert.ok(universeResidueAward(36, 8000, 1) > universeResidueAward(18, 8000, 1));
+  assert.equal(universeResidueAward(0, 0, 1), 1);
+  assert.ok(universeResidueAward(18, 8000, 1.8) > universeResidueAward(18, 8000, 1));
+});
+
+test('the axiom award rewards universe investment', () => {
+  assert.equal(multiverseAxiomAward(4, 24), 10);
+  assert.ok(multiverseAxiomAward(4, 48) > multiverseAxiomAward(4, 24));
+  assert.equal(multiverseAxiomAward(0, 0), 1);
+});
+
+test('the harvest record carries the depth that produced it', () => {
+  const engine = withUpgrades(freshEngine(), { reality_lattice: 4 }, {});
+  runCivilization(engine, { seed: 4242, harvestAt: 'transcendent' });
+  const record = engine.state.machine.lastHarvest;
+  assert.equal(typeof record.depth, 'number');
+  assert.ok(record.depth > 0);
+  assert.equal(record.grade, depthBand(record.depth));
+  assert.ok(record.credits >= 1);
+});
+
+test('a Universe consumed with more credits returns more residue', () => {
+  const consume = credits => {
+    const engine = freshEngine();
+    engine.state.meta.progression.unlockedSystems.push('universe_prestige');
+    engine.state.machine.cultivationCreditsThisUniverse = credits;
+    engine.state.machine.currencies.causal_mass = 8000;
+    engine.consumeUniverse();
+    return engine.state.meta.universalResidue;
+  };
+  assert.equal(consume(18), universeResidueAward(18, 8000, 1));
+  assert.ok(consume(36) > consume(18));
+});
+
+test('the harvest era term extends into Apotheosis', () => {
+  const civ = GameEngine.createCivilizationForTest(861);
+  civ.development = 500;
+  civ.era = 2;
+  const bonuses = GameEngine.baseBonuses();
+  const transcendence = calculateHarvest(civ, false, bonuses);
+  civ.era = 3;
+  const apotheosis = calculateHarvest(civ, false, bonuses);
+  assert.ok(apotheosis.existence > transcendence.existence, 'Existence must keep scaling in Apotheosis');
+  assert.ok(apotheosis.paradox > transcendence.paradox, 'Paradox must keep scaling in Apotheosis');
+});
+
+test('the pool falls back to seen events before it falls back to one event', () => {
+  const civ = GameEngine.createCivilizationForTest(310);
+  const events = [
+    { id: 'a', weight: 1 },
+    { id: 'b', weight: 1 },
+    { id: 'c', weight: 1 },
+  ];
+  const options = {
+    pathMultiplier: () => 1,
+    stateMultiplier: () => 1,
+    exhausted: event => (civ.eventCounts[event.id] ?? 0) >= 1,
+  };
+  assert.equal(buildInterventionPool(events, civ, options).length, 3);
+  civ.eventCounts = { a: 1, b: 1, c: 1 };
+  const saturated = buildInterventionPool(events, civ, options);
+  assert.equal(saturated.length, 3, 'every exhausted event must return once nothing fresh is left');
+  recordRecentIntervention(civ, 'a');
+  const withoutRecent = buildInterventionPool(events, civ, options);
+  assert.deepEqual(withoutRecent.map(entry => entry.event.id).sort(), ['b', 'c'], 'the most recent event must stay excluded');
+});
+
+test('freshness spreads saturated repetition instead of concentrating it', () => {
+  const civ = GameEngine.createCivilizationForTest(311);
+  civ.eventCounts = { often: 6, rarely: 1 };
+  const options = { pathMultiplier: () => 1, stateMultiplier: () => 1, exhausted: () => true };
+  const pool = buildInterventionPool([{ id: 'often', weight: 1 }, { id: 'rarely', weight: 1 }], civ, options);
+  const weights = new Map(pool.map(entry => [entry.event.id, entry.weight]));
+  assert.ok(weights.get('rarely') > weights.get('often') * 2);
+});
+
+test('Apotheosis has its own cadence and phase weighting', () => {
+  const civ = GameEngine.createCivilizationForTest(320);
+  civ.era = 3;
+  assert.deepEqual(eventDelayWindow(civ), { min: 6, max: 9 });
+  const endgame = { id: 'x', weight: 1, path_id: 'machine_faith', path_phase: 'endgame' };
+  const impulse = { id: 'y', weight: 1, path_id: 'machine_faith', path_phase: 'impulse' };
+  const options = { pathMultiplier: () => 1, stateMultiplier: () => 1, exhausted: () => false };
+  const pool = new Map(buildInterventionPool([endgame, impulse], civ, options).map(e => [e.event.id, e.weight]));
+  assert.ok(pool.get('x') > pool.get('y') * 5, 'Apotheosis must favour endgame phases');
+});
+
+test('the era ceiling keeps the catalog eligible in Apotheosis', () => {
+  const raised = applyEraCeiling(CONTENT.events);
+  assert.equal(raised.length, CONTENT.events.length);
+  for (let index = 0; index < raised.length; index++) {
+    const original = Number(CONTENT.events[index].max_era ?? 2);
+    const expected = original === 2 ? 3 : original;
+    assert.equal(Number(raised[index].max_era), expected, `${raised[index].id} ceiling`);
+  }
+  assert.ok(raised.some(event => Number(event.max_era) === 3));
+});
+
+test('a civilization in Apotheosis still has an eligible pool', () => {
+  const engine = freshEngine();
+  engine.startCivilization(321);
+  const civ = engine.state.civilization;
+  civ.era = 3;
+  civ.years = 15000;
+  civ.eventChoices = 12;
+  civ.pendingEvent = '';
+  civ.eventTimer = 0;
+  engine.tick(0.25);
+  assert.ok(civ.pendingEvent, 'an intervention must be presented in Apotheosis');
+  assert.notEqual(civ.pendingEvent, 'routine_compliance_audit');
+});
+
+test('the Apotheosis event module meets its content contract', () => {
+  assert.equal(APOTHEOSIS_EVENTS.length, 12);
+  let entropyEffects = 0;
+  let harvestEffects = 0;
+  for (const event of APOTHEOSIS_EVENTS) {
+    assert.equal(Number(event.min_era), 3, `${event.id} must be Apotheosis-only`);
+    assert.ok(event.title && event.body, `${event.id} needs copy`);
+    assert.ok(event.choices.length >= 2, `${event.id} needs at least two choices`);
+    for (const choice of event.choices) {
+      assert.ok(choice.label, `${event.id} choice needs a label`);
+      assert.ok(choice.prediction, `${event.id} choice needs a prediction`);
+      assert.ok(choice.effects && Object.keys(choice.effects).length, `${event.id} choice needs effects`);
+    }
+    if (event.choices.some(choice => 'entropy' in (choice.effects ?? {}))) entropyEffects++;
+    if (event.choices.some(choice => Object.keys(choice.effects ?? {}).some(key => key.startsWith('harvest_mult_')))) harvestEffects++;
+  }
+  assert.ok(entropyEffects >= 4, `only ${entropyEffects} events touch Entropy`);
+  assert.ok(harvestEffects >= 2, `only ${harvestEffects} events touch harvest multipliers`);
+  const ids = new Set(APOTHEOSIS_EVENTS.map(event => event.id));
+  assert.equal(ids.size, 12);
+  for (const event of CONTENT.events) assert.ok(!ids.has(event.id), `${event.id} collides with the catalog`);
+});
+
+test('reaching Apotheosis awards Machine Insight', () => {
+  const engine = freshEngine();
+  engine.startCivilization(322);
+  const civ = engine.state.civilization;
+  civ.era = 3;
+  civ.development = 400;
+  civ.stats.awareness = 60;
+  Progression.recordCivilizationProgress(engine.state, civ);
+  assert.equal(engine.state.meta.progression.milestones.era_apotheosis, true);
+});
+
+test('dominance succeeds only from Transcendence and only under its guards', () => {
+  const civ = GameEngine.createCivilizationForTest(330);
+  const paths = CivilizationPaths.ensure(civ);
+  paths.affinity.machine_faith = 6;
+  assert.equal(CivilizationPaths.resolveDominance(civ), 'machine_faith');
+  assert.equal(paths.dominantPath, 'machine_faith');
+  assert.equal(paths.successions, 0);
+
+  paths.affinity.void_communion = 9;
+  civ.era = 1;
+  assert.equal(CivilizationPaths.resolveDominance(civ), '', 'no succession below Transcendence');
+
+  civ.era = 2;
+  civ.eventChoices = 2;
+  assert.equal(CivilizationPaths.resolveDominance(civ), '', 'no succession inside the interval');
+
+  civ.eventChoices = 8;
+  assert.equal(CivilizationPaths.resolveDominance(civ), 'void_communion');
+  assert.equal(paths.dominantPath, 'void_communion');
+  assert.equal(paths.successions, 1);
+});
+
+test('succession stops after three changes', () => {
+  const civ = GameEngine.createCivilizationForTest(331);
+  const paths = CivilizationPaths.ensure(civ);
+  civ.era = 2;
+  const order = ['machine_faith', 'void_communion', 'temporal_dominion', 'reality_engineering', 'collective_mind'];
+  order.forEach((id, index) => {
+    paths.affinity[id] = 6 + index * 4;
+    civ.eventChoices = index * 5;
+    CivilizationPaths.resolveDominance(civ);
+  });
+  assert.equal(paths.successions, SUCCESSION_MAX);
+  assert.equal(paths.dominantPath, order[SUCCESSION_MAX]);
+});
+
+test('every reached end-state is recorded once and deepens the harvest', () => {
+  const civ = GameEngine.createCivilizationForTest(332);
+  const paths = CivilizationPaths.ensure(civ);
+  paths.dominantPath = 'machine_faith';
+  civ.development = 400;
+  const before = cultivationDepth(civ);
+  CivilizationPaths.applyChoice(
+    civ,
+    { id: 'e1', path_id: 'machine_faith', path_phase: 'endgame' },
+    { label: 'finish', effects: {} },
+  );
+  assert.equal(paths.endgameStates.length, 1);
+  assert.equal(cultivationDepth(civ), before + 1.5);
+  CivilizationPaths.applyChoice(
+    civ,
+    { id: 'e1b', path_id: 'machine_faith', path_phase: 'endgame' },
+    { label: 'finish again', effects: {} },
+  );
+  assert.equal(paths.endgameStates.length, 1, 'the same end-state must not count twice');
+});
+
+test('a long run never serves one intervention over and over', () => {
+  const engine = withUpgrades(
+    freshEngine(),
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  const result = runCivilization(engine, { seed: 7777 });
+  const counts = new Map();
+  for (const id of result.eventIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const worst = Math.max(...counts.values());
+  assert.ok(result.interventions >= 90, `only ${result.interventions} interventions`);
+  assert.ok(counts.size >= 55, `only ${counts.size} distinct events`);
+  assert.ok(worst <= 5, `one event appeared ${worst} times`);
+  assert.ok((counts.get('routine_compliance_audit') ?? 0) <= 3, 'the fallback must stay exceptional');
+  for (let index = 1; index < result.eventIds.length; index++) {
+    assert.notEqual(result.eventIds[index], result.eventIds[index - 1], 'no intervention may repeat back to back');
+  }
+});
+
+test('Vent trades Stability for Entropy relief and harvestable Paradox', () => {
+  const engine = freshEngine();
+  engine.startCivilization(410);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 40;
+  // years must agree with the era: the engine re-derives it and entering an era refunds Control.
+  civ.years = 7000;
+  civ.era = 2;
+  assert.equal(engine.useTacticalAction('vent'), true);
+  assert.equal(civ.tactical.entropy, 22);
+  assert.equal(civ.stats.stability, civ.stats.stabilityMax - 10);
+  assert.equal(civ.stats.attention, 4);
+  assert.equal(civ.tactical.controlCapacity, 2);
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 14.4);
+});
+
+test('Vent removes only the Entropy that exists and pays out accordingly', () => {
+  const engine = freshEngine();
+  engine.startCivilization(411);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 10;
+  civ.era = 0;
+  assert.equal(engine.useTacticalAction('vent'), true);
+  assert.equal(civ.tactical.entropy, 0);
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 4);
+});
+
+test('Vent is unavailable below the minimum Entropy and changes nothing', () => {
+  const engine = freshEngine();
+  engine.startCivilization(412);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 5;
+  const snapshot = JSON.stringify(civ);
+  assert.equal(engine.useTacticalAction('vent'), false);
+  assert.equal(engine.lastActionFailure, 'Entropy is too low to vent.');
+  assert.equal(JSON.stringify(civ), snapshot);
+});
+
+test('Vent gives the credit-optimal playstyle a Paradox source', () => {
+  const build = () => withUpgrades(freshEngine(), { reality_lattice: 4 }, {});
+  const without = build();
+  runCivilization(without, { seed: 4141 });
+  const venting = build();
+  runCivilization(venting, { seed: 4141, policy: ['safe', 'vent'] });
+  const vented = venting.state.machine.lastHarvest.rewards;
+  const plain = without.state.machine.lastHarvest.rewards;
+  assert.ok(vented.paradox > plain.paradox * 1.4, `venting must lift Paradox: ${vented.paradox} vs ${plain.paradox}`);
+  const share = resources => resources.paradox / (resources.causal_mass + resources.cognition + resources.existence);
+  assert.ok(share(vented) > share(plain), 'venting must raise the Paradox share of a harvest');
+});
+
+test('Accelerate keeps its two-Control cost and sheds two Entropy', () => {
+  assert.equal(TACTICAL_ACTIONS.accelerate.cost, 2);
+  assert.match(TACTICAL_ACTIONS.accelerate.risk, /\+5 Entropy/, 'the advertised risk must match the applied surcharge');
+  assert.equal(TACTICAL_ACTIONS.vent.cost, 1);
+  assert.equal(TACTICAL_ACTIONS.vent.shortcut, '4');
+  const engine = freshEngine();
+  engine.startCivilization(413);
+  const civ = engine.state.civilization;
+  civ.eventTimer = 100;
+  civ.pendingEvent = '';
+  assert.equal(engine.useTacticalAction('accelerate'), true);
+  assert.equal(civ.tactical.entropy, 5);
+});
+
+test('no tactical policy stretches a no-upgrade run past four minutes', () => {
+  const policies = [['safe'], ['safe', 'vent'], ['safe', 'stabilize'], ['safe', 'accelerate'], ['safe', 'vent', 'stabilize'], ['safe', 'vent', 'stabilize', 'accelerate']];
+  for (const policy of policies) {
+    const result = runCivilization(freshEngine(), { seed: 4321, policy });
+    assert.ok(result.elapsed <= 240, `policy ${policy.join('+')} survived ${result.elapsed}s`);
+  }
+});
+
+test('run intervention cost escalates with use and with depth', () => {
+  const pulse = runInterventionById('containment_pulse');
+  assert.equal(pulse.baseCost, 180);
+  assert.equal(RUN_INTERVENTIONS.length, 3);
+  assert.equal(runInterventionCost(pulse, 0, 0), 180);
+  assert.equal(runInterventionCost(pulse, 1, 0), 540);
+  assert.equal(runInterventionCost(pulse, 2, 0), 1620);
+  assert.equal(runInterventionCost(pulse, 0, 20), 1080);
+  assert.equal(runInterventionCost(pulse, 1, 20), 3240);
+  assert.equal(runInterventionCost(pulse, 2, 20), 9720);
+});
+
+test('a containment pulse removes Entropy and consumes a use', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 5000;
+  engine.startCivilization(420);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 60;
+  // The depth factor applies from the first use, so the quoted price already exceeds the base cost.
+  const quoted = engine.runInterventions().find(view => view.id === 'containment_pulse').cost;
+  assert.equal(quoted, runInterventionCost(runInterventionById('containment_pulse'), 0, civ.development / 80));
+  assert.ok(quoted >= 180);
+  assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  assert.equal(civ.tactical.entropy, 35);
+  assert.equal(engine.state.machine.currencies.causal_mass, 5000 - quoted);
+  assert.equal(runInterventionUses(civ, 'containment_pulse'), 1);
+});
+
+test('run interventions stop at three uses per run', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 1_000_000;
+  engine.startCivilization(421);
+  const civ = engine.state.civilization;
+  for (let index = 0; index < 3; index++) {
+    civ.tactical.entropy = 90;
+    assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  }
+  civ.tactical.entropy = 90;
+  assert.equal(engine.useRunIntervention('containment_pulse'), false);
+  assert.equal(engine.lastActionFailure, 'Containment Pulse is exhausted for this civilization.');
+  assert.equal(civ.tactical.entropy, 90);
+});
+
+test('an unaffordable run intervention changes nothing', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 10;
+  engine.startCivilization(422);
+  const civ = engine.state.civilization;
+  civ.tactical.entropy = 60;
+  const snapshot = JSON.stringify(civ);
+  assert.equal(engine.useRunIntervention('containment_pulse'), false);
+  assert.equal(JSON.stringify(civ), snapshot);
+  assert.equal(engine.state.machine.currencies.causal_mass, 10);
+});
+
+test('run interventions stay locked behind their Insight gates', () => {
+  const engine = freshEngine();
+  engine.state.machine.currencies.causal_mass = 100_000;
+  engine.state.machine.currencies.cognition = 100_000;
+  engine.startCivilization(423);
+  const views = new Map(engine.runInterventions().map(view => [view.id, view]));
+  assert.equal(views.get('containment_pulse').enabled, false);
+  assert.match(views.get('containment_pulse').reason, /Machine Insight 4/);
+  engine.state.meta.progression.machineInsight = 4;
+  assert.equal(engine.runInterventions().find(view => view.id === 'containment_pulse').enabled, true);
+  assert.equal(engine.runInterventions().find(view => view.id === 'emergency_lattice').enabled, false);
+});
+
+test('spending every reserve intervention is a losing trade', () => {
+  const build = () => withUpgrades(
+    freshEngine(),
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  const bank = 200_000;
+  const seed = 4242;
+  const keys = ['causal_mass', 'cognition', 'paradox', 'existence'];
+  const without = build();
+  for (const key of keys) without.state.machine.currencies[key] = bank;
+  runCivilization(without, { seed });
+  const withReserve = build();
+  for (const key of keys) withReserve.state.machine.currencies[key] = bank;
+  runCivilization(withReserve, { seed, policy: ['safe', 'reserve'] });
+  const total = engine => keys.reduce((sum, key) => sum + engine.state.machine.currencies[key], 0);
+  assert.ok(total(withReserve) < total(without), `reserve spending must not pay for itself: ${total(withReserve)} vs ${total(without)}`);
+});
+
+test('a no-upgrade run with full reserve spending stays under seven minutes', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  for (const key of ['causal_mass', 'cognition', 'existence']) engine.state.machine.currencies[key] = 200_000;
+  const result = runCivilization(engine, { seed: 4324, policy: ['safe', 'vent', 'reserve'] });
+  assert.ok(result.elapsed <= 420, `survived ${result.elapsed}s`);
 });

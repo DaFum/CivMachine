@@ -1,7 +1,14 @@
 import type { Civilization, GameState, ResourceKey, RuntimeBonuses } from './types.js';
 
 export const RESOURCE_KEYS: ResourceKey[] = ['causal_mass', 'cognition', 'paradox', 'existence'];
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000] as const;
+
+export function eraForYears(years: number): number {
+  const safe = Math.max(0, Number(years) || 0);
+  for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--) if (safe >= ERA_YEAR_THRESHOLDS[era]!) return era;
+  return 0;
+}
 
 export function createNewState(): GameState {
   return {
@@ -39,7 +46,7 @@ export function upgradeCost(baseCost: number, growth: number, level: number): nu
 export function calculateHarvest(civ: Civilization, chaotic: boolean, bonuses: RuntimeBonuses): Record<ResourceKey, number> {
   const years = Math.max(0, civ.years);
   const development = Math.max(1, civ.development);
-  const era = Math.max(0, Math.min(2, civ.era));
+  const era = Math.max(0, Math.min(3, civ.era));
   const eventChoices = Math.max(0, civ.eventChoices);
   const { stability, awareness, sanity, attention } = civ.stats;
   const raw: Record<ResourceKey, number> = {
@@ -57,14 +64,12 @@ export function calculateHarvest(civ: Civilization, chaotic: boolean, bonuses: R
   return result;
 }
 
-export function universeResidueAward(civilizations: number, bank: number, multiplier: number): number {
-  const civTerm = Math.pow(Math.max(0, civilizations), 1.15) / 2.6;
-  const bankTerm = Math.sqrt(Math.max(0, bank)) / 35;
-  return Math.max(1, Math.floor((civTerm + bankTerm) * Math.max(0.1, multiplier)));
+export function universeResidueAward(credits: number, bank: number, multiplier: number): number {
+  const creditTerm = Math.pow(Math.max(0, credits), 1.15) / 1.2;
+  const bankTerm = Math.sqrt(Math.max(0, bank)) / 10;
+  return Math.max(1, Math.floor((creditTerm + bankTerm) * Math.max(0.1, multiplier)));
 }
 
 export function multiverseAxiomAward(universes: number, universalLevels: number): number {
-  const universeTerm = Math.sqrt(Math.max(0, universes)) / 1.6;
-  const upgradeTerm = Math.max(0, universalLevels) / 4;
-  return Math.max(1, Math.floor(universeTerm + upgradeTerm));
+  return Math.max(1, Math.floor(Math.pow(Math.max(0, universes), 1.1) / 2 + Math.max(0, universalLevels) / 3));
 }

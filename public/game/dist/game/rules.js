@@ -1,5 +1,13 @@
 export const RESOURCE_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000];
+export function eraForYears(years) {
+    const safe = Math.max(0, Number(years) || 0);
+    for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--)
+        if (safe >= ERA_YEAR_THRESHOLDS[era])
+            return era;
+    return 0;
+}
 export function createNewState() {
     return {
         saveVersion: SAVE_VERSION,
@@ -34,7 +42,7 @@ export function upgradeCost(baseCost, growth, level) {
 export function calculateHarvest(civ, chaotic, bonuses) {
     const years = Math.max(0, civ.years);
     const development = Math.max(1, civ.development);
-    const era = Math.max(0, Math.min(2, civ.era));
+    const era = Math.max(0, Math.min(3, civ.era));
     const eventChoices = Math.max(0, civ.eventChoices);
     const { stability, awareness, sanity, attention } = civ.stats;
     const raw = {
@@ -52,14 +60,12 @@ export function calculateHarvest(civ, chaotic, bonuses) {
     }
     return result;
 }
-export function universeResidueAward(civilizations, bank, multiplier) {
-    const civTerm = Math.pow(Math.max(0, civilizations), 1.15) / 2.6;
-    const bankTerm = Math.sqrt(Math.max(0, bank)) / 35;
-    return Math.max(1, Math.floor((civTerm + bankTerm) * Math.max(0.1, multiplier)));
+export function universeResidueAward(credits, bank, multiplier) {
+    const creditTerm = Math.pow(Math.max(0, credits), 1.15) / 1.2;
+    const bankTerm = Math.sqrt(Math.max(0, bank)) / 10;
+    return Math.max(1, Math.floor((creditTerm + bankTerm) * Math.max(0.1, multiplier)));
 }
 export function multiverseAxiomAward(universes, universalLevels) {
-    const universeTerm = Math.sqrt(Math.max(0, universes)) / 1.6;
-    const upgradeTerm = Math.max(0, universalLevels) / 4;
-    return Math.max(1, Math.floor(universeTerm + upgradeTerm));
+    return Math.max(1, Math.floor(Math.pow(Math.max(0, universes), 1.1) / 2 + Math.max(0, universalLevels) / 3));
 }
 //# sourceMappingURL=rules.js.map

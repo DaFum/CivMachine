@@ -266,7 +266,7 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
             surface.lineStyle(1, 0xf2cd7b, .34).line(structure.x - structure.width * .6, ground, structure.x - structure.width * .6, top);
             surface.lineStyle(1, 0xf2cd7b, .34).line(structure.x + structure.width * .6, ground, structure.x + structure.width * .6, top);
             for (let spark = 0; spark < 3; spark++) {
-                surface.fillStyle(0xffd9a0, .6).fillCircle(structure.x + (hash01(spark * 31 + Math.trunc(time / 90)) - .5) * structure.width, buildY + hash01(spark * 17 + Math.trunc(time / 90)) * 6, 1.1);
+                surface.fillStyle(0xffd9a0, .6).fillCircle(structure.x + (hash01(spark * 31 + Math.trunc(animationTime / 90)) - .5) * structure.width, buildY + hash01(spark * 17 + Math.trunc(animationTime / 90)) * 6, 1.1);
             }
         }
     }
@@ -379,6 +379,8 @@ class CanvasWorld {
         this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
         this.feedbackSequence = 0;
         this.feedbackStartTime = 0;
+        this.sceneRebuilds = 0;
+        this.staticRedraws = 0;
         this.loop = (time) => {
             this.raf = requestAnimationFrame(this.loop);
             if (time - this.lastFrame < (reducedMotion ? 180 : DYNAMIC_FRAME_MS))
@@ -397,17 +399,26 @@ class CanvasWorld {
             if (!civ)
                 return;
             const key = `${structuralWorldKey(civ, this.width)}|${Math.round(this.height / 40)}|${civ.traits.join(',')}`;
-            if (key !== this.lastStructuralKey || this.scroll !== this.lastStaticScroll) {
+            // Only a structural change rebuilds the scene. Scrolling repaints the cached static layer and
+            // nothing else: panning used to trigger a full buildScene plus tracker.sync on every throttled
+            // frame, which is the per-frame budget the rest of this file is built to protect.
+            if (key !== this.lastStructuralKey) {
                 this.lastStructuralKey = key;
-                this.lastStaticScroll = this.scroll;
-                this.scene = buildScene(civ, rect.width, this.height);
+                this.scene = buildScene(civ, this.width, this.height);
                 this.tracker.sync(this.scene.structures, time);
-                this.drawStatic(this.scene);
+                this.sceneRebuilds++;
+                this.lastStaticScroll = Number.NaN;
             }
             if (!this.scene)
                 return;
+            // Clamp before painting, so the frame on screen and the stored baseline are the same value.
+            this.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - this.width, this.scroll));
+            if (this.scroll !== this.lastStaticScroll) {
+                this.lastStaticScroll = this.scroll;
+                this.drawStatic(this.scene);
+                this.staticRedraws++;
+            }
             this.tracker.prune(time);
-            this.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - rect.width, this.scroll));
             this.drawDynamic(time, this.scene, civ);
         };
         this.staticCanvas = document.createElement('canvas');
@@ -435,6 +446,7 @@ class CanvasWorld {
         this.loop(0);
     }
     nudge(direction) { this.scroll += direction * Math.max(220, this.width * .65); this.lastStaticScroll = Number.NaN; }
+    stats() { return { sceneRebuilds: this.sceneRebuilds, staticRedraws: this.staticRedraws }; }
     resizeCanvas(canvas) {
         canvas.width = Math.max(1, Math.round(this.width * devicePixelRatio));
         canvas.height = Math.max(1, Math.round(this.height * devicePixelRatio));
@@ -500,6 +512,7 @@ export function startWorldRenderer(engine, host) {
     ensure();
     return {
         nudge(direction) { world?.nudge(direction); },
+        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0 }; },
         destroy() { unsubscribe(); world?.destroy(); world = null; host.replaceChildren(); },
     };
 }

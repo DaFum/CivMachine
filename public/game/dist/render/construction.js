@@ -12,6 +12,16 @@ export class ConstructionTracker {
         this.active = new Map();
     }
     sync(structures, now) {
+        // Drop structures the world no longer contains first. Without this both maps grow for the whole
+        // run, and an id that vanishes and later returns at a higher level animates a build that never
+        // happened, because its stale baseline is still on record.
+        const present = new Set(structures.map(structure => structure.id));
+        for (const id of this.levels.keys())
+            if (!present.has(id))
+                this.levels.delete(id);
+        for (const id of this.active.keys())
+            if (!present.has(id))
+                this.active.delete(id);
         for (const structure of structures) {
             const previous = this.levels.get(structure.id);
             if (previous !== undefined && structure.level > previous)

@@ -91,17 +91,17 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /['"]\/game\/dist\/game\/upgrade-balance\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js\.map['"]/);
   assert.match(worker, /['"]\/game\/dist\/render\/world-presentation\.js['"]/);
-  assert.match(worker, /rce-app-v1\.4\.0['"]/);
+  assert.match(worker, /rce-app-v1\.5\.0['"]/);
   assert.match(worker, /caches\.delete/);
 });
 
-test('release metadata identifies browser app v1.4.0', async () => {
+test('release metadata identifies browser app v1.5.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const gamePackage = JSON.parse(await readFile(new URL('../public/game/package.json', import.meta.url), 'utf8'));
   const html = await readFile(new URL('../public/game/index.html', import.meta.url), 'utf8');
-  assert.equal(rootPackage.version, '1.4.0');
-  assert.equal(gamePackage.version, '1.4.0');
-  assert.match(html, /Browser v1\.4\.0/);
+  assert.equal(rootPackage.version, '1.5.0');
+  assert.equal(gamePackage.version, '1.5.0');
+  assert.match(html, /Browser v1\.5\.0/);
 });
 
 test('game surface protects mobile safe areas and dynamic viewport height', async () => {

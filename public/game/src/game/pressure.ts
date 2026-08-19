@@ -1,4 +1,4 @@
-import type { Civilization, RuntimeBonuses } from './types.js';
+import type { Civilization } from './types.js';
 
 export const ENTROPY_THRESHOLDS = [25, 50, 75] as const;
 
@@ -8,6 +8,12 @@ export const ENTROPY_CRISIS_IDS: Readonly<Record<number, string>> = {
   75: 'entropy_crisis_75',
 };
 
+export const PRESSURE_BASE = 0.48;
+export const PRESSURE_YEAR_SCALE = 6500;
+export const CONTAINMENT_RELIEF = 0.4;
+export const CASCADE_DECAY_FRACTION = 0.07;
+const YEARS_PER_SECOND = 25;
+
 export interface PressureAdvance {
   before: number;
   after: number;
@@ -15,25 +21,34 @@ export interface PressureAdvance {
   queuedCrises: string[];
 }
 
-export function requiredContainment(era: number): number {
-  return [0, 2, 4][Math.max(0, Math.min(2, Math.trunc(era)))] ?? 0;
+export function pressureMultiplier(years: number): number {
+  return 1 + Math.max(0, Number(years) || 0) / PRESSURE_YEAR_SCALE;
 }
 
-export function entropyRate(era: number, rating: number, multiplier = 1): number {
-  const index = Math.max(0, Math.min(2, Math.trunc(era)));
-  const base = [0.32, 0.48, 0.72][index] ?? 0.72;
-  const safeRating = Math.max(0, rating);
-  const deficit = Math.max(0, requiredContainment(index) - safeRating);
-  return base * (1 + 0.35 * deficit) / (1 + 0.35 * safeRating) * Math.max(0.1, multiplier);
+function relief(containment: number): number {
+  return 1 + CONTAINMENT_RELIEF * Math.max(0, Number(containment) || 0);
+}
+
+export function entropyRate(years: number, containment: number): number {
+  return PRESSURE_BASE * pressureMultiplier(years) / relief(containment);
+}
+
+export function secondsToCascade(years: number, entropy: number, containment: number): number {
+  const remaining = Math.max(0, 100 - (Number(entropy) || 0));
+  if (remaining <= 0) return 0;
+  const b = pressureMultiplier(years);
+  const c = relief(containment) * remaining / PRESSURE_BASE;
+  const k = YEARS_PER_SECOND / (2 * PRESSURE_YEAR_SCALE);
+  return (-b + Math.sqrt(b * b + 4 * k * c)) / (2 * k);
 }
 
 export function advancePressure(
   civ: Civilization,
-  bonuses: Pick<RuntimeBonuses, 'containmentRating' | 'entropyGainMult'>,
+  bonuses: { containmentRating: number },
   deltaSeconds: number,
 ): PressureAdvance {
   const before = Math.max(0, Math.min(100, civ.tactical.entropy));
-  const rate = entropyRate(civ.era, bonuses.containmentRating, bonuses.entropyGainMult);
+  const rate = entropyRate(civ.years, bonuses.containmentRating);
   const after = Math.max(0, Math.min(100, before + rate * Math.max(0, deltaSeconds)));
   civ.tactical.entropy = after;
   const queuedCrises: string[] = [];
@@ -47,6 +62,6 @@ export function advancePressure(
   return { before, after, rate, queuedCrises };
 }
 
-export function cascadeDecay(entropy: number): number {
-  return entropy >= 100 ? 7 : 0;
+export function cascadeDecay(entropy: number, stabilityMax: number): number {
+  return entropy >= 100 ? CASCADE_DECAY_FRACTION * Math.max(1, Number(stabilityMax) || 1) : 0;
 }

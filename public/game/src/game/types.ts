@@ -1,8 +1,8 @@
 export type ResourceKey = 'causal_mass' | 'cognition' | 'paradox' | 'existence';
 export type Layer = 'machine' | 'universe' | 'axiom';
 export type Phase = 'machine' | 'civilization';
-export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe';
-export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant';
+export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe' | 'vent';
+export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant' | 'singular';
 
 export interface Stats {
   stability: number;
@@ -20,6 +20,9 @@ export interface PathState {
   recentPaths: string[];
   recentDeltas: Record<string, number>;
   endgameState: string;
+  endgameStates: string[];
+  successions: number;
+  successionAtChoice: number;
 }
 
 export interface DecisionMetricDelta {
@@ -94,6 +97,7 @@ export interface Civilization {
   tactical: TacticalState;
   directiveId: string;
   directiveObjective: DirectiveObjectiveState;
+  runInterventionUses: Record<string, number>;
 }
 
 export interface ProgressionState {
@@ -163,7 +167,6 @@ export interface RuntimeBonuses {
   allHarvestMult: number;
   chaoticRetention: number;
   containmentRating: number;
-  entropyGainMult: number;
   controlRecharge: number;
   accelerateYears: number;
   accelerateTimer: number;

@@ -7,16 +7,25 @@ export const PATH_IDS = [
 ] as const;
 export const DOMINANCE_MIN_AFFINITY = 5;
 export const DOMINANCE_MIN_LEAD = 2;
+// From Transcendence onward dominance can change hands. Without this, 18 written path events -- the
+// consolidation and endgame phases of the nine non-dominant paths -- are unreachable in any run.
+export const SUCCESSION_MIN_ERA = 2;
+export const SUCCESSION_INTERVAL = 4;
+export const SUCCESSION_MAX = 3;
 const DEFINITIONS = CONTENT.path_definitions as unknown as Record<string, any>;
 
 export class CivilizationPaths {
   static newState(): PathState {
-    return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '' };
+    return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '', endgameStates: [], successions: 0, successionAtChoice: 0 };
   }
   static ensure(civ: Civilization): PathState {
     if (!civ.pathState) civ.pathState = this.newState();
-    for (const id of PATH_IDS) if (!(id in civ.pathState.affinity)) civ.pathState.affinity[id] = 0;
-    return civ.pathState;
+    const ps = civ.pathState;
+    for (const id of PATH_IDS) if (!(id in ps.affinity)) ps.affinity[id] = 0;
+    if (!Array.isArray(ps.endgameStates)) ps.endgameStates = ps.endgameState ? [ps.endgameState] : [];
+    if (typeof ps.successions !== 'number') ps.successions = 0;
+    if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
+    return ps;
   }
   static displayName(id: string): string { return DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
   static affinity(civ: Civilization, id: string): number { return PATH_IDS.includes(id as any) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
@@ -28,14 +37,20 @@ export class CivilizationPaths {
   static secondaryPaths(civ: Civilization, limit = 3): string[] { return this.ranked(civ, limit, true); }
   static resolveDominance(civ: Civilization): string {
     const ps = this.ensure(civ);
-    if (ps.dominantPath) return '';
     const ranked = this.ranked(civ, PATH_IDS.length);
     if (!ranked.length) return '';
     const leader = ranked[0]!;
     const score = this.affinity(civ, leader);
     const runner = ranked[1] ? this.affinity(civ, ranked[1]) : 0;
     if (score < DOMINANCE_MIN_AFFINITY || score - runner < DOMINANCE_MIN_LEAD) return '';
+    if (!ps.dominantPath) { ps.dominantPath = leader; return leader; }
+    if (leader === ps.dominantPath) return '';
+    if (civ.era < SUCCESSION_MIN_ERA) return '';
+    if (ps.successions >= SUCCESSION_MAX) return '';
+    if (civ.eventChoices - ps.successionAtChoice < SUCCESSION_INTERVAL) return '';
     ps.dominantPath = leader;
+    ps.successions += 1;
+    ps.successionAtChoice = civ.eventChoices;
     return leader;
   }
   static qualitativeTendencies(civ: Civilization): Array<{id:string;name:string;label:string}> {
@@ -66,8 +81,12 @@ export class CivilizationPaths {
     const newDominantPath = this.resolveDominance(civ);
     let endgameState = '';
     if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {
-      endgameState = String(DEFINITIONS[event.path_id]?.endgame ?? ''); ps.endgameState = endgameState;
-      if (endgameState && !civ.flags.includes(endgameState)) civ.flags.push(endgameState);
+      endgameState = String(DEFINITIONS[event.path_id]?.endgame ?? '');
+      if (endgameState) {
+        ps.endgameState = endgameState;
+        if (!ps.endgameStates.includes(endgameState)) ps.endgameStates.push(endgameState);
+        if (!civ.flags.includes(endgameState)) civ.flags.push(endgameState);
+      }
     }
     return { newDominantPath, history: String(choice.path_history ?? ''), endgameState };
   }
@@ -96,5 +115,5 @@ export class CivilizationPaths {
   static recordSelectedEvent(civ:Civilization,event:any):void { const ps=this.ensure(civ); const id=String(event.path_id??''); ps.recentPaths.push(PATH_IDS.includes(id as any)?id:'neutral'); while(ps.recentPaths.length>6) ps.recentPaths.shift(); }
   static dominanceEffects(id:string):Record<string,any>{ return structuredClone(DEFINITIONS[id]?.dominance_effects ?? {}); }
   static simulationModifier(civ:Civilization,key:string):number { const id=this.ensure(civ).dominantPath; return id ? Number(DEFINITIONS[id]?.simulation?.[key] ?? 1) : 1; }
-  static summary(civ:Civilization){ const ps=this.ensure(civ); return { dominantId:ps.dominantPath, dominantName: ps.dominantPath?this.displayName(ps.dominantPath):'', tendencies:this.qualitativeTendencies(civ), endgameState:ps.endgameState }; }
+  static summary(civ:Civilization){ const ps=this.ensure(civ); return { dominantId:ps.dominantPath, dominantName: ps.dominantPath?this.displayName(ps.dominantPath):'', tendencies:this.qualitativeTendencies(civ), endgameState:ps.endgameState, endgameStates:[...ps.endgameStates], successions:ps.successions }; }
 }

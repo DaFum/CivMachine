@@ -89,3 +89,44 @@ test('the renderer actually draws a populated world', async () => {
   assertFiniteGeometry(staticCalls, 'static');
   assertFiniteGeometry(dynamicCalls, 'dynamic');
 });
+
+test('panning repaints the cached static layer without rebuilding the scene', async () => {
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext([]), addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }) };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { globalThis.__frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(707) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?pan=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    const frame = time => globalThis.__frame(time);
+
+    frame(100);
+    assert.deepEqual(controller.stats(), { sceneRebuilds: 1, staticRedraws: 1 }, 'the first real frame builds and paints once');
+
+    frame(200);
+    assert.deepEqual(controller.stats(), { sceneRebuilds: 1, staticRedraws: 1 }, 'an unchanged frame must neither rebuild nor repaint');
+
+    controller.nudge(1);
+    frame(300);
+    const panned = controller.stats();
+    assert.equal(panned.sceneRebuilds, 1, 'panning must not rebuild the scene');
+    assert.equal(panned.staticRedraws, 2, 'panning must repaint the cached static layer exactly once');
+
+    frame(400);
+    assert.deepEqual(controller.stats(), panned, 'a frame after the pan settles must be free again');
+
+    // A structural change is the only thing that may rebuild.
+    engine.state.civilization.institutions.push('Ministry Of Sanity');
+    frame(500);
+    const structural = controller.stats();
+    assert.equal(structural.sceneRebuilds, 2, 'a structural change must rebuild once');
+    assert.equal(structural.staticRedraws, 3, 'a rebuild must repaint the static layer once');
+
+    controller.destroy();
+    delete globalThis.__frame;
+  });
+});

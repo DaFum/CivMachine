@@ -2,6 +2,10 @@ import { CivilizationPaths } from './paths.js';
 import type { Civilization, RuntimeBonuses, TacticalActionId } from './types.js';
 
 export const CONTROL_CAPACITY_MAX = 3;
+export const VENT_ENTROPY_RELIEF = 18;
+export const VENT_MIN_ENTROPY = 6;
+export const VENT_STABILITY_COST = 10;
+export const VENT_ATTENTION_COST = 4;
 
 export interface TacticalActionDefinition {
   id: TacticalActionId;
@@ -40,7 +44,7 @@ export const TACTICAL_ACTIONS: Readonly<Record<TacticalActionId, TacticalActionD
     title: 'Temporal Injection',
     label: 'Accelerate historical throughput',
     summary: '+200 years · advance Development',
-    risk: '-4 Stability · +7 Entropy',
+    risk: '-4 Stability · +5 Entropy',
     cost: 2,
     shortcut: '2',
   },
@@ -53,12 +57,22 @@ export const TACTICAL_ACTIONS: Readonly<Record<TacticalActionId, TacticalActionD
     cost: 1,
     shortcut: '3',
   },
+  vent: {
+    id: 'vent',
+    title: 'Entropy Vent',
+    label: 'Vent accumulated entropy into Paradox',
+    summary: '-18 Entropy · yields Paradox at harvest',
+    risk: '-10 Stability · +4 Attention',
+    cost: 1,
+    shortcut: '4',
+  },
 };
 
 const ACTION_PATHS: Readonly<Record<TacticalActionId, readonly [string, string]>> = {
   stabilize: ['cosmic_resistance', 'bureaucratic_singularity'],
   accelerate: ['temporal_dominion', 'reality_engineering'],
   probe: ['recursive_simulation', 'machine_faith'],
+  vent: ['void_communion', 'post_mortal_civilization'],
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -80,6 +94,9 @@ export function tacticalAvailability(civ: Civilization, id: TacticalActionId): T
   if (id === 'probe' && civ.tactical.probedEventId === civ.pendingEvent) {
     return { enabled: false, reason: 'This intervention has already been probed.', cost: definition.cost };
   }
+  if (id === 'vent' && civ.tactical.entropy < VENT_MIN_ENTROPY) {
+    return { enabled: false, reason: 'Entropy is too low to vent.', cost: definition.cost };
+  }
   return { enabled: true, reason: '', cost: definition.cost };
 }
 
@@ -100,7 +117,13 @@ export function applyTacticalAction(
     civ.development += 6 * Math.max(0.2, civ.developmentMultiplier) * (1 + civ.era * 0.2);
     civ.eventTimer = Math.max(0, civ.eventTimer - bonuses.accelerateTimer);
     civ.stats.stability = clamp(civ.stats.stability - 4, 0, civ.stats.stabilityMax);
-    civ.tactical.entropy = clamp(civ.tactical.entropy + 7, 0, 100);
+    civ.tactical.entropy = clamp(civ.tactical.entropy + 5, 0, 100);
+  } else if (id === 'vent') {
+    const removed = Math.min(VENT_ENTROPY_RELIEF, civ.tactical.entropy);
+    civ.tactical.entropy = clamp(civ.tactical.entropy - removed, 0, 100);
+    civ.harvestBonus.paradox += removed * (0.4 + 0.2 * Math.max(0, Math.min(3, Math.trunc(civ.era))));
+    civ.stats.stability = clamp(civ.stats.stability - VENT_STABILITY_COST, 0, civ.stats.stabilityMax);
+    civ.stats.attention = clamp(civ.stats.attention + VENT_ATTENTION_COST * bonuses.attentionGainMult, 0, 100);
   } else {
     civ.stats.awareness = clamp(civ.stats.awareness + 3 * bonuses.awarenessGainMult, 0, 100);
     civ.tactical.entropy = clamp(civ.tactical.entropy + 2, 0, 100);

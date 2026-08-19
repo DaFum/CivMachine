@@ -1,7 +1,8 @@
 import { CivilizationPaths } from '../game/paths.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
-import { requiredContainment } from '../game/pressure.js';
 import { objectiveForDirective } from '../game/run-directives.js';
+import { entropyRate, pressureMultiplier, secondsToCascade } from '../game/pressure.js';
+import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand } from '../game/harvest-quality.js';
 import { TACTICAL_ACTIONS } from '../game/tactical-actions.js';
 import type { GameEngine } from '../game/engine.js';
 
@@ -40,6 +41,19 @@ function entropyBand(value:number):{index:number;id:string;label:string}{
   if(value>=50)return {index:2,id:'fractured',label:'FRACTURED'};
   if(value>=25)return {index:1,id:'strained',label:'STRAINED'};
   return {index:0,id:'contained',label:'CONTAINED'};
+}
+
+// The stay-or-harvest decision is a blind guess without a forecast, so the view model carries the
+// next band the run can reach and what it is worth.
+function nextDepthBand(depth: number) {
+  const upcoming = DEPTH_BANDS.find(band => band.minDepth > depth);
+  if (!upcoming) return null;
+  return {
+    grade: upcoming.grade,
+    label: HARVEST_GRADE_LABELS[upcoming.grade],
+    depthNeeded: upcoming.minDepth,
+    yieldMultiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * upcoming.minDepth,
+  };
 }
 
 export function buildViewModel(engine: GameEngine) {
@@ -111,16 +125,25 @@ export function buildViewModel(engine: GameEngine) {
     tactical: civ ? {
       entropy: civ.tactical.entropy,
       entropyBand: entropyBand(civ.tactical.entropy),
+      entropyRate: entropyRate(civ.years, bonuses.containmentRating),
+      pressureMultiplier: pressureMultiplier(civ.years),
+      secondsToCascade: secondsToCascade(civ.years, civ.tactical.entropy, bonuses.containmentRating),
       controlCapacity: civ.tactical.controlCapacity,
       controlMax: 3,
       containmentRating: bonuses.containmentRating,
-      requiredContainment: requiredContainment(civ.era),
       actions: (Object.keys(TACTICAL_ACTIONS) as Array<keyof typeof TACTICAL_ACTIONS>).map(id=>({
         ...TACTICAL_ACTIONS[id],
         ...engine.tacticalAvailability(id),
       })),
     } : null,
-    harvest: civ ? { controlled: controlledHarvest, chaotic: chaoticHarvest } : null,
+    harvest: civ ? {
+      controlled: controlledHarvest,
+      chaotic: chaoticHarvest,
+      depth: cultivationDepth(civ),
+      depthBand: depthBand(cultivationDepth(civ)),
+      nextBand: nextDepthBand(cultivationDepth(civ)),
+    } : null,
+    machineReserve: civ ? engine.runInterventions() : [],
     directiveObjective: activeObjective ? {
       id: activeObjective.id,
       title: activeObjective.title,
@@ -176,6 +199,8 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     vm.tactical?.controlCapacity ?? 0,
     vm.directiveObjective?.completed ? 'objective-complete' : 'objective-open',
     vm.harvest?.controlled?.grade ?? '',
+    vm.harvest?.depthBand ?? '',
+    vm.machineReserve.map(entry => (entry.enabled ? '1' : '0')).join(''),
     vm.lastActionFailure,
   ].join('|');
 }

@@ -14,6 +14,9 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
+import { freshEngine } from './balance-harness.mjs';
+
+const NEWLINE = String.fromCharCode(10);
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -668,4 +671,213 @@ test('banners stay inside the viewport however tall the skyline gets', () => {
 test('settlement crown is the tallest structure', () => {
   assert.equal(settlementCrown({ structures: [{ height: 10 }, { height: 42 }, { height: 7 }] }), 42);
   assert.equal(settlementCrown({ structures: [] }), 0);
+});
+
+test('the view model forecasts the cascade and the next depth band', () => {
+  const engine = freshEngine();
+  engine.state.machine.upgradeLevels.reality_lattice = 4;
+  engine.startCivilization(510);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+  civ.tactical.entropy = 20;
+  const vm = buildViewModel(engine);
+  assert.equal(vm.tactical.containmentRating, 4);
+  assert.ok(vm.tactical.entropyRate > 0);
+  assert.ok(vm.tactical.secondsToCascade > 0);
+  assert.equal(Number(vm.tactical.pressureMultiplier.toFixed(4)), Number((1 + 3000 / 6500).toFixed(4)));
+  assert.equal(vm.harvest.depth, 5);
+  assert.equal(vm.harvest.depthBand, 'transcendent');
+  assert.equal(vm.harvest.nextBand.grade, 'ascendant');
+  assert.equal(vm.harvest.nextBand.depthNeeded, 9);
+  assert.ok(vm.harvest.nextBand.yieldMultiplier > vm.harvest.controlled.multiplier);
+});
+
+test('the deepest band reports no next band', () => {
+  const engine = freshEngine();
+  engine.startCivilization(511);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 7000;
+  civ.era = 2;
+  civ.development = 4000;
+  assert.equal(buildViewModel(engine).harvest.nextBand, null);
+  assert.equal(buildViewModel(engine).harvest.depthBand, 'singular');
+});
+
+test('the machine reserve is presented with its escalated cost and reason', () => {
+  const engine = freshEngine();
+  engine.startCivilization(512);
+  const reserve = buildViewModel(engine).machineReserve;
+  assert.equal(reserve.length, 3);
+  assert.equal(reserve[0].id, 'containment_pulse');
+  assert.equal(reserve[0].enabled, false);
+  assert.ok(reserve[0].reason.length > 0);
+  assert.equal(reserve[0].usesLeft, 3);
+});
+
+test('the render key tracks reserve affordability as a boolean, not a balance', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 5000;
+  engine.startCivilization(513);
+  const before = civilizationRenderKey(buildViewModel(engine));
+  engine.state.machine.currencies.causal_mass = 5001;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before);
+  engine.state.machine.currencies.causal_mass = 1;
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before);
+});
+
+test('the render key tracks the depth band, never the depth itself', () => {
+  const engine = freshEngine();
+  engine.startCivilization(514);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+  const before = civilizationRenderKey(buildViewModel(engine));
+  civ.development = 401;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before, 'a ticking development must not change the key');
+  civ.development = 1600;
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before, 'crossing a band must change the key');
+});
+
+test('the service worker precaches every new game module', async () => {
+  const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
+  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler']) {
+    assert.ok(source.includes(`'/game/dist/game/${name}.js'`), `sw.js must precache game/${name}.js`);
+  }
+  assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
+  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.5.0'"), 'CACHE_NAME must be bumped');
+});
+
+test('the construction tracker forgets structures the world no longer contains', () => {
+  const tracker = new ConstructionTracker(1000);
+  tracker.sync([{ id: 'a', level: 1 }, { id: 'b', level: 1 }], 0);
+  tracker.sync([{ id: 'a', level: 2 }, { id: 'b', level: 1 }], 10);
+  assert.equal(tracker.activeCount, 1, 'a raised level animates');
+  assert.equal(tracker.isBuilding('a', 20), true);
+
+  // 'a' leaves the world: its animation and its baseline must both go with it.
+  tracker.sync([{ id: 'b', level: 1 }], 30);
+  assert.equal(tracker.activeCount, 0, 'a departed structure must stop animating');
+  assert.equal(tracker.isBuilding('a', 40), false);
+
+  // 'a' returns at a higher level. Its stale baseline is gone, so this is a first sighting and
+  // establishes a baseline instead of animating a build that never happened.
+  tracker.sync([{ id: 'a', level: 9 }, { id: 'b', level: 1 }], 50);
+  assert.equal(tracker.isBuilding('a', 60), false, 'a returning structure must not replay a build');
+  assert.equal(tracker.activeCount, 0);
+
+  // From that baseline a genuine upgrade animates again.
+  tracker.sync([{ id: 'a', level: 10 }, { id: 'b', level: 1 }], 70);
+  assert.equal(tracker.isBuilding('a', 80), true);
+});
+
+test('volatile reserve and harvest figures are refreshed live, not only on a structural render', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
+  assert.ok(refresh.length > 0, 'the live refresh must exist');
+
+  // Reserve cost rises with depth on every tick and usesLeft drops on use, while the render key
+  // tracks only affordability. Both must therefore be written by the live refresh.
+  assert.match(app, /data-reserve-cost="\$\{esc\(entry\.id\)\}"/, 'the reserve cost line needs a live hook');
+  assert.match(app, /data-reserve-reason="\$\{esc\(entry\.id\)\}"/, 'the reserve reason needs a live hook');
+  assert.ok(refresh.includes('[data-reserve-cost="${entry.id}"]'), 'the live refresh must rewrite the reserve cost');
+  assert.ok(refresh.includes('[data-reserve-reason="${entry.id}"]'), 'the live refresh must rewrite the reserve reason');
+  assert.ok(refresh.includes('button.disabled=!entry.enabled'), 'the live refresh must resync reserve availability');
+
+  // Harvest yield and credits move continuously inside one depth band.
+  assert.match(app, /data-live="harvest-summary"/, 'the harvest summary needs a live hook');
+  assert.ok(refresh.includes("setText('[data-live=\"harvest-summary\"]',harvestSummaryText(vm.harvest.controlled))"), 'the live refresh must rewrite the harvest summary');
+  assert.ok(refresh.includes('[data-live="harvest-controlled-${key}"]'), 'controlled rewards must refresh');
+  assert.ok(refresh.includes('[data-live="harvest-chaotic-${key}"]'), 'chaotic rewards must refresh');
+
+  // One builder per figure, so the structural render and the live refresh cannot drift apart.
+  for (const builder of ['reserveCostText', 'harvestSummaryText', 'rewardText']) {
+    assert.ok(app.includes(`const ${builder}=`), `${builder} must have a single definition`);
+    assert.ok(app.split(`${builder}(`).length - 1 >= 2, `${builder} must be called by both the render and the refresh`);
+  }
+});
+
+test('no volatile figure leaks into the civilization render key', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 500_000;
+  engine.state.machine.currencies.cognition = 500_000;
+  engine.state.machine.currencies.existence = 500_000;
+  engine.startCivilization(9202);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+
+  const before = civilizationRenderKey(buildViewModel(engine));
+  const reserveBefore = buildViewModel(engine).machineReserve[0].cost;
+
+  // Depth growth inside a band raises every reserve price and the harvest yield.
+  civ.development = 500;
+  const after = buildViewModel(engine);
+  assert.ok(after.machineReserve[0].cost > reserveBefore, 'the reserve price must track depth');
+  assert.equal(after.harvest.depthBand, 'transcendent', 'still the same band');
+  assert.equal(civilizationRenderKey(after), before, 'a rising price must not rebuild the DOM');
+
+  // Spending a use is different: it emits decision feedback, and the feedback sequence IS part of
+  // the key, so that one does rebuild. usesLeft is therefore never the stale half of this bug -- the
+  // price is. The live refresh covers both regardless.
+  assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  const spent = buildViewModel(engine);
+  assert.equal(spent.machineReserve[0].usesLeft, 2);
+  assert.equal(spent.machineReserve[0].enabled, true);
+  assert.notEqual(civilizationRenderKey(spent), before, 'a use emits feedback, which legitimately rebuilds');
+});
+
+test('the armed reset announces itself through a live region, not a relabelled button', async () => {
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /aria-live['"],\s*['"]assertive['"]/, 'the announcer must be an assertive live region');
+  assert.match(main, /role['"],\s*['"]status['"]/, 'the announcer must carry a status role');
+  assert.match(main, /className = 'visually-hidden'/, 'the announcer must be visually hidden');
+  assert.match(main, /resetAnnouncer\.textContent = `Erase save armed\./, 'arming must write the warning');
+  assert.match(main, /resetAnnouncer\.textContent = '';/, 'disarming must clear the warning');
+
+  const disarm = main.slice(main.indexOf('function disarmReset()'), main.indexOf('resetButton.addEventListener(\'click\''));
+  assert.ok(disarm.includes("resetAnnouncer.textContent = ''"), 'disarmReset itself must clear the region');
+
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.visually-hidden\{[^}]*clip-path:inset\(50%\)/, 'the stylesheet must define the hidden utility');
+  assert.match(styles, /\.visually-hidden\{[^}]*position:absolute/, 'the hidden utility must be taken out of flow');
+});
+
+test('reduced motion freezes decorative animation but not build progress', async () => {
+  const renderer = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  const lines = renderer.split(NEWLINE);
+
+  const sparkLine = lines.find(line => line.includes('hash01(spark'));
+  assert.ok(sparkLine, 'the construction spark line must exist');
+  assert.ok(sparkLine.includes('animationTime / 90'), 'construction sparks must seed from animationTime');
+  assert.ok(!sparkLine.includes('(time / 90'), 'no spark seed may still read the raw clock');
+
+  const trackerLines = lines.filter(line => line.includes('tracker.isBuilding(') || line.includes('tracker.progress('));
+  assert.ok(trackerLines.length >= 2, 'the tracker calls must exist');
+  for (const line of trackerLines) {
+    assert.ok(!line.includes('animationTime'), 'build progress must keep advancing on real time');
+  }
+
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const reduced = styles.slice(styles.indexOf('@media(prefers-reduced-motion:reduce)'));
+  assert.ok(reduced.includes('.icon-button.is-armed{animation:none}'), 'the armed reset button must stop pulsing');
+});
+
+test('every precached game asset actually exists on disk', async () => {
+  const worker = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
+  const listed = [...worker.matchAll(/'(\/game\/dist\/[^']+)'/g)].map(match => match[1]);
+  assert.ok(listed.length >= 25, `only ${listed.length} dist assets are precached`);
+  for (const path of listed) {
+    const onDisk = new URL(`..${path.replace('/game', '')}`, import.meta.url);
+    await assert.doesNotReject(readFile(onDisk), `sw.js precaches ${path}, which is not committed`);
+  }
 });

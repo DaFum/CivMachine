@@ -1,18 +1,19 @@
 import { CONTENT } from '../data/content.generated.js';
-import { applyInterventionCopy } from '../data/intervention-copy.js';
+import { applyEraCeiling, applyInterventionCopy } from '../data/intervention-copy.js';
+import { APOTHEOSIS_EVENTS } from '../data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
-import { RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
-import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
+import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
+import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
 import { advancePressure, cascadeDecay } from './pressure.js';
 import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './tactical-actions.js';
-import { applyHarvestQuality, calculateCultivationCredits, evaluateHarvestQuality } from './harvest-quality.js';
+import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality } from './harvest-quality.js';
+import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses } from './run-interventions.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from './run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from './upgrade-balance.js';
-const ERA_YEARS = [0, 2500, 6500];
-export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE'];
+export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE', 'APOTHEOSIS'];
 const SAVE_KEY = 'reality_consumption_engine_browser_save_v2';
 const C = CONTENT;
 function mixSeed(value) {
@@ -37,7 +38,7 @@ export class GameEngine {
         this.tickEmitAccumulator = 0;
         this.feedbackSequence = 0;
         this.traits = C.traits;
-        this.events = [...applyInterventionCopy(C.events), ...ENTROPY_CRISES];
+        this.events = [...applyEraCeiling(applyInterventionCopy(C.events)), ...ENTROPY_CRISES, ...APOTHEOSIS_EVENTS];
         this.machineUpgrades = balancedMachineUpgrades(C.machine_upgrades);
         this.universeUpgrades = balancedUniverseUpgrades(C.universe_upgrades);
         this.axiomUpgrades = balancedAxiomUpgrades(C.axiom_upgrades);
@@ -73,8 +74,8 @@ export class GameEngine {
     } }
     deleteSave() { this.storage.removeItem(SAVE_KEY); this.state = createNewState(); this.messages = []; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); this.save(); this.emit(); }
     reset() { this.state = createNewState(); this.messages = []; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); this.save(); this.emit(); }
-    static baseBonuses() { return { stabilityMax: 100, predictionLevel: 0, developmentMult: 1, causal_massMult: 1, cognitionMult: 1, paradoxMult: 1, existenceMult: 1, awarenessGainMult: 1, sanityLossMult: 1, attentionGainMult: 1, stabilityLossMult: 1, stabilityDecayMult: 1, eventDelay: 0, startingEra: 0, extraTraits: 0, allHarvestMult: 1, chaoticRetention: .4, containmentRating: 0, entropyGainMult: 1, controlRecharge: 1, accelerateYears: 200, accelerateTimer: 8, gradeRewardMult: 1 }; }
-    static createCivilizationForTest(seed) { return { seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1, eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0, traits: [], institutions: [], flags: [], scheduledEvents: [], history: [], stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 }, harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }, harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 }, stabilityDecayMult: 1, eventDelayBonus: 0, predictionLevel: 0, pathState: CivilizationPaths.newState(), tactical: { entropy: 0, controlCapacity: 3, triggeredCrises: [], probedEventId: '', actionUsage: { stabilize: 0, accelerate: 0, probe: 0 } }, directiveId: '', directiveObjective: { id: '', completed: false } }; }
+    static baseBonuses() { return { stabilityMax: 100, predictionLevel: 0, developmentMult: 1, causal_massMult: 1, cognitionMult: 1, paradoxMult: 1, existenceMult: 1, awarenessGainMult: 1, sanityLossMult: 1, attentionGainMult: 1, stabilityLossMult: 1, stabilityDecayMult: 1, eventDelay: 0, startingEra: 0, extraTraits: 0, allHarvestMult: 1, chaoticRetention: .4, containmentRating: 0, controlRecharge: 1, accelerateYears: 200, accelerateTimer: 8, gradeRewardMult: 1 }; }
+    static createCivilizationForTest(seed) { return { seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1, eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0, traits: [], institutions: [], flags: [], scheduledEvents: [], history: [], stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 }, harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }, harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 }, stabilityDecayMult: 1, eventDelayBonus: 0, predictionLevel: 0, pathState: CivilizationPaths.newState(), tactical: { entropy: 0, controlCapacity: 3, triggeredCrises: [], probedEventId: '', actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 } }, directiveId: '', directiveObjective: { id: '', completed: false }, runInterventionUses: {} }; }
     currentCivilization() { return this.state.civilization; }
     tacticalAvailability(id) { const civ = this.state.civilization; return civ ? tacticalAvailability(civ, id) : { enabled: false, reason: 'Start a civilization first.', cost: TACTICAL_ACTIONS[id].cost }; }
     eventById(id) { return this.events.find(e => e.id === id) ?? null; }
@@ -130,12 +131,11 @@ export class GameEngine {
     }
     runtimeBonuses() {
         const l = (layer, id) => this.upgradeLevel(layer, id);
-        const containmentRating = ['reality_lattice', 'awareness_scrubber', 'sanity_protocol', 'cosmic_muffling'].reduce((sum, id) => sum + (l('machine', id) > 0 ? 1 : 0), 0);
+        const containmentRating = ['reality_lattice', 'awareness_scrubber', 'sanity_protocol', 'cosmic_muffling'].reduce((sum, id) => sum + l('machine', id), 0) + l('universe', 'stable_constants');
         const temporalLevel = Math.max(0, Math.min(3, l('machine', 'temporal_injector')));
-        const stableLevel = l('universe', 'stable_constants');
         const bureaucracyLevel = l('universe', 'bureaucracy_of_gods');
         const gradeModules = ['historical_compressor', 'cognitive_extractor', 'paradox_sieve', 'existence_furnace'].filter(id => l('machine', id) >= 3).length;
-        const b = { stabilityMax: 100 + 10 * l('machine', 'reality_lattice') + 20 * l('universe', 'wide_lattice') + 25 * l('axiom', 'axiom_stability'), predictionLevel: l('machine', 'prediction_core'), developmentMult: 1 + .12 * l('machine', 'cultivation_accelerator'), causal_massMult: 1 + .12 * l('machine', 'historical_compressor'), cognitionMult: 1 + .12 * l('machine', 'cognitive_extractor'), paradoxMult: (1 + .15 * l('machine', 'paradox_sieve')) * (1 + .25 * l('universe', 'paradox_rights')), existenceMult: 1 + .12 * l('machine', 'existence_furnace'), awarenessGainMult: Math.max(.45, 1 - .08 * l('machine', 'awareness_scrubber')), sanityLossMult: Math.max(.45, 1 - .08 * l('machine', 'sanity_protocol')), attentionGainMult: Math.max(.45, 1 - .08 * l('machine', 'cosmic_muffling')), stabilityLossMult: 1, stabilityDecayMult: 1, eventDelay: 0, startingEra: l('universe', 'inherited_time'), extraTraits: l('universe', 'archive_of_screams'), allHarvestMult: (1 + .10 * l('universe', 'twin_harvest')) * (1 + .15 * l('axiom', 'axiom_recursive_memory')), chaoticRetention: Math.min(.95, .4 + .08 * l('machine', 'contingency_vat') + .10 * l('axiom', 'axiom_compassionate_accounting')), containmentRating, entropyGainMult: Math.max(.4, 1 - .12 * stableLevel), controlRecharge: 1 + (bureaucracyLevel >= 1 ? 1 : 0) + (bureaucracyLevel >= 3 ? 1 : 0), accelerateYears: [200, 260, 340, 450][temporalLevel], accelerateTimer: [8, 10, 13, 16][temporalLevel], gradeRewardMult: 1 + gradeModules * .025 };
+        const b = { stabilityMax: 100 + 10 * l('machine', 'reality_lattice') + 20 * l('universe', 'wide_lattice') + 25 * l('axiom', 'axiom_stability'), predictionLevel: l('machine', 'prediction_core'), developmentMult: 1 + .12 * l('machine', 'cultivation_accelerator'), causal_massMult: 1 + .12 * l('machine', 'historical_compressor'), cognitionMult: 1 + .12 * l('machine', 'cognitive_extractor'), paradoxMult: (1 + .15 * l('machine', 'paradox_sieve')) * (1 + .25 * l('universe', 'paradox_rights')), existenceMult: 1 + .12 * l('machine', 'existence_furnace'), awarenessGainMult: Math.max(.45, 1 - .08 * l('machine', 'awareness_scrubber')), sanityLossMult: Math.max(.45, 1 - .08 * l('machine', 'sanity_protocol')), attentionGainMult: Math.max(.45, 1 - .08 * l('machine', 'cosmic_muffling')), stabilityLossMult: 1, stabilityDecayMult: 1, eventDelay: 0, startingEra: l('universe', 'inherited_time'), extraTraits: l('universe', 'archive_of_screams'), allHarvestMult: (1 + .10 * l('universe', 'twin_harvest')) * (1 + .15 * l('axiom', 'axiom_recursive_memory')), chaoticRetention: Math.min(.95, .4 + .08 * l('machine', 'contingency_vat') + .10 * l('axiom', 'axiom_compassionate_accounting')), containmentRating, controlRecharge: 1 + (bureaucracyLevel >= 1 ? 1 : 0) + (bureaucracyLevel >= 3 ? 1 : 0), accelerateYears: [200, 260, 340, 450][temporalLevel], accelerateTimer: [8, 10, 13, 16][temporalLevel], gradeRewardMult: 1 + gradeModules * .025 };
         const selected = [this.state.machine.runBuild.selectedDirective, this.state.machine.runBuild.selectedBreedingMatrix];
         for (const id of selected) {
             if (!id)
@@ -174,7 +174,7 @@ export class GameEngine {
         const era = Math.max(0, Math.min(2, Math.trunc(bonuses.startingEra)));
         const civ = GameEngine.createCivilizationForTest(seed);
         civ.rngState = selection.rngState;
-        civ.years = ERA_YEARS[era];
+        civ.years = ERA_YEAR_THRESHOLDS[era];
         civ.era = era;
         civ.development = 1 + era * 80;
         civ.developmentMultiplier = bonuses.developmentMult;
@@ -230,7 +230,7 @@ export class GameEngine {
             this.post(`ENTROPY THRESHOLD: ${Math.trunc(civ.tactical.entropy)} // containment crisis queued.`);
             this.save();
         }
-        const newEra = civ.years >= 6500 ? 2 : civ.years >= 2500 ? 1 : 0;
+        const newEra = eraForYears(civ.years);
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const s = civ.stats;
@@ -245,7 +245,7 @@ export class GameEngine {
         if (civ.flags.includes('resistance'))
             decay *= 1.2;
         decay *= CivilizationPaths.simulationModifier(civ, 'stability');
-        decay += cascadeDecay(civ.tactical.entropy);
+        decay += cascadeDecay(civ.tactical.entropy, s.stabilityMax);
         s.stability -= decay * dt;
         let awareness = .006 * civ.era;
         if (civ.flags.includes('machine_cult'))
@@ -294,12 +294,69 @@ export class GameEngine {
         effects[key] = amount;
     } return effects; }
     previewHarvestDetails(chaotic = false) { const civ = this.state.civilization; if (!civ)
-        return { grade: 'premature', multiplier: .2, credits: 0, rewardMultiplier: .2, objectiveCompleted: false, rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 } }; const bonuses = this.runtimeBonuses(); const quality = evaluateHarvestQuality(civ, chaotic); const objectiveCompleted = quality.grade !== 'premature' && evaluateDirectiveObjective(civ); const applied = applyHarvestQuality(calculateHarvest(civ, chaotic, bonuses), quality, { collapsed: chaotic, gradeRewardMult: bonuses.gradeRewardMult, objectiveMultiplier: objectiveCompleted ? 1.15 : 1 }); return { ...quality, credits: calculateCultivationCredits(quality, chaotic, objectiveCompleted), objectiveCompleted, ...applied }; }
+        return { grade: 'premature', multiplier: .2, credits: 0, depth: 0, rewardMultiplier: .2, objectiveCompleted: false, rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 } }; const bonuses = this.runtimeBonuses(); const quality = evaluateHarvestQuality(civ, chaotic); const objectiveCompleted = quality.grade !== 'premature' && evaluateDirectiveObjective(civ); const applied = applyHarvestQuality(calculateHarvest(civ, chaotic, bonuses), quality, { collapsed: chaotic, gradeRewardMult: bonuses.gradeRewardMult, objectiveMultiplier: objectiveCompleted ? 1.15 : 1 }); return { ...quality, credits: calculateCultivationCredits(quality, chaotic, objectiveCompleted), objectiveCompleted, ...applied }; }
     previewHarvest(chaotic = false) { return this.previewHarvestDetails(chaotic).rewards; }
     returnToMachineWithoutReward() { const priorSeed = this.state.civilization?.seed ?? this.state.machine.runBuild.nextCivilizationSeed; this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(mixSeed(priorSeed + 1), false); this.save(); this.emit(); }
     currentEvent() { const civ = this.state.civilization; return civ?.pendingEvent ? this.eventById(civ.pendingEvent) : null; }
     forceEvent(id) { const civ = this.state.civilization; const e = this.eventById(id); if (!civ || !e)
         return false; this.decisionFeedback = null; this.lastActionFailure = ''; civ.tactical.probedEventId = ''; civ.pendingEvent = id; civ.eventTimer = 0; recordRecentIntervention(civ, id); CivilizationPaths.recordSelectedEvent(civ, e); this.save(); this.emit(); return true; }
+    runInterventions() {
+        const civ = this.state.civilization;
+        const depth = civ ? cultivationDepth(civ) : 0;
+        return RUN_INTERVENTIONS.map(definition => {
+            const uses = civ ? runInterventionUses(civ, definition.id) : 0;
+            const cost = runInterventionCost(definition, uses, depth);
+            const usesLeft = Math.max(0, definition.maxUses - uses);
+            let enabled = true, reason = '';
+            if (!civ) {
+                enabled = false;
+                reason = 'Start a civilization first.';
+            }
+            else if (this.machineInsight() < definition.insight) {
+                enabled = false;
+                reason = `Requires Machine Insight ${definition.insight}.`;
+            }
+            else if (usesLeft <= 0) {
+                enabled = false;
+                reason = `${definition.title} is exhausted for this civilization.`;
+            }
+            else if (this.currencyAmount(definition.currency) < cost) {
+                enabled = false;
+                reason = `Requires ${cost} ${definition.currency.replaceAll('_', ' ')}.`;
+            }
+            return { ...definition, cost, uses, usesLeft, enabled, reason };
+        });
+    }
+    useRunIntervention(id) {
+        const civ = this.state.civilization;
+        const view = this.runInterventions().find(entry => entry.id === id);
+        if (!civ || !view) {
+            this.lastActionFailure = 'Unknown machine intervention.';
+            this.emit();
+            return false;
+        }
+        if (!view.enabled) {
+            this.lastActionFailure = view.reason;
+            this.emit();
+            return false;
+        }
+        const definition = runInterventionById(id);
+        const before = captureDecisionSnapshot(civ);
+        this.spendCurrency(definition.currency, view.cost);
+        const label = applyRunIntervention(civ, definition);
+        const newEra = eraForYears(civ.years);
+        if (newEra !== civ.era)
+            this.enterEra(civ, newEra);
+        this.clampStats(civ);
+        this.lastActionFailure = '';
+        this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, { id: `reserve:${id}`, title: definition.title }, { label }, before, captureDecisionSnapshot(civ));
+        this.worldImpulse = this.decisionFeedback;
+        this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Machine reserve -> ${label}`);
+        this.post(`MACHINE RESERVE COMMITTED: ${definition.title} for ${view.cost} ${definition.currency.replaceAll('_', ' ')}.`);
+        this.save();
+        this.emit();
+        return true;
+    }
     useTacticalAction(id) {
         const civ = this.state.civilization;
         if (!civ) {
@@ -320,7 +377,7 @@ export class GameEngine {
             this.emit();
             return false;
         }
-        const newEra = civ.years >= 6500 ? 2 : civ.years >= 2500 ? 1 : 0;
+        const newEra = eraForYears(civ.years);
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const dominant = CivilizationPaths.resolveDominance(civ);
@@ -350,8 +407,10 @@ export class GameEngine {
         const pr = CivilizationPaths.applyChoice(civ, event, choice);
         if (pr.newDominantPath) {
             this.applyEffects(civ, CivilizationPaths.dominanceEffects(pr.newDominantPath), false);
-            this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${CivilizationPaths.displayName(pr.newDominantPath)} became the dominant civilization path.`);
-            this.post(`DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(pr.newDominantPath).toUpperCase()}`);
+            const succeeded = CivilizationPaths.ensure(civ).successions > 0;
+            const pathName = CivilizationPaths.displayName(pr.newDominantPath);
+            this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${pathName} ${succeeded ? 'succeeded the previous dominant civilization path' : 'became the dominant civilization path'}.`);
+            this.post(`${succeeded ? 'PATH SUCCESSION' : 'DOMINANT CIVILIZATION PATH'}: ${pathName.toUpperCase()}`);
         }
         if (pr.history)
             this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${pr.history}`);
@@ -389,13 +448,13 @@ export class GameEngine {
         civ.rngState = rng.state;
         if (!this.state.machine.activeMutations.includes(mutationId))
             this.state.machine.activeMutations.push(mutationId);
-    } this.state.machine.civilizationsTotal++; this.state.machine.civilizationsThisUniverse++; this.state.machine.cultivationCreditsThisUniverse += details.credits; const record = { chaotic, rewards: { ...rewards }, mutation_id: mutationId, seed: civ.seed, years: Math.trunc(civ.years), era: civ.era, development: civ.development, traits: [...civ.traits], directive_id: civ.directiveId, grade: details.grade, credits: details.credits, objective_completed: details.objectiveCompleted, reward_multiplier: details.rewardMultiplier }; this.state.machine.lastHarvest = record; for (const m of Progression.recordHarvest(this.state, record))
+    } this.state.machine.civilizationsTotal++; this.state.machine.civilizationsThisUniverse++; this.state.machine.cultivationCreditsThisUniverse += details.credits; const record = { chaotic, rewards: { ...rewards }, mutation_id: mutationId, seed: civ.seed, years: Math.trunc(civ.years), era: civ.era, development: civ.development, traits: [...civ.traits], directive_id: civ.directiveId, grade: details.grade, depth: details.depth, credits: details.credits, objective_completed: details.objectiveCompleted, reward_multiplier: details.rewardMultiplier }; this.state.machine.lastHarvest = record; for (const m of Progression.recordHarvest(this.state, record))
         this.post(m); this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(mixSeed(civ.seed + this.state.machine.civilizationsTotal), false); this.post(`${chaotic ? 'CHAOTIC' : 'CONTROLLED'} ${details.grade.toUpperCase()} HARVEST complete. +${details.credits} Cultivation Credits.`); if (details.objectiveCompleted)
         this.post('DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.'); this.post(`Yield: Causal ${rewards.causal_mass}, Cognition ${rewards.cognition}, Paradox ${rewards.paradox}, Existence ${rewards.existence}.`); if (mutationId)
         this.post(`Machine mutation acquired: ${this.mutations.find((x) => x.id === mutationId)?.name ?? mutationId}.`); this.save(); this.emit(); return rewards; }
     canConsumeUniverse() { return this.state.phase === 'machine' && this.state.machine.cultivationCreditsThisUniverse >= 18 && this.systemUnlocked('universe_prestige'); }
     consumeUniverse() { if (!this.canConsumeUniverse())
-        return false; const bank = RESOURCE_KEYS.reduce((s, k) => s + this.state.machine.currencies[k], 0); const award = universeResidueAward(this.state.machine.civilizationsThisUniverse, bank, 1 + .2 * this.upgradeLevel('universe', 'residue_refinery')); this.state.meta.universalResidue += award; this.state.meta.universesTotal++; this.state.meta.universesThisMultiverse++; for (const m of Progression.recordUniverse(this.state))
+        return false; const bank = RESOURCE_KEYS.reduce((s, k) => s + this.state.machine.currencies[k], 0); const award = universeResidueAward(this.state.machine.cultivationCreditsThisUniverse, bank, 1 + .2 * this.upgradeLevel('universe', 'residue_refinery')); this.state.meta.universalResidue += award; this.state.meta.universesTotal++; this.state.meta.universesThisMultiverse++; for (const m of Progression.recordUniverse(this.state))
         this.post(m); this.resetMachineLayer(); this.post(`UNIVERSE CONSUMED. ${award} Universal Residue recovered.`); this.save(); this.emit(); return true; }
     canConsumeMultiverse() { return this.state.phase === 'machine' && this.state.meta.universesThisMultiverse >= 4 && this.systemUnlocked('multiverse_prestige'); }
     consumeMultiverse() { if (!this.canConsumeMultiverse())
@@ -403,7 +462,7 @@ export class GameEngine {
         this.post(m); this.state.meta.universalResidue = 0; this.state.meta.universeUpgradeLevels = {}; this.state.meta.universesThisMultiverse = 0; this.resetMachineLayer(); this.post(`MULTIVERSE COLLAPSED. ${award} Axiom units extracted.`); this.save(); this.emit(); return true; }
     maxSimulationSpeed() { const x = this.upgradeLevel('machine', 'temporal_injector'); return x >= 3 ? 4 : x >= 1 ? 2 : 1; }
     setSimulationSpeed(n) { this.state.simulationSpeed = Math.max(1, Math.min(this.maxSimulationSpeed(), Math.trunc(n))); this.save(); this.emit(); }
-    resetMachineLayer() { this.state.machine.currencies = { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }; this.state.machine.upgradeLevels = {}; this.state.machine.activeMutations = []; this.state.machine.civilizationsThisUniverse = 0; this.state.machine.cultivationCreditsThisUniverse = 0; this.state.machine.lastHarvest = {}; this.state.machine.runBuild = { selectedDirective: '', selectedBreedingMatrix: '', directiveLocked: false, matrixLocked: false, directiveOfferIds: [], nextCivilizationSeed: 0, previewTraitIds: [] }; this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); }
+    resetMachineLayer() { const inheritedLattice = Math.min(this.upgradeLevel('machine', 'reality_lattice'), this.upgradeLevel('universe', 'wide_lattice')); this.state.machine.currencies = { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }; this.state.machine.upgradeLevels = inheritedLattice > 0 ? { reality_lattice: inheritedLattice } : {}; this.state.machine.activeMutations = []; this.state.machine.civilizationsThisUniverse = 0; this.state.machine.cultivationCreditsThisUniverse = 0; this.state.machine.lastHarvest = {}; this.state.machine.runBuild = { selectedDirective: '', selectedBreedingMatrix: '', directiveLocked: false, matrixLocked: false, directiveOfferIds: [], nextCivilizationSeed: 0, previewTraitIds: [] }; this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); }
     presentNextEvent(civ) { this.decisionFeedback = null; this.lastActionFailure = ''; civ.tactical.probedEventId = ''; const e = this.selectEvent(civ) ?? this.eventById('routine_compliance_audit'); if (!e)
         return; civ.pendingEvent = e.id; civ.eventTimer = 0; this.save(); this.emit(); }
     selectEvent(civ) {
@@ -422,7 +481,7 @@ export class GameEngine {
             weight *= 2; if (s.awareness > 50 && ['machine_signal', 'civilization_resists', 'final_question'].includes(id))
             weight *= 2; if (s.stability < 45 && ['sun_goes_missing', 'reality_unionizes', 'edge_of_simulation'].includes(id))
             weight *= 2; return weight; };
-        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier });
+        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier, exhausted: (event) => interventionExhausted(event, civ) });
         const rng = new SeededRng(civ.rngState);
         const selected = chooseWeightedIntervention(pool, rng.next()) ?? this.eventById('routine_compliance_audit');
         civ.rngState = rng.state;
@@ -434,7 +493,6 @@ export class GameEngine {
     }
     eventEligible(e, civ) { if (civ.era < Number(e.min_era ?? 0) || civ.era > Number(e.max_era ?? 2))
         return false; const r = e.requirements ?? {}; if (r.scheduled_only)
-        return false; if ((civ.eventCounts[e.id] ?? 0) >= Number(e.max_count ?? 2))
         return false; if (!CivilizationPaths.eventIsEligible(e, civ))
         return false; const s = civ.stats; if (r.min_attention != null && s.attention < Number(r.min_attention))
         return false; if (r.max_attention != null && s.attention > Number(r.max_attention))
