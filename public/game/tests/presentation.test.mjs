@@ -5,7 +5,7 @@ import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
-import { PATH_IDS } from '../dist/game/paths.js';
+import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
@@ -934,4 +934,24 @@ test('the tactical rail shows the terminal run its real entropy pressure', () =>
   const terminal = buildViewModel(engine).tactical;
   assert.ok(Math.abs(terminal.entropyRate - normal.entropyRate * 1.6) < 1e-9);
   assert.ok(terminal.secondsToCascade < normal.secondsToCascade);
+});
+
+test('index.html hosts the victory view and the machine cards render', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="victory-view"'));
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.ok(app.includes('MILESTONE REGISTER'));
+  assert.ok(app.includes('GREAT CONVERGENCE'));
+  assert.ok(app.includes('data-action="convergence"'));
+  assert.ok(app.includes('data-action="acknowledge-victory"'));
+  assert.ok(app.includes('TERMINAL CULTIVATION'));
+  // Every interpolated player value stays escaped.
+  assert.ok(!app.includes('${vm.convergence.reason}'));
+  assert.ok(app.includes('esc(vm.convergence.reason)'));
+});
+
+test('the victory screen names the dominant path instead of its identifier', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.ok(app.includes('CivilizationPaths.displayName(record.dominantPath)'));
+  assert.notEqual(CivilizationPaths.displayName('machine_faith'), 'machine_faith');
 });

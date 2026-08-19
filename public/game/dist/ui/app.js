@@ -1,5 +1,6 @@
 import { ERA_NAMES } from '../game/engine.js';
 import { buildViewModel, civilizationRenderKey } from './view-model.js';
+import { CivilizationPaths } from '../game/paths.js';
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
 const fmt = (n) => Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : Math.round(n).toLocaleString('en-US');
 const pct = (v, max = 100) => `${Math.max(0, Math.min(100, v / max * 100)).toFixed(0)}%`;
@@ -34,6 +35,7 @@ export function createGameUI(engine, world) {
     const worldShell = document.querySelector('#world-shell');
     const worldHud = document.querySelector('#world-hud');
     const civPanels = document.querySelector('#civilization-panels');
+    const victoryView = document.querySelector('#victory-view');
     const log = document.querySelector('#machine-log');
     let currentCivilizationKey = '';
     let lastFeedbackSequence = 0;
@@ -41,9 +43,12 @@ export function createGameUI(engine, world) {
     const render = () => {
         const vm = buildViewModel(engine);
         replaceIfChanged(resourceBar, vm.resources.map(r => `<div class="resource"><span>${esc(r.name)}</span><strong>${fmt(r.amount)}</strong></div>`).join(''));
-        replaceIfChanged(metaBar, `<span>Machine Insight <b>${vm.machineInsight}</b></span><span>Cultivation Credits <b>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement}</b></span>${vm.systems.multiversePrestige ? `<span>Multiverse <b>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</b></span>` : ''}`);
+        replaceIfChanged(metaBar, `<span>Machine Insight <b>${vm.machineInsight}</b></span><span>Cultivation Credits <b>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement}</b></span><span>Milestones <b>${vm.milestones.completed}/${vm.milestones.total}</b></span>${vm.systems.multiversePrestige ? `<span>Multiverse <b>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</b></span>` : ''}${vm.convergence.convergences ? `<span>Convergences <b>${vm.convergence.convergences}</b></span>` : ''}`);
         machine.classList.toggle('is-hidden', vm.phase !== 'machine');
         civView.classList.toggle('is-hidden', vm.phase !== 'civilization');
+        victoryView.classList.toggle('is-hidden', vm.phase !== 'victory');
+        if (vm.phase === 'victory')
+            renderVictory(vm);
         if (vm.phase === 'machine') {
             currentCivilizationKey = '';
             renderMachine(vm);
@@ -63,6 +68,10 @@ export function createGameUI(engine, world) {
     };
     const upgrades = (entries, layer) => entries.map(entry => { const d = entry.definition; const level = engine.upgradeLevel(layer, d.id), cost = engine.upgradeCost(layer, d.id), max = Number(d.max_level); const locked = entry.status === 'locked'; return `<article class="upgrade ${locked ? 'locked' : ''}"><div><h4>${esc(d.name)}</h4><p>${esc(d.description)}</p>${locked ? `<small>🔒 ${esc(entry.reason)}</small>` : `<small>${esc(d.currency.replaceAll('_', ' '))} ${fmt(cost)} · Level ${level}/${max}</small>`}</div><button data-action="upgrade" data-layer="${layer}" data-id="${esc(d.id)}" ${locked || level >= max || !engine.canPurchaseUpgrade(layer, d.id) ? 'disabled' : ''}>${level >= max ? 'MAX' : locked ? 'LOCKED' : 'INSTALL'}</button></article>`; }).join('');
     const optionCards = (items, kind, selected, locked) => items.map(x => `<article class="build-option ${selected === x.id ? 'selected' : ''}"><h4>${esc(x.name)}</h4><p>${esc(x.description)}</p>${x.objective ? `<div class="objective-brief"><span>DIRECTIVE OBJECTIVE</span><b>${esc(x.objective.title)}</b><small>${esc(x.objective.description)}</small></div>` : ''}<button data-action="${kind}" data-id="${esc(x.id)}" ${locked || selected === x.id ? 'disabled' : ''}>${selected === x.id ? 'ACTIVE' : locked ? 'LOCKED FOR RUN' : 'SELECT'}</button></article>`).join('');
+    const milestoneRegister = (vm) => { const groups = ['CULTIVATION', 'HARVEST', 'PATHS', 'PRESTIGE', 'CONVERGENCE']; const sections = groups.map(group => { const entries = vm.milestones.entries.filter((entry) => entry.group === group); if (!entries.length)
+        return ''; const open = entries.filter((entry) => !entry.completed).map((entry) => `<article class="milestone"><div><b>${esc(entry.title)}</b><p>${esc(entry.description)}</p></div><div class="milestone-progress"><div class="meter"><i style="width:${pct(entry.current, entry.target)}"></i></div><small>${fmt(entry.current)} / ${fmt(entry.target)} · INSIGHT +${entry.insight}</small></div></article>`).join(''); const done = entries.filter((entry) => entry.completed).map((entry) => `<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>INSIGHT +${entry.insight}</small></article>`).join(''); return `<div class="milestone-group"><span class="panel-kicker">${esc(group)}</span>${open}${done}</div>`; }).join(''); return card('MILESTONE REGISTER', `<div class="milestone-register"><p class="register-summary">${vm.milestones.completed} of ${vm.milestones.total} milestones recorded. Each one pays Machine Insight.</p>${sections}</div>`, 'milestone-card'); };
+    const convergenceCard = (vm) => { if (!vm.convergence.visible)
+        return ''; const rows = vm.convergence.requirements.map((entry) => `<li class="${entry.met ? 'met' : 'open'}"><span>${entry.met ? '\u2713' : '\u25CB'} ${esc(entry.label)}</span><b>${fmt(entry.current)} / ${fmt(entry.target)}</b></li>`).join(''); return card('GREAT CONVERGENCE', `<div class="convergence-card"><p>Terminal cultivation begins in APOTHEOSIS with no yield and 1.6\u00D7 Entropy. It is won by a controlled harvest at Cultivation Depth ${vm.convergence.targetDepth.toFixed(1)} or deeper. Failure costs nothing but the run.</p><ul class="convergence-requirements">${rows}</ul><button class="primary big" data-action="convergence" ${vm.convergence.unlocked ? '' : 'disabled'}>INITIATE GREAT CONVERGENCE</button>${vm.convergence.unlocked ? '' : `<p class="start-reason" role="status">${esc(vm.convergence.reason)}</p>`}${vm.convergence.convergences ? `<small>Convergences achieved: ${vm.convergence.convergences}</small>` : ''}</div>`, 'convergence-panel'); };
     function renderMachine(vm) {
         const previews = vm.previews.map((p) => `<article class="unlock-preview"><b>🔒 ${esc(p.name)}</b><span>${esc(p.condition)}</span></article>`).join('');
         const previewTraits = vm.previewTraits.map((trait) => `<span>${esc(trait.name)}</span>`).join('');
@@ -75,6 +84,8 @@ export function createGameUI(engine, world) {
       ${vm.systems.breedingMatrices ? card('Breeding Matrix', vm.matrices.length ? `<div class="option-grid">${optionCards(vm.matrices, 'matrix', vm.runBuild.selectedBreedingMatrix, vm.runBuild.matrixLocked)}</div>` : '<p>No breeding matrices are currently understood.</p>') : ''}
       ${vm.systems.universeUpgrades ? card('Universe Upgrades', `<div class="upgrade-list">${upgrades(vm.universeUpgrades, 'universe')}</div>`) : ''}
       ${vm.systems.axioms ? card('Axiom Upgrades', `<div class="upgrade-list">${upgrades(vm.axiomUpgrades, 'axiom')}</div>`) : ''}
+      ${convergenceCard(vm)}
+      ${milestoneRegister(vm)}
       ${previews ? card('Next Discoveries', `<div class="preview-grid">${previews}</div>`) : ''}
       <section class="prestige-row">${vm.systems.universePrestige ? `<button data-action="universe" ${vm.canConsumeUniverse ? '' : 'disabled'}>CONSUME UNIVERSE <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} Cultivation Credits</span></button>` : ''}${vm.systems.multiversePrestige ? `<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse ? '' : 'disabled'}>COLLAPSE MULTIVERSE <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>` : ''}</section>`);
     }
@@ -90,12 +101,13 @@ export function createGameUI(engine, world) {
         const path = c.path;
         const harvest = vm.harvest.controlled;
         const chaotic = vm.harvest.chaotic;
+        const terminalBanner = c.terminal ? `<section class="panel terminal-banner ${vm.harvest.convergenceReady ? 'ready' : ''}"><div class="panel-kicker">TERMINAL CULTIVATION</div><b>CONVERGENCE TARGET DEPTH ${vm.convergence.targetDepth.toFixed(1)}</b><span>CURRENT <b data-live="convergence-depth">${vm.harvest.depth.toFixed(1)}</b> \u00B7 ${vm.harvest.convergenceReady ? 'CONVERGENCE READY' : 'INSUFFICIENT DEPTH'}</span></section>` : '';
         replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? `DOMINANT: <b>${esc(path.dominantName)}</b>` : 'PATH: <b>UNRESOLVED</b>'}</div><div class="world-state-strip"><span>ERA <b data-live="world-era">${esc(ERA_NAMES[c.era])}</b></span><span>DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span>STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span>SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span>AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span>ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span>ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="swipe-hint">↔ DRAG / SWIPE TO EXPLORE</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="Pan left">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="Pan right">›</button>`);
         const eventCard = event ? `<section class="panel intervention"><div class="panel-kicker">CURRENT INTERVENTION${event.probed ? ' // PROBED' : ''}</div><h2>${esc(event.title)}</h2><p class="event-body">${esc(event.body)}</p>${event.predictionLocked ? '<div class="prediction-lock">PREDICTION CORE OFFLINE // Spend 1 Control on Probe to reveal risk directions.</div>' : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? '<button class="ghost" data-action="reroll">REROLL WITH PARADOX</button>' : ''}</section>` : `<section class="panel intervention quiet"><div class="panel-kicker">CURRENT INTERVENTION</div><h2>Monitoring civilization...</h2><p data-live="event-timer">Next intervention window in approximately ${Math.max(0, c.eventTimer).toFixed(1)} simulation seconds.</p></section>`;
         const tendencies = path.tendencies.length ? path.tendencies.map((t) => `<li><b>${esc(t.name)}</b><span>${esc(t.label)}</span></li>`).join('') : '<li><span>No coherent tendency yet.</span></li>';
         const objectiveCard = vm.directiveObjective ? card('Directive Objective', `<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${vm.directiveObjective.completed ? 'COMPLETE' : 'ACTIVE'}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>OBJECTIVE BONUS // ×1.15 rewards + 1 Cultivation Credit</small></div>`, 'directive-objective') : '';
         const reserveCard = vm.machineReserve.length ? card('Machine Reserve', `<p class="panel-note">Commit banked resources to the running civilization. Each use triples the price, and the price rises with the depth already reached.</p><div class="reserve-actions">${vm.machineReserve.map((entry) => `<div class="tactical-action-wrap"><button data-action="reserve" data-id="${esc(entry.id)}" aria-describedby="reserve-reason-${esc(entry.id)}" ${entry.enabled ? '' : 'disabled'}><span>${esc(entry.title)}</span><b>${esc(entry.summary)}</b><small data-reserve-cost="${esc(entry.id)}">${esc(reserveCostText(entry))}</small></button><span id="reserve-reason-${esc(entry.id)}" class="tactical-reason" data-reserve-reason="${esc(entry.id)}">${esc(entry.reason)}</span></div>`).join('')}</div>`, 'machine-reserve') : '';
-        replaceIfChanged(civPanels, `${tacticalRail(vm)}${decisionFeedback(vm.feedback)}${eventCard}${objectiveCard}${reserveCard}
+        replaceIfChanged(civPanels, `${terminalBanner}${tacticalRail(vm)}${decisionFeedback(vm.feedback)}${eventCard}${objectiveCard}${reserveCard}
       ${card('Strategic Overview', `<div class="stats-grid">${statBar('Reality Stability', c.stats.stability, c.stats.stabilityMax, 'stability')}${statBar('Machine Awareness', c.stats.awareness, 100, 'awareness')}${statBar('Collective Sanity', c.stats.sanity, 100, 'sanity')}${statBar('Cosmic Attention', c.stats.attention, 100, 'attention')}</div><div class="overview-line"><span>Era <b data-live="era">${ERA_NAMES[c.era]}</b></span><span>Year <b data-live="year">${fmt(c.years)}</b></span><span>Development <b data-live="development">${c.development.toFixed(1)}</b></span></div>`)}
       <details><summary>Era Progression</summary>${card('', `<p>Emergence: 0–2,499 years · Expansion: 2,500–6,499 · Transcendence: 6,500–13,999 · Apotheosis: 14,000+</p><div class="era-track"><i style="width:${Math.min(100, c.years / 14000 * 100)}%"></i></div>`)}</details>
       <details><summary>Cosmic Conditions</summary>${card('', `<p>${c.stats.attention > 65 ? 'External observers are converging.' : c.stats.awareness > 65 ? 'The civilization is becoming dangerously aware of cultivation.' : 'Cosmic observation remains tolerable.'}</p>`)}</details>
@@ -131,6 +143,7 @@ export function createGameUI(engine, world) {
         setText('[data-live="entropy-rate"]', vm.tactical.entropyRate.toFixed(2));
         setText('[data-live="pressure-multiplier"]', `×${vm.tactical.pressureMultiplier.toFixed(2)}`);
         setText('[data-live="depth"]', vm.harvest.depth.toFixed(1));
+        setText('[data-live="convergence-depth"]', vm.harvest.depth.toFixed(1));
         setText('[data-live="harvest-summary"]', harvestSummaryText(vm.harvest.controlled));
         for (const key of CONTROLLED_KEYS)
             setText(`[data-live="harvest-controlled-${key}"]`, rewardText(key, vm.harvest.controlled));
@@ -182,6 +195,10 @@ export function createGameUI(engine, world) {
                 meter.style.width = pct(value, max);
         });
     }
+    function renderVictory(vm) { const record = vm.victory?.record; if (!record) {
+        replaceIfChanged(victoryView, '');
+        return;
+    } const endgames = record.endgameStates.length ? record.endgameStates.map((state) => `<span>${esc(state.replace('endgame_', '').replaceAll('_', ' '))}</span>`).join('') : '<span>none recorded</span>'; replaceIfChanged(victoryView, `<section class="panel victory-screen"><div class="panel-kicker">GREAT CONVERGENCE ${record.convergence}</div><h2>The Machine Closes Its Ledger</h2><p>A civilization was cultivated to the depth at which the harvest and the harvester stop being different operations.</p><div class="victory-stats"><article><span>SEED</span><b>${fmt(record.seed)}</b></article><article><span>YEARS</span><b>${fmt(record.years)}</b></article><article><span>ERA</span><b>${esc(ERA_NAMES[record.era])}</b></article><article><span>DEPTH</span><b>${record.depth.toFixed(1)}</b></article><article><span>DEVELOPMENT</span><b>${fmt(record.development)}</b></article><article><span>DOMINANT PATH</span><b>${esc(record.dominantPath ? CivilizationPaths.displayName(record.dominantPath) : 'unresolved')}</b></article></div><div class="victory-endgames">${endgames}</div><p class="victory-bonus">Permanent reward: \u00D7${(1 + .25 * vm.victory.convergences).toFixed(2)} harvest yield and +${2 * vm.victory.convergences} Containment.</p><button class="primary big" data-action="acknowledge-victory">CONTINUE</button></section>`); }
     function bindActions() { document.querySelectorAll('[data-action]').forEach(el => { if (el.dataset.bound)
         return; el.dataset.bound = '1'; el.addEventListener('click', () => { const a = el.dataset.action; switch (a) {
         case 'start':
@@ -225,6 +242,12 @@ export function createGameUI(engine, world) {
             break;
         case 'abandon':
             engine.returnToMachineWithoutReward();
+            break;
+        case 'convergence':
+            engine.startConvergenceRun();
+            break;
+        case 'acknowledge-victory':
+            engine.acknowledgeVictory();
             break;
         case 'pan':
             world.nudge(Number(el.dataset.dir));
