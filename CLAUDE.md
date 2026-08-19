@@ -70,13 +70,13 @@ The engine composes these over the generated catalogs in its field initializers.
 
 `public/sw.js` precaches a **hand-maintained** path list (`APP_ASSETS`) and serves cache-first with no revalidation. Consequences:
 
-- Adding or renaming a module under `public/game/dist/` requires adding it to `APP_ASSETS`.
+- Adding or renaming a module under `public/game/dist/` requires adding it to `APP_ASSETS`. `public/game/tests/presentation.test.mjs` asserts that all eleven `dist/render/*.js` modules are listed.
 - Any release requires bumping `CACHE_NAME`, or returning players keep the old files forever.
 - Phaser is deliberately absent from the precache list; offline sessions use the Canvas fallback.
 
 ## Version coupling
 
-`1.3.1` appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and both READMEs. `tests/game-release.test.mjs` asserts the two `package.json` versions match, so bump all of them together.
+`1.4.0` appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and both READMEs. `tests/game-release.test.mjs` asserts the two `package.json` versions match, so bump all of them together.
 
 ## Conventions
 
@@ -97,4 +97,4 @@ Everything else is pinned to an exact latest version; `npm audit` reports zero v
 
 ## Design docs
 
-`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-19` (v1.3.1 progression rebalance). Read the matching spec before changing balance or progression — the numbers in the tests come from there.
+`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-19` (v1.4.0 civilization visualization, and the v1.3.1 progression rebalance before it). Read the matching spec before changing balance or progression — the numbers in the tests come from there.

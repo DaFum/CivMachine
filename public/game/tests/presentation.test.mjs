@@ -648,3 +648,12 @@ test('world module no longer carries its own layout or hash helpers', async () =
   assert.ok(source.includes('drawBanner('), 'faction banners must be rendered');
   assert.ok(source.includes('ConstructionTracker'), 'construction animation must be wired in');
 });
+
+test('every render module is precached by the service worker', async () => {
+  const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
+  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation'];
+  for (const name of modules) {
+    assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
+  }
+  assert.ok(!source.includes("'rce-app-v1.3.1'"), 'CACHE_NAME must be bumped for this release');
+});
