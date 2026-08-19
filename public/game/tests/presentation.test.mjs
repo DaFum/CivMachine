@@ -9,6 +9,7 @@ import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_
 import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
+import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -400,4 +401,85 @@ test('settlement count grows with development stage and stays bounded', () => {
   late.institutions.push('Consensus Lattice', 'Reality Works Authority');
   const count = worldSnapshot(late, 900).settlementCount;
   assert.ok(count >= 6 && count <= 9, `settlementCount was ${count}`);
+});
+
+function lateCiv(seed = 51) {
+  const civ = GameEngine.createCivilizationForTest(seed);
+  civ.development = 600; civ.era = 2; civ.eventChoices = 15;
+  civ.institutions.push('Consensus Lattice', 'Reality Works Authority');
+  return civ;
+}
+
+test('settlement sizes account for every structure in the snapshot', () => {
+  for (const civ of [GameEngine.createCivilizationForTest(51), lateCiv()]) {
+    const snapshot = worldSnapshot(civ, 900);
+    const sizes = settlementSizes(civ, snapshot);
+    assert.equal(sizes.length, snapshot.settlementCount);
+    assert.equal(sizes.reduce((a, b) => a + b, 0), snapshot.buildingCount);
+    assert.ok(sizes.every(size => size >= 1), 'no settlement may be empty');
+  }
+});
+
+test('early worlds are camps and villages, late worlds reach metropolis scale', () => {
+  const early = GameEngine.createCivilizationForTest(52);
+  const earlySnapshot = worldSnapshot(early, 900);
+  const earlyClasses = settlementLayout(early, earlySnapshot.worldWidth, 400, earlySnapshot).map(s => s.settlementClass);
+  assert.ok(earlyClasses.every(c => c === 'camp' || c === 'village'), `got ${earlyClasses.join(',')}`);
+
+  const late = lateCiv(52);
+  const lateSnapshot = worldSnapshot(late, 900);
+  const lateClasses = settlementLayout(late, lateSnapshot.worldWidth, 400, lateSnapshot).map(s => s.settlementClass);
+  assert.ok(lateClasses.some(c => c === 'metropolis' || c === 'arcology'), `got ${lateClasses.join(',')}`);
+});
+
+test('settlement layout is deterministic and geometrically sane', () => {
+  const civ = lateCiv(53);
+  const snapshot = worldSnapshot(civ, 900);
+  const first = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  const second = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  assert.deepEqual(first, second);
+  const totalStructures = first.reduce((sum, s) => sum + s.structures.length, 0);
+  assert.equal(totalStructures, snapshot.buildingCount);
+  const ids = new Set(first.flatMap(s => s.structures.map(st => st.id)));
+  assert.equal(ids.size, totalStructures, 'structure ids must be unique');
+  for (const settlement of first) {
+    assert.ok(settlement.centerX >= 0 && settlement.centerX <= snapshot.worldWidth);
+    assert.ok(settlement.radius > 0);
+    for (const structure of settlement.structures) {
+      assert.ok(structure.width > 0 && structure.height > 0);
+      assert.ok(Number.isFinite(structure.x));
+    }
+  }
+});
+
+test('settlements are assigned to factions proportionally to affinity share', () => {
+  const civ = lateCiv(54);
+  civ.pathState.affinity.machine_faith = 9;
+  civ.pathState.affinity.void_communion = 1;
+  const snapshot = worldSnapshot(civ, 900);
+  const layout = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  const leaderHeld = layout.filter(s => s.factionIndex === 0).length;
+  assert.ok(leaderHeld > layout.length / 2, `leader held ${leaderHeld} of ${layout.length}`);
+  assert.ok(layout.every(s => s.factionIndex >= 0));
+
+  const unaligned = lateCiv(54);
+  const unalignedLayout = settlementLayout(unaligned, snapshot.worldWidth, 400, worldSnapshot(unaligned, 900));
+  assert.ok(unalignedLayout.every(s => s.factionIndex === -1), 'no affinity means no banner owner');
+});
+
+test('settlement class signature is discrete and reflects the class mix', () => {
+  const civ = lateCiv(55);
+  const snapshot = worldSnapshot(civ, 900);
+  const base = settlementClassSignature(civ, snapshot);
+  civ.development += 1;
+  assert.equal(settlementClassSignature(civ, worldSnapshot(civ, 900)), base, 'a one-point tick must not churn the signature');
+  civ.era = 4; civ.development = 3000;
+  assert.notEqual(settlementClassSignature(civ, worldSnapshot(civ, 900)), base);
+});
+
+test('settlement classes are ordered from camp to arcology', () => {
+  assert.deepEqual([...CLASS_ORDER], ['camp', 'village', 'town', 'city', 'metropolis', 'arcology']);
+  assert.equal(settlementClassFor(2, 0, 0), 'camp');
+  assert.equal(settlementClassFor(6, 0, 0), 'village');
+  assert.equal(settlementClassFor(30, 4, 4), 'arcology');
 });
