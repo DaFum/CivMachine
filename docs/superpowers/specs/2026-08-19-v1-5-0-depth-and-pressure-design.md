@@ -324,7 +324,7 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 A headless harness drives the compiled engine with fixed seeds and declared policies. The harness built for this analysis is committed as a test helper under `public/game/tests/`.
 
 - No-upgrade run under the safety policy cascades between 150 and 185 seconds.
-- Containment 4 reaches between 300 and 360 seconds; containment 28 between 870 and 950 seconds.
+- Containment 4 reaches between 300 and 360 seconds; containment 28 between 900 and 1,020 seconds. The analytic curve puts containment 28 at 918.7 s; a safety policy that prefers choices with a negative Entropy effect measures about 5% above the integral, so the band tops out above it.
 - **No tactical-action policy extends a no-upgrade run past 240 seconds**, including Vent spam, Stabilize spam, Accelerate spam and every combination. This is the acceptance test for the requirement that survival without upgrades is not possible for long.
 - A no-upgrade run that additionally spends every reserve intervention does not exceed **420 seconds**, and ends with strictly fewer net resources than the same run without them. Three `emergency_lattice` uses restore about 180 Stability, which is the only way to stretch a containment-free run past the tactical bound; escalation and the depth factor make it a losing trade, and the ceiling stays far below the 919 seconds a fully contained build reaches. Containment upgrades remain the only route to depth.
 - 18 credits are reachable in at most six runs at containment 4 and in two runs at containment 28.

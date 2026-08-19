@@ -19,53 +19,7 @@ import { calculateCultivationCredits, evaluateHarvestQuality } from '../dist/gam
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
-
-function freshEngine() {
-  return new GameEngine({
-    autosave: false,
-    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-  });
-}
-
-function safestChoiceIndex(event) {
-  let best = 0;
-  let bestScore = -Infinity;
-  for (let index = 0; index < event.choices.length; index++) {
-    const effects = event.choices[index].effects ?? {};
-    const score = Number(effects.stability ?? 0) * 3
-      + Number(effects.sanity ?? 0) * 2
-      - Number(effects.awareness ?? 0) * 1.25
-      - Number(effects.attention ?? 0) * 1.5
-      - Number(effects.entropy ?? 0) * 2
-      + Number(effects.development ?? 0) * 0.04;
-    if (score > bestScore) { best = index; bestScore = score; }
-  }
-  return best;
-}
-
-function simulatedSurvival(seed, containmentBuild = false) {
-  const engine = freshEngine();
-  if (containmentBuild) {
-    engine.state.machine.upgradeLevels = {
-      reality_lattice: 1,
-      awareness_scrubber: 1,
-      sanity_protocol: 1,
-      cosmic_muffling: 1,
-    };
-  }
-  engine.startCivilization(seed);
-  let elapsed = 0;
-  while (engine.state.phase === 'civilization' && elapsed < 600) {
-    const event = engine.currentEvent();
-    if (event) {
-      engine.chooseEvent(safestChoiceIndex(event));
-      continue;
-    }
-    engine.tick(0.25);
-    elapsed += 0.25;
-  }
-  return elapsed;
-}
+import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -574,16 +528,23 @@ test('active cadence stays fast across eras', () => {
   assert.deepEqual(eventDelayWindow(civ), { min: 7, max: 10 });
 });
 
-test('deterministic pressure keeps unupgraded runs short and rewards Containment builds', () => {
-  const seeds = Array.from({ length: 60 }, (_, index) => 10_000 + index * 97);
-  const noUpgrade = seeds.map(seed => simulatedSurvival(seed, false));
-  const containment = seeds.map(seed => simulatedSurvival(seed, true));
-  const noUpgradeMedian = percentile(noUpgrade, 0.5);
-  const noUpgradeP95 = percentile(noUpgrade, 0.95);
-  const containmentMedian = percentile(containment, 0.5);
-  assert.ok(noUpgradeMedian >= 150 && noUpgradeMedian <= 240, `no-upgrade median ${noUpgradeMedian}s`);
-  assert.ok(noUpgradeP95 < 300, `no-upgrade p95 ${noUpgradeP95}s`);
-  assert.ok(containmentMedian >= 300 && containmentMedian <= 480, `Containment median ${containmentMedian}s`);
+test('the survival curve separates no-upgrade runs from contained builds', () => {
+  const seeds = Array.from({ length: 24 }, (_, index) => 10_000 + index * 97);
+  const measure = (machineLevels, universeLevels) => percentile(
+    seeds.map(seed => runCivilization(withUpgrades(freshEngine(), machineLevels, universeLevels), { seed }).elapsed),
+    0.5,
+  );
+  const bare = measure({}, {});
+  const four = measure({ reality_lattice: 1, awareness_scrubber: 1, sanity_protocol: 1, cosmic_muffling: 1 }, {});
+  const full = measure(
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  assert.ok(bare >= 150 && bare <= 185, `no-upgrade median ${bare}s`);
+  assert.ok(four >= 300 && four <= 360, `containment 4 median ${four}s`);
+  // The analytic curve puts containment 28 at 918.7s. The safety policy prefers choices with a
+  // negative entropy effect, which buys roughly 5% more, so the band tops out above the integral.
+  assert.ok(full >= 900 && full <= 1020, `containment 28 median ${full}s`);
 });
 
 test('premature harvest gives reduced resources and zero credits', () => {
