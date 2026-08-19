@@ -6,10 +6,10 @@ under the harvest, and cost-bearing decisions into every gap between interventio
 
 ## Included
 
-- 78 production interventions and 10 Civilization paths
-- 163 individually written English action labels and consequence texts
+- 90 production interventions and 10 Civilization paths
+- 192 individually written English action labels and consequence texts
 - deterministic weighted scheduling with six-event repetition protection
-- Stabilize, Accelerate, and Probe actions on keys 1, 2, and 3
+- Stabilize, Accelerate, Probe, and Entropy Vent actions on keys 1, 2, 3, and 4
 - shared Control Capacity, Containment Rating, Entropy crises, and cascade pressure
 - exact before/after feedback and action-specific world impulses
 - deterministic Directive drafts, objective bonuses, and starting-trait previews
@@ -24,7 +24,7 @@ under the harvest, and cost-bearing decisions into every gap between interventio
 
 v1.5.0 replaces binary survival with a continuous containment curve, replaces the capped harvest
 grade with a continuous Cultivation Depth, and adds an Entropy Vent plus three mid-run machine
-interventions. Measured medians over 24 seeds at 1x speed:
+interventions. Median of nine seeds under the safety choice policy at 1x speed:
 
 | Build | Containment | Median run |
 | --- | ---: | ---: |
@@ -38,8 +38,9 @@ interventions. Measured medians over 24 seeds at 1x speed:
   and the Universe upgrade Stable Constants. Every level is measurable; nothing is binary.
 - Cascade decay is 7% of maximum Stability per second, so it lasts about 14 seconds for any build.
 - Cultivation Depth is `development / 80 + 1.5` per completed path arc. Yield multiplier and credits
-  scale off it, so staying deeper is the central roguelite decision. A chaotic harvest keeps 60% of
-  its credits and 40% of its resources.
+  scale off it, so staying deeper is the central roguelite decision. The four harvest grades become
+  display bands over depth, joined by a fifth, **Singular**, from depth 16. A chaotic harvest keeps
+  60% of its credits and 40% of its resources.
 - Accelerate still costs 2 Control; only its Entropy surcharge dropped from 7 to 5. Entropy Vent
   costs 1 Control and 10 Stability, removes up to 18 Entropy and pays the removed amount into the
   harvest as Paradox.

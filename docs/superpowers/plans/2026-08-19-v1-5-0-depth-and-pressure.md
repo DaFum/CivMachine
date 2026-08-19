@@ -69,7 +69,7 @@
 
 ---
 
-# Stage 1 — Continuous pressure
+## Stage 1 — Continuous pressure
 
 After this stage the game is playable: survival scales smoothly with containment levels and a no-upgrade run dies in about 160 seconds.
 
@@ -210,10 +210,10 @@ test('secondsToCascade matches numeric integration of the rate', () => {
 });
 
 test('the survival curve hits the published targets', () => {
-  const expected = [[0, 159], [1, 208], [2, 252], [4, 331], [8, 463], [14, 625], [20, 761], [28, 921]];
+  const expected = [[0, 159.4], [1, 208.3], [2, 252.4], [4, 331.0], [8, 462.9], [14, 624.6], [20, 761.1], [28, 918.7]];
   for (const [containment, target] of expected) {
     const actual = secondsToCascade(0, 0, containment);
-    assert.ok(Math.abs(actual - target) <= 2, `containment ${containment}: ${actual}s, expected ${target}s`);
+    assert.ok(Math.abs(actual - target) <= 0.5, `containment ${containment}: ${actual}s, expected ${target}s`);
   }
 });
 
@@ -600,7 +600,7 @@ git commit -m "test: assert the continuous survival curve across containment lev
 
 ---
 
-# Stage 2 — Cultivation Depth
+## Stage 2 — Cultivation Depth
 
 After this stage a deep run is worth staying for and a cascade costs real yield.
 
@@ -926,7 +926,7 @@ git commit -m "feat(economy): scale prestige with credits and record harvest dep
 
 ---
 
-# Stage 3 — Intervention supply
+## Stage 3 — Intervention supply
 
 After this stage a fifteen-minute run has enough varied content to be worth playing.
 
@@ -1467,7 +1467,7 @@ git commit -m "feat(paths): let dominance succeed in Transcendence and unlock th
 
 ---
 
-# Stage 4 — Vent and reserve
+## Stage 4 — Vent and reserve
 
 After this stage the interval between interventions carries decisions and Paradox has a source.
 
@@ -1864,7 +1864,7 @@ git commit -m "feat(reserve): let banked resources be spent inside a running civ
 
 ---
 
-# Stage 5 — Interface and release
+## Stage 5 — Interface and release
 
 ### Task 12: Pressure, depth and reserve readouts
 

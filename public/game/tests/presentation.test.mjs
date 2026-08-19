@@ -777,6 +777,65 @@ test('the construction tracker forgets structures the world no longer contains',
   assert.equal(tracker.isBuilding('a', 80), true);
 });
 
+test('volatile reserve and harvest figures are refreshed live, not only on a structural render', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
+  assert.ok(refresh.length > 0, 'the live refresh must exist');
+
+  // Reserve cost rises with depth on every tick and usesLeft drops on use, while the render key
+  // tracks only affordability. Both must therefore be written by the live refresh.
+  assert.match(app, /data-reserve-cost="\$\{esc\(entry\.id\)\}"/, 'the reserve cost line needs a live hook');
+  assert.match(app, /data-reserve-reason="\$\{esc\(entry\.id\)\}"/, 'the reserve reason needs a live hook');
+  assert.ok(refresh.includes('[data-reserve-cost="${entry.id}"]'), 'the live refresh must rewrite the reserve cost');
+  assert.ok(refresh.includes('[data-reserve-reason="${entry.id}"]'), 'the live refresh must rewrite the reserve reason');
+  assert.ok(refresh.includes('button.disabled=!entry.enabled'), 'the live refresh must resync reserve availability');
+
+  // Harvest yield and credits move continuously inside one depth band.
+  assert.match(app, /data-live="harvest-summary"/, 'the harvest summary needs a live hook');
+  assert.ok(refresh.includes("setText('[data-live=\"harvest-summary\"]',harvestSummaryText(vm.harvest.controlled))"), 'the live refresh must rewrite the harvest summary');
+  assert.ok(refresh.includes('[data-live="harvest-controlled-${key}"]'), 'controlled rewards must refresh');
+  assert.ok(refresh.includes('[data-live="harvest-chaotic-${key}"]'), 'chaotic rewards must refresh');
+
+  // One builder per figure, so the structural render and the live refresh cannot drift apart.
+  for (const builder of ['reserveCostText', 'harvestSummaryText', 'rewardText']) {
+    assert.ok(app.includes(`const ${builder}=`), `${builder} must have a single definition`);
+    assert.ok(app.split(`${builder}(`).length - 1 >= 2, `${builder} must be called by both the render and the refresh`);
+  }
+});
+
+test('no volatile figure leaks into the civilization render key', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.machineInsight = 30;
+  engine.state.machine.currencies.causal_mass = 500_000;
+  engine.state.machine.currencies.cognition = 500_000;
+  engine.state.machine.currencies.existence = 500_000;
+  engine.startCivilization(9202);
+  const civ = engine.state.civilization;
+  civ.eventChoices = 4;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 400;
+
+  const before = civilizationRenderKey(buildViewModel(engine));
+  const reserveBefore = buildViewModel(engine).machineReserve[0].cost;
+
+  // Depth growth inside a band raises every reserve price and the harvest yield.
+  civ.development = 500;
+  const after = buildViewModel(engine);
+  assert.ok(after.machineReserve[0].cost > reserveBefore, 'the reserve price must track depth');
+  assert.equal(after.harvest.depthBand, 'transcendent', 'still the same band');
+  assert.equal(civilizationRenderKey(after), before, 'a rising price must not rebuild the DOM');
+
+  // Spending a use is different: it emits decision feedback, and the feedback sequence IS part of
+  // the key, so that one does rebuild. usesLeft is therefore never the stale half of this bug -- the
+  // price is. The live refresh covers both regardless.
+  assert.equal(engine.useRunIntervention('containment_pulse'), true);
+  const spent = buildViewModel(engine);
+  assert.equal(spent.machineReserve[0].usesLeft, 2);
+  assert.equal(spent.machineReserve[0].enabled, true);
+  assert.notEqual(civilizationRenderKey(spent), before, 'a use emits feedback, which legitimately rebuilds');
+});
+
 test('the armed reset announces itself through a live region, not a relabelled button', async () => {
   const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(main, /aria-live['"],\s*['"]assertive['"]/, 'the announcer must be an assertive live region');
@@ -811,4 +870,14 @@ test('reduced motion freezes decorative animation but not build progress', async
   const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
   const reduced = styles.slice(styles.indexOf('@media(prefers-reduced-motion:reduce)'));
   assert.ok(reduced.includes('.icon-button.is-armed{animation:none}'), 'the armed reset button must stop pulsing');
+});
+
+test('every precached game asset actually exists on disk', async () => {
+  const worker = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
+  const listed = [...worker.matchAll(/'(\/game\/dist\/[^']+)'/g)].map(match => match[1]);
+  assert.ok(listed.length >= 25, `only ${listed.length} dist assets are precached`);
+  for (const path of listed) {
+    const onDisk = new URL(`..${path.replace('/game', '')}`, import.meta.url);
+    await assert.doesNotReject(readFile(onDisk), `sw.js precaches ${path}, which is not committed`);
+  }
 });

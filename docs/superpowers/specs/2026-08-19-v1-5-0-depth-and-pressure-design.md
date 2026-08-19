@@ -291,7 +291,7 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 - `game/paths.ts` owns path succession, its guards and the `endgameStates` list.
 - `game/rules.ts` owns the two prestige award formulas, `eraForYears`, the era clamp in `calculateHarvest` and `reality_lattice` bootstrap reachability.
 - `data/intervention-copy.ts` gains the `max_era` layering function; `data/apotheosis-events.ts` is new and holds the twelve Apotheosis events. Neither touches the generated catalog.
-- `game/upgrade-balance.ts` owns the repurposed Universe descriptions and the 1.75 growth floor.
+- `game/upgrade-balance.ts` owns the repurposed Universe descriptions and the 1.75 growth ceiling.
 - `game/engine.ts` composes them, sums containment from levels, and preserves `wide_lattice` levels in `resetMachineLayer()`.
 - `ui/view-model.ts` and `ui/app.ts` present them; no simulation rule moves into presentation.
 

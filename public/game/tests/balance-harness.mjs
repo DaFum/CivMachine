@@ -44,7 +44,13 @@ export function runCivilization(engine, { seed = 0, policy = ['safe'], harvestAt
   const eventIds = [];
   let elapsed = 0;
   let interventions = 0;
+  // The intervention branch continues without advancing elapsed, so the elapsed guard cannot bound
+  // it. An event whose choice never resolves would spin forever and hang the suite instead of
+  // failing it, so the loop carries a hard iteration cap as well.
+  let iterations = 0;
+  const maxIterations = Math.ceil(maxSeconds / dt) * 4;
   while (engine.state.phase === 'civilization' && elapsed < maxSeconds) {
+    if (++iterations > maxIterations) throw new Error(`runCivilization did not terminate after ${iterations} iterations`);
     const civ = engine.state.civilization;
     const event = engine.currentEvent();
     if (event) {

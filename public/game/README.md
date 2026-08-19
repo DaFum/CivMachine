@@ -55,15 +55,15 @@ npm test
 
 ## Ported game systems
 
-- 78 production interventions, including three scheduled Entropy crises
-- 163 individually written choice actions and consequence descriptions
+- 90 production interventions, including three scheduled Entropy crises and twelve Apotheosis events
+- 192 individually written choice actions and consequence descriptions
 - deterministic weighted scheduling with six-event repetition protection
 - exact before/after decision feedback and state-reactive visual impulses
-- shared Control Capacity with Stabilize, Accelerate, and Probe tactical actions
-- keyboard shortcuts 1/2/3 plus touch-safe action controls
+- shared Control Capacity with Stabilize, Accelerate, Probe, and Entropy Vent tactical actions
+- keyboard shortcuts 1/2/3/4 plus touch-safe action controls
 - escalating Entropy, Containment requirements, and collapse pressure
 - deterministic per-Civilization Directive offers, objectives, and Trait previews
-- Premature, Established, Transcendent, and Ascendant Harvest Grades
+- Premature, Established, Transcendent, Ascendant, and Singular Harvest Grades as bands over Cultivation Depth
 - Cultivation Credits with an 18-credit Universe consumption requirement
 - 10 civilization paths with dominant and secondary tendencies
 - 12 traits
@@ -88,7 +88,7 @@ npm test
 
 v1.5.0 replaces binary survival with a continuous containment curve, replaces the capped harvest
 grade with a continuous Cultivation Depth, and adds an Entropy Vent plus three mid-run machine
-interventions. Measured medians over 24 seeds at 1x speed:
+interventions. Median of nine seeds under the safety choice policy at 1x speed:
 
 | Build | Containment | Median run |
 | --- | ---: | ---: |
@@ -102,8 +102,9 @@ interventions. Measured medians over 24 seeds at 1x speed:
   and the Universe upgrade Stable Constants. Every level is measurable; nothing is binary.
 - Cascade decay is 7% of maximum Stability per second, so it lasts about 14 seconds for any build.
 - Cultivation Depth is `development / 80 + 1.5` per completed path arc. Yield multiplier and credits
-  scale off it, so staying deeper is the central roguelite decision. A chaotic harvest keeps 60% of
-  its credits and 40% of its resources.
+  scale off it, so staying deeper is the central roguelite decision. The four harvest grades become
+  display bands over depth, joined by a fifth, **Singular**, from depth 16. A chaotic harvest keeps
+  60% of its credits and 40% of its resources.
 - Accelerate still costs 2 Control; only its Entropy surcharge dropped from 7 to 5. Entropy Vent
   costs 1 Control and 10 Stability, removes up to 18 Entropy and pays the removed amount into the
   harvest as Paradox.
@@ -120,4 +121,4 @@ The production boot uses the built-in deterministic Canvas renderer. Structural 
 
 ## Save data
 
-Version 1.5.0 continues to use the existing v2 `localStorage` key without migration or reset. v1 browser saves and Godot saves remain unsupported. The game has no offline progression.
+Version 1.5.0 writes the v3 save format. The `localStorage` key is unchanged, but the version gate discards every v2 payload on load, so existing progress is lost and there is no migration. v1 browser saves and Godot saves remain unsupported. The game has no offline progression.

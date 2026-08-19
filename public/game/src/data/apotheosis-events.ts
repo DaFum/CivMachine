@@ -2,8 +2,10 @@
 // in engine.ts exactly as ENTROPY_CRISES are, so the generated catalog stays frozen.
 //
 // Four themes, three events each: the civilization noticing the harvest, negotiating with the
-// machine, post-causal economics, and the machine's own maintenance. Four events carry no path so
-// they remain available whatever path a run took; the other eight are spread across eight paths.
+// machine, post-causal economics, and the machine's own maintenance. Three events carry no path so
+// they remain available whatever path a run took; the other nine cover nine of the ten paths.
+// biological_transcendence has no Apotheosis event of its own and is reached through the pathless
+// three and through path succession.
 export const APOTHEOSIS_EVENTS = [
   {
     id: 'apotheosis_ledger_of_the_cultivator',
@@ -103,7 +105,7 @@ export const APOTHEOSIS_EVENTS = [
     choices: [
       {
         label: 'Offer accelerated maturity for stability',
-        prediction: 'Entropy eases and Stability rises, but the civilization ages faster than it chose to.',
+        prediction: 'Entropy eases, Stability rises and Development leaps, but the forced maturity costs Collective Sanity.',
         effects: { entropy: -3, stability: 10, development: 60, sanity: -8 },
         path_affinity: { machine_faith: 2, temporal_dominion: 1 },
       },
@@ -115,7 +117,7 @@ export const APOTHEOSIS_EVENTS = [
       },
       {
         label: 'Ask for the terms in writing',
-        prediction: 'The reply is legible and ruinous: Sanity falls hard while Entropy eases a little and Development leaps.',
+        prediction: 'The reply is legible and ruinous: Sanity falls hard and Awareness rises, while Entropy eases a little and Development leaps.',
         effects: { sanity: -14, entropy: -2, development: 110, awareness: 6 },
         path_affinity: { bureaucratic_singularity: 2, recursive_simulation: 1 },
       },
@@ -163,7 +165,7 @@ export const APOTHEOSIS_EVENTS = [
       },
       {
         label: 'Appeal to a body that does not exist yet',
-        prediction: 'Cosmic Attention rises with the filing, but Development advances on the invented jurisdiction.',
+        prediction: 'Cosmic Attention and Entropy both rise with the filing, but Development advances on the invented jurisdiction.',
         effects: { attention: 9, development: 100, entropy: 4 },
         path_affinity: { recursive_simulation: 2, temporal_dominion: 1 },
       },
@@ -238,7 +240,7 @@ export const APOTHEOSIS_EVENTS = [
       },
       {
         label: 'Short the remaining centuries',
-        prediction: 'Entropy eases as unclaimed time is sold off, but the civilization loses Development it had already earned.',
+        prediction: 'Entropy eases as unclaimed time is sold off, but the civilization loses Development it had already earned and Awareness rises.',
         effects: { entropy: -3, development: -90, awareness: 5 },
         path_affinity: { temporal_dominion: 2, void_communion: 1 },
       },
@@ -255,7 +257,7 @@ export const APOTHEOSIS_EVENTS = [
     choices: [
       {
         label: 'Comply and hold the regions consistent',
-        prediction: 'Stability rises and Entropy falls as the work completes cleanly.',
+        prediction: 'Stability rises and Entropy falls as the work completes cleanly, at a small cost in Development.',
         effects: { stability: 16, entropy: -3, development: -20 },
         path_affinity: { machine_faith: 2, bureaucratic_singularity: 1 },
       },
