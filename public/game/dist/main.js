@@ -22,10 +22,34 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault();
     engine.useTacticalAction(action);
 });
-document.querySelector('#reset-save').addEventListener('click', () => {
-    if (confirm('Erase the browser save and reset all Machine Insight, unlocks, and progress?'))
+// Confirmation happens inside the page: confirm() is suppressed in fullscreen, in the installed
+// fullscreen PWA and in embedded frames, which silently turned the reset into a no-op there.
+const resetButton = document.querySelector('#reset-save');
+const RESET_ARM_MS = 4000;
+let resetArmTimer = 0;
+function disarmReset() {
+    if (!resetArmTimer)
+        return;
+    clearTimeout(resetArmTimer);
+    resetArmTimer = 0;
+    resetButton.classList.remove('is-armed');
+    resetButton.textContent = '⌫';
+    resetButton.title = 'Reset browser save';
+    resetButton.setAttribute('aria-label', 'Reset browser save');
+}
+resetButton.addEventListener('click', () => {
+    if (resetArmTimer) {
+        disarmReset();
         engine.deleteSave();
+        return;
+    }
+    resetButton.classList.add('is-armed');
+    resetButton.textContent = 'ERASE SAVE?';
+    resetButton.title = 'Click again to erase the browser save and reset all progress';
+    resetButton.setAttribute('aria-label', 'Confirm: erase the browser save and reset all Machine Insight, unlocks and progress');
+    resetArmTimer = setTimeout(disarmReset, RESET_ARM_MS);
 });
+resetButton.addEventListener('blur', disarmReset);
 let previous = performance.now();
 let accumulator = 0;
 function frame(now) {

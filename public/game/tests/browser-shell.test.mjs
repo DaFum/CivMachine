@@ -192,3 +192,15 @@ test('Harvest projection names grade, credits, and Directive objective bonus', a
   assert.match(app, /Cultivation Credit/);
   assert.match(app, /OBJECTIVE BONUS/);
 });
+
+test('save reset never depends on a native modal dialog', async () => {
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  // confirm() is suppressed in fullscreen, in installed fullscreen PWAs and in embedded frames,
+  // which are exactly the contexts this app ships in. The reset must confirm inside the page.
+  assert.doesNotMatch(main, /confirm\s*\(/);
+  assert.doesNotMatch(main, /alert\s*\(/);
+  assert.doesNotMatch(main, /prompt\s*\(/);
+  assert.match(main, /#reset-save/);
+  assert.match(main, /deleteSave\(\)/);
+  assert.match(main, /armed/i, 'reset must require a second, explicit in-page confirmation');
+});

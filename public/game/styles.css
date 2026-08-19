@@ -22,6 +22,8 @@ button:disabled{opacity:.38;cursor:not-allowed}
 .resource span{display:block;color:var(--muted);font-size:.68rem;text-transform:uppercase}
 .resource strong{font-size:1rem;color:#e8f7ff}
 .icon-button{padding:.5rem .7rem}
+.icon-button.is-armed{border-color:var(--danger,#ee6973);color:var(--danger,#ee6973);font-size:.72rem;letter-spacing:.06em;animation:reset-armed 1s ease-in-out infinite alternate}
+@keyframes reset-armed{from{opacity:.72}to{opacity:1}}
 .meta-bar{display:flex;gap:1.2rem;flex-wrap:wrap;padding:.45rem 1rem;background:#081016;border-bottom:1px solid #172936;color:var(--muted);font-size:.75rem}
 .meta-bar b{color:var(--amber)}
 main{padding:1rem}
