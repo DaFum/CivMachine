@@ -21,6 +21,8 @@ import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
+import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
+import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -1463,4 +1465,107 @@ test('a save written under the previous version is discarded', () => {
   });
   assert.equal(engine.state.meta.convergences, 0);
   assert.equal(engine.state.saveVersion, 4);
+});
+
+const MIGRATED_MILESTONE_AWARDS = {
+  development_70: 1, development_180: 1, development_340: 2,
+  era_expansion: 1, era_transcendence: 2, era_apotheosis: 2, awareness_50: 1,
+  controlled_harvest_1: 2, controlled_harvest_2: 2,
+  first_universe: 4, first_multiverse: 6,
+};
+
+// Awards above 1 must sit behind Apotheosis, a deep harvest or the prestige layers, or the
+// existing unlock thresholds (directives at 3, axioms at 18-23) would move forward.
+const ALLOWED_LARGE_AWARDS = new Set([
+  ...Object.keys(MIGRATED_MILESTONE_AWARDS),
+  'development_600', 'development_1000', 'endurance_900',
+  'harvest_ascendant', 'harvest_singular',
+  'paths_seen_10', 'endgames_in_run_4',
+  'second_multiverse', 'axioms_all_level_1',
+  'convergence_gate', 'first_convergence',
+]);
+
+test('the milestone catalog has 28 entries with unique ids', () => {
+  assert.equal(MILESTONE_CATALOG.length, 28);
+  assert.equal(new Set(MILESTONE_CATALOG.map(m => m.id)).size, 28);
+  for (const milestone of MILESTONE_CATALOG) {
+    assert.ok(milestone.target > 0, `${milestone.id} needs a positive target`);
+    assert.ok(milestone.title.length > 0 && milestone.description.length > 0);
+  }
+});
+
+test('migrated milestones keep their identifiers and award amounts', () => {
+  for (const [id, insight] of Object.entries(MIGRATED_MILESTONE_AWARDS)) {
+    const milestone = MILESTONE_CATALOG.find(m => m.id === id);
+    assert.ok(milestone, `${id} is missing from the catalog`);
+    assert.equal(milestone.insight, insight, `${id} award changed`);
+  }
+});
+
+test('only late milestones award more than one Machine Insight', () => {
+  for (const milestone of MILESTONE_CATALOG) {
+    if (milestone.insight <= 1) continue;
+    assert.ok(ALLOWED_LARGE_AWARDS.has(milestone.id), `${milestone.id} awards ${milestone.insight} too early`);
+  }
+});
+
+test('harvest grades have a total order', () => {
+  assert.deepEqual([...HARVEST_GRADE_ORDER], ['premature', 'established', 'transcendent', 'ascendant', 'singular']);
+  assert.equal(gradeIndex(''), -1);
+  assert.equal(gradeIndex('ascendant'), 3);
+  assert.ok(gradeIndex('singular') > gradeIndex('ascendant'));
+});
+
+test('each milestone completes exactly once and pays its award once', () => {
+  const state = createNewState();
+  state.meta.progression.maxDevelopment = 2000;
+  state.meta.progression.maxEra = 3;
+  state.meta.progression.longestRunSeconds = 1200;
+  state.meta.progression.maxEndgamesInRun = 4;
+  state.meta.progression.controlledHarvestsTotal = 30;
+  state.meta.progression.bestGrade = 'singular';
+  state.meta.progression.objectivesCompleted = 9;
+  state.meta.progression.seenDominantPaths = [
+    'machine_faith', 'collective_mind', 'temporal_dominion', 'reality_engineering', 'biological_transcendence',
+    'cosmic_resistance', 'bureaucratic_singularity', 'post_mortal_civilization', 'void_communion', 'recursive_simulation',
+  ];
+  state.meta.progression.discoveredResources = ['causal_mass', 'cognition', 'paradox', 'existence'];
+  state.meta.universesTotal = 3;
+  state.meta.multiversesConsumed = 2;
+  state.meta.axiomLevels = {
+    axiom_stability: 1, axiom_recursive_memory: 1, axiom_paradox_food: 1,
+    axiom_compassionate_accounting: 1, axiom_impossible_birth: 1, axiom_multiple_choice: 1,
+  };
+  state.meta.convergences = 1;
+  state.civilization = { ...GameEngine.createCivilizationForTest(3), development: 2000, era: 3, elapsedSeconds: 1200 };
+  state.civilization.stats.awareness = 90;
+
+  const first = evaluateMilestones(state, true);
+  assert.equal(first.newlyCompleted.length, 28);
+  const total = MILESTONE_CATALOG.reduce((sum, m) => sum + m.insight, 0);
+  assert.equal(first.insightAwarded, total);
+  assert.equal(completedMilestoneCount(state), 28);
+
+  const second = evaluateMilestones(state, true);
+  assert.equal(second.newlyCompleted.length, 0);
+  assert.equal(second.insightAwarded, 0);
+});
+
+test('milestone progress reports current and target for open entries', () => {
+  const state = createNewState();
+  state.meta.progression.controlledHarvestsTotal = 4;
+  const view = milestoneProgress(state, false).find(m => m.id === 'controlled_harvest_10');
+  assert.equal(view.current, 4);
+  assert.equal(view.target, 10);
+  assert.equal(view.completed, false);
+  assert.equal(view.group, 'HARVEST');
+});
+
+test('the snapshot takes the better of live and recorded values', () => {
+  const state = createNewState();
+  state.meta.progression.maxDevelopment = 500;
+  state.civilization = { ...GameEngine.createCivilizationForTest(5), development: 120 };
+  assert.equal(milestoneSnapshot(state, false).development, 500);
+  state.civilization.development = 900;
+  assert.equal(milestoneSnapshot(state, false).development, 900);
 });

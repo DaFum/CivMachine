@@ -89,3 +89,9 @@ export function applyHarvestQuality(
   if (options.collapsed && quality.grade === 'premature') rewards.causal_mass = Math.max(8, rewards.causal_mass);
   return { rewards, rewardMultiplier };
 }
+
+export const HARVEST_GRADE_ORDER: ReadonlyArray<HarvestGrade> = DEPTH_BANDS.map(band => band.grade);
+
+export function gradeIndex(grade: HarvestGrade | ''): number {
+  return grade ? HARVEST_GRADE_ORDER.indexOf(grade) : -1;
+}
