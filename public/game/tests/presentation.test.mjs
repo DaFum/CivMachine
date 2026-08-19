@@ -10,6 +10,7 @@ import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
+import { structureKindsForEra, drawStructure, drawBanner } from '../dist/render/structures.js';
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -482,4 +483,38 @@ test('settlement classes are ordered from camp to arcology', () => {
   assert.equal(settlementClassFor(2, 0, 0), 'camp');
   assert.equal(settlementClassFor(6, 0, 0), 'village');
   assert.equal(settlementClassFor(30, 4, 4), 'arcology');
+});
+
+test('structure kinds unlock by era', () => {
+  assert.deepEqual(structureKindsForEra(0, 1), ['dwelling', 'farm', 'temple', 'monument']);
+  const era1 = structureKindsForEra(1, 1);
+  assert.ok(era1.includes('industry') && era1.includes('academy'));
+  assert.ok(!era1.includes('spaceport'), 'spaceport must not exist before era 2');
+  assert.ok(!structureKindsForEra(0, 1).includes('spaceport'));
+  const era2 = structureKindsForEra(2, 2);
+  assert.ok(era2.includes('spaceport') && era2.includes('reactor'));
+  assert.ok(!era2.includes('orbital_anchor'), 'orbital anchor must not exist before era 3');
+  assert.ok(structureKindsForEra(3, 3).includes('orbital_anchor'));
+  assert.deepEqual(structureKindsForEra(4, 0), ['dwelling', 'farm'], 'stage 0 stays pre-urban regardless of era');
+});
+
+test('every structure kind draws distinct geometry', () => {
+  const signatures = new Map();
+  for (const kind of ['dwelling', 'farm', 'temple', 'monument', 'industry', 'academy', 'reactor', 'spaceport', 'orbital_anchor']) {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 'x', x: 120, width: 30, height: 80, kind, level: 3 }, 300, 0x182b39, 0x6fe7e1, 0xf2cd7b, 7);
+    assert.ok(calls.length >= 2, `${kind} drew ${calls.length} primitives`);
+    assert.ok(calls.every(([, ...args]) => args.every(value => typeof value !== 'number' || Number.isFinite(value))), `${kind} emitted a non-finite coordinate`);
+    signatures.set(kind, JSON.stringify(calls));
+  }
+  assert.equal(new Set(signatures.values()).size, signatures.size, 'two kinds produced identical geometry');
+});
+
+test('banners draw a pole and a sigil for every faction sigil', () => {
+  for (const sigil of ['spire', 'node', 'ring', 'prism', 'spiral', 'chevron', 'grid', 'halo', 'void', 'nest']) {
+    const calls = [];
+    drawBanner(recordingSurface(calls), 200, 140, 40, 0xf0ca6f, sigil, .5);
+    assert.ok(calls.some(([name]) => name === 'line'), `${sigil} drew no pole`);
+    assert.ok(calls.length >= 4, `${sigil} drew ${calls.length} primitives`);
+  }
 });
