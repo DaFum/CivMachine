@@ -1,0 +1,144 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+test('bundled game preserves the full release catalog', async () => {
+  const content = await readFile(
+    new URL('../public/game/src/data/content.generated.json', import.meta.url),
+    'utf8',
+  );
+  const parsed = JSON.parse(content);
+
+  assert.equal(parsed.events.length, 75);
+  assert.equal(Object.keys(parsed.path_definitions).length, 10);
+  assert.equal(parsed.traits.length, 12);
+  assert.equal(parsed.machine_upgrades.length, 12);
+  assert.equal(parsed.universe_upgrades.length, 8);
+  assert.equal(parsed.axiom_upgrades.length, 6);
+  assert.equal(parsed.directives.length, 6);
+  assert.equal(parsed.breeding_matrices.length, 6);
+});
+
+test('bundled game exposes the playable surfaces', async () => {
+  const html = await readFile(
+    new URL('../public/game/index.html', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(html, /id="machine-view"/);
+  assert.match(html, /id="civilization-view"/);
+  assert.match(html, /id="phaser-world"/);
+});
+
+test('game boots without optional Phaser or remote runtime scripts', async () => {
+  const html = await readFile(
+    new URL('../public/game/index.html', import.meta.url),
+    'utf8',
+  );
+
+  assert.doesNotMatch(html, /\.\/vendor\/phaser\.min\.js/);
+  assert.doesNotMatch(html, /<script[^>]+src="https?:\/\//);
+});
+
+test('app manifest requests fullscreen without locking orientation', async () => {
+  const manifest = JSON.parse(
+    await readFile(
+      new URL('../public/manifest.webmanifest', import.meta.url),
+      'utf8',
+    ),
+  );
+
+  assert.equal(manifest.name, 'Reality Consumption Engine');
+  assert.equal(manifest.display, 'fullscreen');
+  assert.equal(manifest.start_url, '/');
+  assert.equal('orientation' in manifest, false);
+});
+
+test('shell registers offline support and requires user action for fullscreen', async () => {
+  const shell = await readFile(
+    new URL('../app/game-shell.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(shell, /serviceWorker\.register\('\/sw\.js'\)/);
+  assert.match(shell, /requestFullscreen\(\)/);
+  assert.match(shell, /beforeinstallprompt/);
+  assert.match(shell, /src="\/game\/index\.html"/);
+});
+
+test('shell recovers from an early iframe load and a denied fullscreen request', async () => {
+  const shell = await readFile(
+    new URL('../app/game-shell.tsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(shell, /contentDocument\?\.readyState === 'complete'/);
+  assert.match(shell, /try\s*{[\s\S]*requestFullscreen\(\)[\s\S]*}\s*catch/);
+});
+
+test('service worker precaches the shell, game, content and deterministic Canvas renderer', async () => {
+  const worker = await readFile(
+    new URL('../public/sw.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(worker, /['"]\/game\/index\.html['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/content\.generated\.js['"]/);
+  assert.doesNotMatch(worker, /['"]\/game\/vendor\/phaser\.min\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/intervention-copy\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/intervention-scheduler\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/decision-feedback\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/entropy-crises\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/tactical-actions\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/harvest-quality\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/run-directives\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/upgrade-balance\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js\.map['"]/);
+  assert.match(worker, /['"]\/game\/dist\/render\/world-presentation\.js['"]/);
+  assert.match(worker, /rce-app-v1\.3\.1['"]/);
+  assert.match(worker, /caches\.delete/);
+});
+
+test('release metadata identifies browser app v1.3.1', async () => {
+  const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const gamePackage = JSON.parse(await readFile(new URL('../public/game/package.json', import.meta.url), 'utf8'));
+  const html = await readFile(new URL('../public/game/index.html', import.meta.url), 'utf8');
+  assert.equal(rootPackage.version, '1.3.1');
+  assert.equal(gamePackage.version, '1.3.1');
+  assert.match(html, /Browser v1\.3\.1/);
+});
+
+test('game surface protects mobile safe areas and dynamic viewport height', async () => {
+  const css = await readFile(
+    new URL('../public/game/mobile.css', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(css, /100dvh/);
+  assert.match(css, /env\(safe-area-inset-top\)/);
+  assert.match(css, /env\(safe-area-inset-left\)/);
+});
+
+test('game saves when the document becomes hidden', async () => {
+  const main = await readFile(
+    new URL('../public/game/src/main.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(main, /visibilitychange/);
+  assert.match(main, /document\.hidden/);
+  assert.match(main, /engine\.save\(\)/);
+});
+
+test('Canvas fallback caps rendering density at two device pixels', async () => {
+  const world = await readFile(
+    new URL('../public/game/src/render/world.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    world,
+    /Math\.min\(2,\s*Math\.max\(1,\s*globalThis\.devicePixelRatio/,
+  );
+});

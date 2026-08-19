@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05070b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Reality Consumption Engine — Browser Edition</title>
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./mobile.css">
+</head>
+<body>
+  <div class="background-noise"></div>
+  <div id="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">RCE</span><div><b>REALITY CONSUMPTION ENGINE</b><small>BROWSER CULTIVATION NODE</small></div></div>
+      <div id="resource-bar" class="resource-bar"></div>
+      <button id="reset-save" class="icon-button" title="Reset browser save" aria-label="Reset browser save">⌫</button>
+    </header>
+    <div id="meta-bar" class="meta-bar"></div>
+    <main>
+      <section id="machine-view" class="phase-view"></section>
+      <section id="civilization-view" class="phase-view is-hidden">
+        <div id="world-shell" class="world-shell">
+          <div id="phaser-world" class="phaser-world" aria-label="Scrollable civilization visualization"></div>
+          <div id="world-hud" class="world-hud"></div>
+        </div>
+        <div id="civilization-panels" class="civilization-panels"></div>
+      </section>
+      <section class="machine-log panel"><div class="panel-kicker">MACHINE RECORD</div><ul id="machine-log"></ul></section>
+    </main>
+    <footer><span>Reality Consumption Engine Browser v1.3.1</span><span>v2 save · localStorage · No offline progression</span></footer>
+  </div>
+  <script type="module" src="./dist/main.js"></script>
+</body>
+</html>

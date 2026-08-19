@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+:root {
+  --void: #03050a;
+  --panel: rgba(8, 13, 22, 0.9);
+  --line: rgba(129, 229, 255, 0.28);
+  --signal: #8cecff;
+  --signal-hot: #f3bf63;
+  --text: #eefaff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--void);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+button,
+iframe {
+  font: inherit;
+}
+
+.app-frame {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 72% 10%, rgba(94, 71, 164, 0.2), transparent 34%),
+    radial-gradient(circle at 12% 82%, rgba(36, 166, 184, 0.14), transparent 38%),
+    var(--void);
+}
+
+.ambient {
+  position: absolute;
+  z-index: -1;
+  width: 36rem;
+  height: 36rem;
+  border-radius: 999px;
+  filter: blur(96px);
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.ambient-one {
+  top: -20rem;
+  right: -10rem;
+  background: #7138c7;
+}
+
+.ambient-two {
+  bottom: -24rem;
+  left: -12rem;
+  background: #178ca5;
+}
+
+.game-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--void);
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.game-viewport.is-ready {
+  opacity: 1;
+}
+
+.boot-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  letter-spacing: 0.18em;
+  color: var(--signal);
+  background: var(--void);
+}
+
+.boot-sigil {
+  display: grid;
+  place-items: center;
+  width: 5.25rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: 0 0 42px rgba(140, 236, 255, 0.18), inset 0 0 24px rgba(140, 236, 255, 0.08);
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.boot-screen p {
+  margin: 0;
+  font-size: 0.66rem;
+}
+
+.boot-screen i {
+  width: 9rem;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(140, 236, 255, 0.12);
+}
+
+.boot-screen i::after {
+  content: "";
+  display: block;
+  width: 42%;
+  height: 100%;
+  background: var(--signal);
+  box-shadow: 0 0 12px var(--signal);
+  animation: boot-scan 1.2s ease-in-out infinite alternate;
+}
+
+.app-controls {
+  position: fixed;
+  z-index: 5;
+  right: max(0.7rem, env(safe-area-inset-right));
+  bottom: max(0.7rem, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+
+.app-controls button {
+  display: flex;
+  align-items: center;
+  min-height: 2.5rem;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.app-controls button:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.app-controls button:focus-visible {
+  outline: 2px solid var(--signal-hot);
+  outline-offset: 2px;
+}
+
+.app-controls span {
+  font-size: 1rem;
+}
+
+.app-controls b {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+}
+
+@keyframes boot-scan {
+  from { transform: translateX(-15%); }
+  to { transform: translateX(155%); }
+}
+
+@media (max-width: 560px) {
+  .app-controls b {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .app-controls button {
+    justify-content: center;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    border-radius: 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

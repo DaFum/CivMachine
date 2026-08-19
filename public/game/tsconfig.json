@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ES2020",
+    "moduleResolution": "Node",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true,
+    "lib": ["ES2021", "DOM"],
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"]
+}

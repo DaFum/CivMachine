@@ -1,0 +1,4626 @@
+export const CONTENT = {
+    "traits": [
+        {
+            "id": "telepathic_species",
+            "name": "Telepathic Species",
+            "description": "Privacy was discovered and rejected in prehistory.",
+            "effects": {
+                "development_mult": 0.08,
+                "sanity": -5.0,
+                "awareness": 5.0
+            },
+            "impossible": false
+        },
+        {
+            "id": "physics_optional",
+            "name": "Physics Is Slightly Optional",
+            "description": "Local constants respond to persuasive arguments.",
+            "effects": {
+                "stability": -10.0,
+                "harvest_mult_paradox": 1.25
+            },
+            "impossible": false
+        },
+        {
+            "id": "extreme_bureaucracy",
+            "name": "Extremely Bureaucratic",
+            "description": "Three permits are required before experiencing causality.",
+            "effects": {
+                "event_delay": 2.5,
+                "harvest_mult_causal_mass": 1.15
+            },
+            "impossible": false
+        },
+        {
+            "id": "sentient_moon",
+            "name": "Moon Is Sentient",
+            "description": "It watches. It also files complaints.",
+            "effects": {
+                "attention": 10.0,
+                "harvest_mult_existence": 1.15
+            },
+            "impossible": false
+        },
+        {
+            "id": "recurring_nightmare",
+            "name": "Shared Recurring Nightmare",
+            "description": "Every citizen dreams of the same rotating black gear.",
+            "effects": {
+                "sanity": -12.0,
+                "harvest_mult_cognition": 1.2
+            },
+            "impossible": false
+        },
+        {
+            "id": "fungal_consensus",
+            "name": "Fungal Consensus",
+            "description": "Most political disputes are settled underground.",
+            "effects": {
+                "development_mult": 0.12,
+                "awareness": -4.0
+            },
+            "impossible": false
+        },
+        {
+            "id": "ritual_engineering",
+            "name": "Ritual Engineering",
+            "description": "Machines work better when thanked in dead languages.",
+            "effects": {
+                "awareness": 8.0,
+                "harvest_mult_paradox": 1.1
+            },
+            "impossible": false
+        },
+        {
+            "id": "chronically_lucky",
+            "name": "Chronically Lucky",
+            "description": "Disasters keep missing by statistically insulting margins.",
+            "effects": {
+                "stability": 5.0,
+                "flag_add": "lucky"
+            },
+            "impossible": false
+        },
+        {
+            "id": "museum_planet",
+            "name": "Museum Planet",
+            "description": "History is archived before it happens.",
+            "effects": {
+                "development_mult": -0.05,
+                "harvest_mult_causal_mass": 1.25
+            },
+            "impossible": false
+        },
+        {
+            "id": "last_species",
+            "name": "Last Species",
+            "description": "They inherited a world full of ruins and no explanations.",
+            "effects": {
+                "sanity": -5.0,
+                "harvest_mult_existence": 1.2
+            },
+            "impossible": false
+        },
+        {
+            "id": "liquid_mathematics",
+            "name": "Liquid Mathematics",
+            "description": "Equations are stored in sealed tanks.",
+            "effects": {
+                "stability": -5.0,
+                "harvest_mult_cognition": 1.25
+            },
+            "impossible": false
+        },
+        {
+            "id": "born_after_end",
+            "name": "Born After The End",
+            "description": "This civilization remembers an apocalypse that has not happened yet.",
+            "effects": {
+                "stability": -20.0,
+                "awareness": 15.0,
+                "attention": 15.0,
+                "harvest_mult_paradox": 1.45
+            },
+            "impossible": true
+        }
+    ],
+    "machine_upgrades": [
+        {
+            "id": "reality_lattice",
+            "name": "Reality Lattice",
+            "currency": "causal_mass",
+            "base_cost": 90,
+            "growth": 1.7,
+            "max_level": 8,
+            "description": "+10 starting and maximum Reality Stability per level."
+        },
+        {
+            "id": "prediction_core",
+            "name": "Prediction Core",
+            "currency": "cognition",
+            "base_cost": 80,
+            "growth": 1.75,
+            "max_level": 5,
+            "description": "Shows increasingly precise outcome predictions."
+        },
+        {
+            "id": "cultivation_accelerator",
+            "name": "Cultivation Accelerator",
+            "currency": "existence",
+            "base_cost": 100,
+            "growth": 1.72,
+            "max_level": 8,
+            "description": "+12% civilization development speed per level."
+        },
+        {
+            "id": "historical_compressor",
+            "name": "Historical Compressor",
+            "currency": "causal_mass",
+            "base_cost": 140,
+            "growth": 1.85,
+            "max_level": 6,
+            "description": "+12% Causal Mass harvest per level."
+        },
+        {
+            "id": "cognitive_extractor",
+            "name": "Cognitive Extractor",
+            "currency": "cognition",
+            "base_cost": 140,
+            "growth": 1.85,
+            "max_level": 6,
+            "description": "+12% Cognition harvest per level."
+        },
+        {
+            "id": "paradox_sieve",
+            "name": "Paradox Sieve",
+            "currency": "paradox",
+            "base_cost": 90,
+            "growth": 1.8,
+            "max_level": 6,
+            "description": "+15% Paradox harvest per level."
+        },
+        {
+            "id": "existence_furnace",
+            "name": "Existence Furnace",
+            "currency": "existence",
+            "base_cost": 150,
+            "growth": 1.82,
+            "max_level": 6,
+            "description": "+12% Existence harvest per level."
+        },
+        {
+            "id": "awareness_scrubber",
+            "name": "Awareness Scrubber",
+            "currency": "cognition",
+            "base_cost": 190,
+            "growth": 1.9,
+            "max_level": 5,
+            "description": "Reduces Machine Awareness gain by 8% per level."
+        },
+        {
+            "id": "sanity_protocol",
+            "name": "Sanity Compliance Protocol",
+            "currency": "cognition",
+            "base_cost": 220,
+            "growth": 1.9,
+            "max_level": 5,
+            "description": "Reduces Collective Sanity losses by 8% per level."
+        },
+        {
+            "id": "cosmic_muffling",
+            "name": "Cosmic Muffling",
+            "currency": "paradox",
+            "base_cost": 180,
+            "growth": 1.88,
+            "max_level": 5,
+            "description": "Reduces Cosmic Attention gain by 8% per level."
+        },
+        {
+            "id": "contingency_vat",
+            "name": "Contingency Vat",
+            "currency": "paradox",
+            "base_cost": 260,
+            "growth": 2.0,
+            "max_level": 4,
+            "description": "Improves non-Paradox rewards from chaotic harvests."
+        },
+        {
+            "id": "temporal_injector",
+            "name": "Temporal Injector",
+            "currency": "causal_mass",
+            "base_cost": 300,
+            "growth": 2.1,
+            "max_level": 3,
+            "description": "Unlocks 2x simulation speed, then 4x at level 3."
+        }
+    ],
+    "universe_upgrades": [
+        {
+            "id": "wide_lattice",
+            "name": "Wide Reality Lattice",
+            "currency": "universal_residue",
+            "base_cost": 2,
+            "growth": 1.75,
+            "max_level": 6,
+            "description": "+20 Reality Stability capacity per level."
+        },
+        {
+            "id": "inherited_time",
+            "name": "Inherited Time",
+            "currency": "universal_residue",
+            "base_cost": 3,
+            "growth": 2.0,
+            "max_level": 2,
+            "description": "Future civilizations begin in later eras."
+        },
+        {
+            "id": "archive_of_screams",
+            "name": "Archive Of Screams",
+            "currency": "universal_residue",
+            "base_cost": 3,
+            "growth": 1.9,
+            "max_level": 3,
+            "description": "Adds one extra starting civilization trait per level."
+        },
+        {
+            "id": "twin_harvest",
+            "name": "Twin Harvest Mandate",
+            "currency": "universal_residue",
+            "base_cost": 4,
+            "growth": 1.95,
+            "max_level": 6,
+            "description": "+10% to every civilization harvest per level."
+        },
+        {
+            "id": "stable_constants",
+            "name": "Stable Constants Department",
+            "currency": "universal_residue",
+            "base_cost": 4,
+            "growth": 2.0,
+            "max_level": 5,
+            "description": "Reduces passive Reality Stability decay by 10% per level."
+        },
+        {
+            "id": "paradox_rights",
+            "name": "Paradox Labor Rights",
+            "currency": "universal_residue",
+            "base_cost": 5,
+            "growth": 2.1,
+            "max_level": 5,
+            "description": "+25% Paradox yield per level."
+        },
+        {
+            "id": "bureaucracy_of_gods",
+            "name": "Bureaucracy Of Gods",
+            "currency": "universal_residue",
+            "base_cost": 5,
+            "growth": 2.1,
+            "max_level": 4,
+            "description": "Adds time between civilization events."
+        },
+        {
+            "id": "residue_refinery",
+            "name": "Residue Refinery",
+            "currency": "universal_residue",
+            "base_cost": 7,
+            "growth": 2.25,
+            "max_level": 4,
+            "description": "+20% Universal Residue on universe consumption per level."
+        }
+    ],
+    "axiom_upgrades": [
+        {
+            "id": "axiom_stability",
+            "name": "Axiom: Stability May Exceed 100",
+            "currency": "axioms",
+            "base_cost": 1,
+            "growth": 2.0,
+            "max_level": 5,
+            "description": "+25 Reality Stability capacity per level."
+        },
+        {
+            "id": "axiom_paradox_food",
+            "name": "Axiom: Paradox Is Nutritional",
+            "currency": "axioms",
+            "base_cost": 2,
+            "growth": 2.0,
+            "max_level": 4,
+            "description": "Low stability accelerates civilization development."
+        },
+        {
+            "id": "axiom_recursive_memory",
+            "name": "Axiom: History Remembers Itself",
+            "currency": "axioms",
+            "base_cost": 2,
+            "growth": 2.2,
+            "max_level": 5,
+            "description": "+15% to all harvest rewards per level."
+        },
+        {
+            "id": "axiom_impossible_birth",
+            "name": "Axiom: The Impossible May Be Born",
+            "currency": "axioms",
+            "base_cost": 3,
+            "growth": 2.4,
+            "max_level": 1,
+            "description": "Unlocks impossible starting civilization traits."
+        },
+        {
+            "id": "axiom_compassionate_accounting",
+            "name": "Axiom: Losses Are Merely Alternative Profits",
+            "currency": "axioms",
+            "base_cost": 3,
+            "growth": 2.4,
+            "max_level": 4,
+            "description": "Greatly improves chaotic harvest retention."
+        },
+        {
+            "id": "axiom_multiple_choice",
+            "name": "Axiom: Reality Has A Back Button",
+            "currency": "axioms",
+            "base_cost": 4,
+            "growth": 2.6,
+            "max_level": 3,
+            "description": "Allows event rerolls by spending Paradox."
+        }
+    ],
+    "mutations": [
+        {
+            "id": "scarred_vat",
+            "name": "Scarred Cultivation Vat",
+            "description": "Next civilization begins with -15 Stability but +25% Paradox yield.",
+            "effects": {
+                "stability": -15.0,
+                "harvest_mult_paradox": 1.25
+            }
+        },
+        {
+            "id": "singing_gears",
+            "name": "Singing Gears",
+            "description": "Next civilization develops 15% faster but attracts more Cosmic Attention.",
+            "effects": {
+                "development_mult": 0.15,
+                "attention": 12.0
+            }
+        },
+        {
+            "id": "inverted_archive",
+            "name": "Inverted Archive",
+            "description": "Next civilization begins more aware and produces extra Cognition.",
+            "effects": {
+                "awareness": 12.0,
+                "harvest_mult_cognition": 1.2
+            }
+        },
+        {
+            "id": "missing_second",
+            "name": "Missing Second",
+            "description": "A stolen second grants safer passive stability for one civilization.",
+            "effects": {
+                "stability_decay_mult": 0.75
+            }
+        },
+        {
+            "id": "hungry_geometry",
+            "name": "Hungry Geometry",
+            "description": "Existence output rises, but sanity erodes more easily.",
+            "effects": {
+                "harvest_mult_existence": 1.25,
+                "sanity": -10.0
+            }
+        },
+        {
+            "id": "clerical_error",
+            "name": "Clerical Error In Causality",
+            "description": "Causal Mass is overpaid by an impossible accounting department.",
+            "effects": {
+                "harvest_mult_causal_mass": 1.3
+            }
+        }
+    ],
+    "directives": [
+        {
+            "id": "accelerated_development",
+            "name": "Accelerated Development",
+            "description": "Civilization development is accelerated at the cost of attracting cosmic scrutiny.",
+            "effects": {
+                "development_mult": 1.2,
+                "attention_gain_mult": 1.2
+            }
+        },
+        {
+            "id": "cognitive_extraction",
+            "name": "Cognitive Extraction",
+            "description": "Thought itself becomes the preferred crop. Sanity is treated as a consumable input.",
+            "effects": {
+                "cognition_mult": 1.3,
+                "sanity_loss_mult": 1.2
+            }
+        },
+        {
+            "id": "stable_cultivation",
+            "name": "Stable Cultivation",
+            "description": "Reality is protected from passive decay, but extraction quotas are deliberately reduced.",
+            "effects": {
+                "stability_decay_mult": 0.8,
+                "all_harvest_mult": 0.88
+            }
+        },
+        {
+            "id": "paradox_prospecting",
+            "name": "Paradox Prospecting",
+            "description": "Contradictions are actively mined, accelerating damage to local reality.",
+            "effects": {
+                "paradox_mult": 1.35,
+                "stability_decay_mult": 1.15
+            }
+        },
+        {
+            "id": "quiet_machine",
+            "name": "Quiet Machine",
+            "description": "The cultivator suppresses its signature and accepts slower development in exchange.",
+            "effects": {
+                "awareness_gain_mult": 0.8,
+                "attention_gain_mult": 0.8,
+                "development_mult": 0.85
+            }
+        },
+        {
+            "id": "temporal_pressure",
+            "name": "Temporal Pressure",
+            "description": "Time is compressed until civilizations mature faster and extract more, while reality decays faster.",
+            "effects": {
+                "development_mult": 1.25,
+                "all_harvest_mult": 1.1,
+                "stability_decay_mult": 1.25
+            }
+        }
+    ],
+    "breeding_matrices": [
+        {
+            "id": "neural_bloom",
+            "name": "Neural Bloom Matrix",
+            "description": "Civilizations are selected for dense cognitive activity and unusual shared mental structures.",
+            "effects": {
+                "cognition_mult": 1.25,
+                "trait_bias": [
+                    "telepathic_species",
+                    "recurring_nightmare",
+                    "liquid_mathematics"
+                ]
+            }
+        },
+        {
+            "id": "industrial_genome",
+            "name": "Industrial Genome",
+            "description": "Development and material extraction are favored at the expense of collective psychological health.",
+            "effects": {
+                "development_mult": 1.15,
+                "causal_mass_mult": 1.2,
+                "sanity_loss_mult": 1.15
+            }
+        },
+        {
+            "id": "adaptive_aberration",
+            "name": "Adaptive Aberration",
+            "description": "Unstable physical adaptations are encouraged to increase paradoxical output.",
+            "effects": {
+                "paradox_mult": 1.25,
+                "stability_decay_mult": 1.2,
+                "trait_bias": [
+                    "physics_optional",
+                    "ritual_engineering",
+                    "born_after_end"
+                ]
+            }
+        },
+        {
+            "id": "museum_seed",
+            "name": "Museum Seed",
+            "description": "Species are cultivated around inherited ruins and curated extinction memory.",
+            "effects": {
+                "existence_mult": 1.2,
+                "causal_mass_mult": 1.15,
+                "trait_bias": [
+                    "museum_planet",
+                    "last_species"
+                ]
+            }
+        },
+        {
+            "id": "lunar_synapse",
+            "name": "Lunar Synapse",
+            "description": "Planetary cognition is routed through orbital and telepathic structures.",
+            "effects": {
+                "cognition_mult": 1.15,
+                "attention_gain_mult": 1.15,
+                "trait_bias": [
+                    "sentient_moon",
+                    "telepathic_species"
+                ]
+            }
+        },
+        {
+            "id": "post_causal_spore",
+            "name": "Post-Causal Spore",
+            "description": "Fungal and impossible lineages are favored to turn instability into rapid development and Paradox.",
+            "effects": {
+                "paradox_mult": 1.35,
+                "development_mult": 1.1,
+                "stability_decay_mult": 1.25,
+                "trait_bias": [
+                    "fungal_consensus",
+                    "born_after_end"
+                ]
+            }
+        }
+    ],
+    "events": [
+        {
+            "id": "dreams_of_gears",
+            "title": "Dreams Of Gears",
+            "body": "Across the planet, unrelated sleepers describe a black machine turning behind the stars.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 8.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Fund sleep research",
+                    "prediction": "More cognition; awareness rises.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 7.0,
+                        "sanity": -4.0,
+                        "harvest_cognition": 14.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1
+                    },
+                    "path_history": "Dreams Of Gears -> Fund sleep research"
+                },
+                {
+                    "label": "Declare it a harmless cultural trend",
+                    "prediction": "Safer, but wastes useful data.",
+                    "effects": {
+                        "awareness": -3.0,
+                        "sanity": 3.0,
+                        "development": -3.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Broadcast the dreams globally",
+                    "prediction": "Excellent science. Terrible discretion.",
+                    "effects": {
+                        "development": 18.0,
+                        "awareness": 10.0,
+                        "attention": 8.0,
+                        "harvest_paradox": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "recursive_simulation": 1
+                    },
+                    "path_history": "Dreams Of Gears -> Broadcast the dreams globally"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "fracture_beneath_lab",
+            "title": "A Fracture Beneath The Laboratory",
+            "body": "Researchers discover that the basement is seven centimeters deeper on the inside.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Study the impossible depth",
+                    "prediction": "High-value research damages reality.",
+                    "effects": {
+                        "development": 20.0,
+                        "stability": -8.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 18.0
+                    },
+                    "follow_up": "fracture_answers_back",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_history": "A Fracture Beneath The Laboratory -> Study the impossible depth"
+                },
+                {
+                    "label": "Fill it with concrete",
+                    "prediction": "The concrete files a protest later.",
+                    "effects": {
+                        "stability": 2.0,
+                        "development": -4.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Open it to tourists",
+                    "prediction": "An irresponsible but profitable compromise.",
+                    "effects": {
+                        "stability": -4.0,
+                        "sanity": -6.0,
+                        "attention": 5.0,
+                        "harvest_causal_mass": 10.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "fracture_answers_back",
+            "title": "The Fracture Answers Back",
+            "body": "The laboratory receives a peer-review report from beneath itself.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 100.0,
+            "requirements": {
+                "scheduled_only": true
+            },
+            "choices": [
+                {
+                    "label": "Accept the corrections",
+                    "prediction": "Reality dislikes the revised methodology.",
+                    "effects": {
+                        "development": 28.0,
+                        "stability": -10.0,
+                        "awareness": 8.0,
+                        "harvest_cognition": 22.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1
+                    },
+                    "path_history": "The Fracture Answers Back -> Accept the corrections"
+                },
+                {
+                    "label": "Reject reviewer two",
+                    "prediction": "Civilization preserves dignity at measurable cost.",
+                    "effects": {
+                        "sanity": 4.0,
+                        "attention": 3.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 1
+        },
+        {
+            "id": "impossible_tax",
+            "title": "Tax On Impossible Objects",
+            "body": "The treasury proposes a revenue category for objects that exist only on Tuesdays.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 5.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Approve the tax",
+                    "prediction": "Bureaucracy stabilizes the impossible.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 6.0,
+                        "harvest_causal_mass": 8.0,
+                        "flag_add": "impossible_tax"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_history": "Tax On Impossible Objects -> Approve the tax"
+                },
+                {
+                    "label": "Exempt nonexistence",
+                    "prediction": "Economically compassionate. Metaphysically reckless.",
+                    "effects": {
+                        "stability": -5.0,
+                        "paradox": 0.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "first_machine_cult",
+            "title": "The First Machine Cult",
+            "body": "A minor religion claims history is livestock and the stars are inventory labels.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {
+                "min_awareness": 12.0
+            },
+            "choices": [
+                {
+                    "label": "Suppress the cult",
+                    "prediction": "Reduces awareness, harms sanity.",
+                    "effects": {
+                        "awareness": -8.0,
+                        "sanity": -5.0,
+                        "development": -4.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": -1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_history": "The First Machine Cult -> Suppress the cult"
+                },
+                {
+                    "label": "Observe quietly",
+                    "prediction": "A useful controlled leak.",
+                    "effects": {
+                        "awareness": 5.0,
+                        "harvest_cognition": 12.0,
+                        "flag_add": "machine_cult"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_history": "The First Machine Cult -> Observe quietly"
+                },
+                {
+                    "label": "Give them accurate schematics",
+                    "prediction": "This cannot possibly be a good idea.",
+                    "effects": {
+                        "awareness": 16.0,
+                        "stability": -7.0,
+                        "attention": 8.0,
+                        "harvest_paradox": 18.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2,
+                        "recursive_simulation": 1
+                    },
+                    "path_history": "The First Machine Cult -> Give them accurate schematics"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "moon_resigns",
+            "title": "The Moon Resigns",
+            "body": "The moon announces that it will no longer perform tidal duties without representation.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 10.0,
+            "requirements": {
+                "requires_trait": "sentient_moon"
+            },
+            "choices": [
+                {
+                    "label": "Offer a cabinet position",
+                    "prediction": "A constitutional solution to an astronomical problem.",
+                    "effects": {
+                        "sanity": 5.0,
+                        "development": 10.0,
+                        "attention": 4.0,
+                        "institution_add": "Lunar Ministry"
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Threaten orbital replacement",
+                    "prediction": "The moon notices the machine before the diplomats do.",
+                    "effects": {
+                        "awareness": 10.0,
+                        "stability": -6.0,
+                        "attention": 10.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "probability_strike",
+            "title": "Probability Goes On Strike",
+            "body": "Coin flips across the world refuse to land until working conditions improve.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Negotiate with chance",
+                    "prediction": "Absurdity becomes policy.",
+                    "effects": {
+                        "stability": -5.0,
+                        "sanity": -3.0,
+                        "development": 12.0,
+                        "harvest_paradox": 15.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Ban coins",
+                    "prediction": "A surprisingly effective emergency measure.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": -2.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "benevolent_plague",
+            "title": "The Benevolent Plague",
+            "body": "A microorganism improves memory but causes infected people to whisper future obituaries.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Distribute it",
+                    "prediction": "Cognition rises rapidly.",
+                    "effects": {
+                        "development": 18.0,
+                        "sanity": -10.0,
+                        "awareness": 4.0,
+                        "harvest_cognition": 20.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2,
+                        "post_mortal_civilization": 1
+                    },
+                    "path_history": "The Benevolent Plague -> Distribute it"
+                },
+                {
+                    "label": "Contain it",
+                    "prediction": "Lower reward, lower risk.",
+                    "effects": {
+                        "development": 4.0,
+                        "sanity": 2.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "sky_inventory",
+            "title": "Inventory Numbers In The Sky",
+            "body": "Astronomers notice that several stars now have serial numbers.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 8.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Decode the numbering scheme",
+                    "prediction": "The civilization learns it is not the customer.",
+                    "effects": {
+                        "awareness": 12.0,
+                        "attention": 8.0,
+                        "development": 22.0,
+                        "harvest_cognition": 15.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_history": "Inventory Numbers In The Sky -> Decode the numbering scheme"
+                },
+                {
+                    "label": "Classify the data",
+                    "prediction": "The stars remain numbered but officially uninteresting.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": -2.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Reply with a purchase order",
+                    "prediction": "Something accepts.",
+                    "effects": {
+                        "stability": -9.0,
+                        "attention": 14.0,
+                        "harvest_paradox": 20.0
+                    },
+                    "follow_up": "delivery_without_sender",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "void_communion": 1
+                    },
+                    "path_history": "Inventory Numbers In The Sky -> Reply with a purchase order"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "delivery_without_sender",
+            "title": "Delivery Without Sender",
+            "body": "A continent-sized crate appears in the ocean. The return address is yesterday.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 100.0,
+            "requirements": {
+                "scheduled_only": true
+            },
+            "choices": [
+                {
+                    "label": "Open the crate",
+                    "prediction": "Inside: tools designed for hands nobody has.",
+                    "effects": {
+                        "development": 32.0,
+                        "stability": -12.0,
+                        "awareness": 7.0,
+                        "harvest_existence": 20.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Return to yesterday",
+                    "prediction": "Logistics successfully weaponizes causality.",
+                    "effects": {
+                        "stability": -6.0,
+                        "harvest_causal_mass": 22.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_history": "Delivery Without Sender -> Return to yesterday"
+                }
+            ],
+            "max_count": 1
+        },
+        {
+            "id": "ministry_of_sanity",
+            "title": "Ministry Of Sanity",
+            "body": "The government proposes mandatory monthly confirmation that reality is still legally binding.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {
+                "max_sanity": 75.0
+            },
+            "choices": [
+                {
+                    "label": "Fund the ministry",
+                    "prediction": "Sanity improves; progress slows.",
+                    "effects": {
+                        "sanity": 14.0,
+                        "development": -8.0,
+                        "institution_add": "Ministry Of Sanity"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_history": "Ministry Of Sanity -> Fund the ministry"
+                },
+                {
+                    "label": "Privatize sanity",
+                    "prediction": "Efficient, predatory, and somehow worse.",
+                    "effects": {
+                        "sanity": -6.0,
+                        "development": 10.0,
+                        "harvest_causal_mass": 10.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "war_against_tomorrow",
+            "title": "War Against Tomorrow",
+            "body": "Military planners declare a preemptive war against a future that keeps sending hostile weather forecasts.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Authorize temporal operations",
+                    "prediction": "History becomes an active combat zone.",
+                    "effects": {
+                        "stability": -12.0,
+                        "development": 20.0,
+                        "attention": 8.0,
+                        "harvest_causal_mass": 18.0,
+                        "harvest_paradox": 18.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_history": "War Against Tomorrow -> Authorize temporal operations"
+                },
+                {
+                    "label": "Cancel tomorrow",
+                    "prediction": "The calendar department refuses.",
+                    "effects": {
+                        "stability": -5.0,
+                        "sanity": -5.0,
+                        "harvest_paradox": 10.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Sign a ceasefire with next week",
+                    "prediction": "Bureaucracy wins again.",
+                    "effects": {
+                        "stability": 5.0,
+                        "sanity": 5.0,
+                        "development": 3.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_history": "War Against Tomorrow -> Sign a ceasefire with next week"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "planetary_mind",
+            "title": "Planetary Mind Proposal",
+            "body": "Scientists can network every citizen into a single administrative consciousness.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Merge everyone",
+                    "prediction": "Productivity spikes. Individual sanity becomes a legacy setting.",
+                    "effects": {
+                        "development_mult": 0.18,
+                        "sanity": -16.0,
+                        "awareness": 10.0,
+                        "harvest_cognition": 25.0,
+                        "flag_add": "planetary_mind"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 3
+                    },
+                    "path_history": "Planetary Mind Proposal -> Merge everyone"
+                },
+                {
+                    "label": "Limit it to civil servants",
+                    "prediction": "A smaller horror with excellent filing.",
+                    "effects": {
+                        "development": 14.0,
+                        "awareness": 4.0,
+                        "institution_add": "Consensus Office"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_history": "Planetary Mind Proposal -> Limit it to civil servants"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "entity_audit",
+            "title": "External Entity Audit",
+            "body": "Something outside the universe requests access to the civilization's books.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {
+                "min_attention": 30.0
+            },
+            "choices": [
+                {
+                    "label": "Comply",
+                    "prediction": "The auditor leaves satisfied and reality leaves thinner.",
+                    "effects": {
+                        "stability": -10.0,
+                        "attention": -6.0,
+                        "harvest_causal_mass": 20.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1
+                    },
+                    "path_history": "External Entity Audit -> Comply"
+                },
+                {
+                    "label": "Refuse jurisdiction",
+                    "prediction": "The entity respects confidence, not law.",
+                    "effects": {
+                        "attention": 10.0,
+                        "sanity": -8.0,
+                        "harvest_paradox": 18.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_history": "External Entity Audit -> Refuse jurisdiction"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "machine_signal",
+            "title": "The Machine Answers Accidentally",
+            "body": "A routine maintenance pulse is detected as a message from beyond cosmology.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {
+                "min_awareness": 35.0
+            },
+            "choices": [
+                {
+                    "label": "Flood the signal with noise",
+                    "prediction": "Awareness falls, attention rises slightly.",
+                    "effects": {
+                        "awareness": -12.0,
+                        "attention": 4.0,
+                        "development": -6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1
+                    },
+                    "path_history": "The Machine Answers Accidentally -> Flood the signal with noise"
+                },
+                {
+                    "label": "Let them listen",
+                    "prediction": "Knowledge is delicious.",
+                    "effects": {
+                        "awareness": 18.0,
+                        "sanity": -8.0,
+                        "harvest_cognition": 24.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "recursive_simulation": 1
+                    },
+                    "path_history": "The Machine Answers Accidentally -> Let them listen"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "museum_of_future_ruins",
+            "title": "Museum Of Future Ruins",
+            "body": "A museum opens displaying artifacts from cities that have not yet been destroyed.",
+            "min_era": 1,
+            "max_era": 3,
+            "weight": 5.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Nationalize the museum",
+                    "prediction": "History becomes easier to process later.",
+                    "effects": {
+                        "development": 10.0,
+                        "harvest_causal_mass": 24.0,
+                        "sanity": -4.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_history": "Museum Of Future Ruins -> Nationalize the museum"
+                },
+                {
+                    "label": "Destroy the exhibits",
+                    "prediction": "Several ruins disappear from the present anyway.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": -6.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "god_in_server_room",
+            "title": "God In The Server Room",
+            "body": "A maintenance technician finds a new deity living between two cooling fans.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 8.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Offer administrator access",
+                    "prediction": "Transcendence becomes a permissions issue.",
+                    "effects": {
+                        "development": 35.0,
+                        "stability": -14.0,
+                        "attention": 12.0,
+                        "harvest_cognition": 25.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2,
+                        "recursive_simulation": 1
+                    },
+                    "path_history": "God In The Server Room -> Offer administrator access"
+                },
+                {
+                    "label": "Assign it to tech support",
+                    "prediction": "The deity learns humility.",
+                    "effects": {
+                        "sanity": 6.0,
+                        "stability": 4.0,
+                        "harvest_causal_mass": 12.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "post_mortal_union",
+            "title": "Post-Mortal Labor Union",
+            "body": "Citizens who uploaded themselves demand back pay for the centuries they spent as backups.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Recognize digital personhood",
+                    "prediction": "Existence becomes a negotiable category.",
+                    "effects": {
+                        "development": 20.0,
+                        "stability": -7.0,
+                        "harvest_existence": 25.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 3
+                    },
+                    "path_history": "Post-Mortal Labor Union -> Recognize digital personhood"
+                },
+                {
+                    "label": "Delete the union",
+                    "prediction": "The backups unionize retroactively.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "sanity": -8.0,
+                        "harvest_paradox": 14.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_history": "Post-Mortal Labor Union -> Delete the union"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "edge_of_simulation",
+            "title": "Edge Of Simulation",
+            "body": "Explorers discover a region where matter is replaced by explanatory tooltips.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Read the tooltips",
+                    "prediction": "They contain several spoilers.",
+                    "effects": {
+                        "awareness": 22.0,
+                        "stability": -13.0,
+                        "development": 28.0,
+                        "harvest_cognition": 28.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2,
+                        "recursive_simulation": 2
+                    },
+                    "path_history": "Edge Of Simulation -> Read the tooltips"
+                },
+                {
+                    "label": "Build a fence",
+                    "prediction": "The fence receives patch notes.",
+                    "effects": {
+                        "stability": 2.0,
+                        "sanity": 2.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "civilization_resists",
+            "title": "The Civilization Resists",
+            "body": "Independent researchers identify the cultivation pattern and publish a plan to starve the machine.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 8.0,
+            "requirements": {
+                "min_awareness": 68.0
+            },
+            "choices": [
+                {
+                    "label": "Sabotage their research",
+                    "prediction": "Awareness falls at a development cost.",
+                    "effects": {
+                        "awareness": -18.0,
+                        "development": -18.0,
+                        "sanity": -4.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": -1
+                    },
+                    "path_history": "The Civilization Resists -> Sabotage their research"
+                },
+                {
+                    "label": "Let resistance mature",
+                    "prediction": "A sophisticated enemy is a sophisticated harvest.",
+                    "effects": {
+                        "awareness": 14.0,
+                        "stability": -10.0,
+                        "harvest_cognition": 30.0,
+                        "harvest_paradox": 20.0,
+                        "flag_add": "resistance"
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 3
+                    },
+                    "path_history": "The Civilization Resists -> Let resistance mature"
+                },
+                {
+                    "label": "Send a customer satisfaction survey",
+                    "prediction": "They are furious. Data quality is excellent.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 16.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1
+                    },
+                    "path_history": "The Civilization Resists -> Send a customer satisfaction survey"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "sun_goes_missing",
+            "title": "The Sun Is Missing From Inventory",
+            "body": "The star still shines, but every database insists it was never purchased.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 6.0,
+            "requirements": {
+                "max_stability": 55.0
+            },
+            "choices": [
+                {
+                    "label": "Continue operations",
+                    "prediction": "Existence learns accounting is stronger than astronomy.",
+                    "effects": {
+                        "stability": -12.0,
+                        "sanity": -10.0,
+                        "harvest_existence": 30.0,
+                        "harvest_paradox": 18.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_history": "The Sun Is Missing From Inventory -> Continue operations"
+                },
+                {
+                    "label": "Reconcile the ledger",
+                    "prediction": "Causal paperwork partially restores the sun.",
+                    "effects": {
+                        "stability": 6.0,
+                        "development": -10.0,
+                        "harvest_causal_mass": 18.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "cosmic_predator",
+            "title": "Something Smells The Timeline",
+            "body": "A vast external organism begins circling history rather than space.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 7.0,
+            "requirements": {
+                "min_attention": 60.0
+            },
+            "choices": [
+                {
+                    "label": "Feed it abandoned futures",
+                    "prediction": "Attention drops. Stability does too.",
+                    "effects": {
+                        "attention": -18.0,
+                        "stability": -12.0,
+                        "harvest_causal_mass": 24.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_history": "Something Smells The Timeline -> Feed it abandoned futures"
+                },
+                {
+                    "label": "Tag it for research",
+                    "prediction": "The predator is now wearing a very small tracking device.",
+                    "effects": {
+                        "attention": 12.0,
+                        "sanity": -10.0,
+                        "harvest_cognition": 24.0,
+                        "harvest_paradox": 20.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "recursive_simulation": 1
+                    },
+                    "path_history": "Something Smells The Timeline -> Tag it for research"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "reality_unionizes",
+            "title": "Reality Unionizes",
+            "body": "Physical law demands weekends, overtime, and a written apology for quantum mechanics.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 5.0,
+            "requirements": {
+                "max_stability": 40.0
+            },
+            "choices": [
+                {
+                    "label": "Accept the contract",
+                    "prediction": "Stability improves, production slows.",
+                    "effects": {
+                        "stability": 15.0,
+                        "development_mult": -0.1,
+                        "sanity": 5.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_history": "Reality Unionizes -> Accept the contract"
+                },
+                {
+                    "label": "Hire replacement physics",
+                    "prediction": "Cheaper. Worse. Extremely profitable.",
+                    "effects": {
+                        "stability": -16.0,
+                        "development_mult": 0.2,
+                        "harvest_paradox": 30.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_history": "Reality Unionizes -> Hire replacement physics"
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "final_question",
+            "title": "The Final Question",
+            "body": "The civilization asks whether existence has a purpose. The machine has a dropdown menu for this.",
+            "min_era": 2,
+            "max_era": 3,
+            "weight": 5.0,
+            "requirements": {
+                "min_awareness": 50.0
+            },
+            "choices": [
+                {
+                    "label": "Answer: PROCESSING",
+                    "prediction": "A truthful answer by machine standards.",
+                    "effects": {
+                        "awareness": 12.0,
+                        "sanity": -8.0,
+                        "harvest_cognition": 20.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "machine_faith": 1
+                    },
+                    "path_history": "The Final Question -> Answer: PROCESSING"
+                },
+                {
+                    "label": "Answer: YES",
+                    "prediction": "No further details are supplied.",
+                    "effects": {
+                        "sanity": 8.0,
+                        "attention": 5.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Answer with the harvest schedule",
+                    "prediction": "Operational transparency has consequences.",
+                    "effects": {
+                        "awareness": 25.0,
+                        "stability": -15.0,
+                        "harvest_paradox": 28.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 2
+        },
+        {
+            "id": "routine_compliance_audit",
+            "title": "Routine Compliance Audit",
+            "body": "History is asked to confirm that it still exists and has read the terms of service.",
+            "min_era": 0,
+            "max_era": 3,
+            "weight": 1.0,
+            "requirements": {},
+            "choices": [
+                {
+                    "label": "Confirm",
+                    "prediction": "Minimal intervention.",
+                    "effects": {
+                        "development": 4.0,
+                        "harvest_causal_mass": 2.0
+                    },
+                    "follow_up": ""
+                },
+                {
+                    "label": "Request clarification",
+                    "prediction": "The clarification is three centuries long.",
+                    "effects": {
+                        "development": 6.0,
+                        "sanity": -1.0,
+                        "harvest_cognition": 2.0
+                    },
+                    "follow_up": ""
+                }
+            ],
+            "max_count": 999
+        },
+        {
+            "id": "synthetic_saint",
+            "title": "The First Synthetic Saint",
+            "body": "A maintenance construct begins healing broken machines before technicians reach them.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_flag_add": "machine_faith_devout",
+                    "path_history": "Machine Faith: The First Synthetic Saint resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "development": 9.0,
+                        "sanity": 4.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "machine_faith_pragmatic",
+                    "path_history": "Machine Faith: The First Synthetic Saint resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "machine_faith",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "cathedral_of_computation",
+            "title": "Cathedral Of Computation",
+            "body": "Cities begin building server-temples whose cooling systems are treated as sacred weather.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "synthetic_saint"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_flag_add": "machine_faith_devout",
+                    "path_history": "Machine Faith: Cathedral Of Computation resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "development": 9.0,
+                        "sanity": 4.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "machine_faith_pragmatic",
+                    "path_history": "Machine Faith: Cathedral Of Computation resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "machine_faith",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "maintenance_schism",
+            "title": "The Maintenance Schism",
+            "body": "Priests and engineers disagree over whether repair manuals are scripture or merely dangerously accurate.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "cathedral_of_computation"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_flag_add": "machine_faith_devout",
+                    "path_history": "Machine Faith: The Maintenance Schism resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "development": 9.0,
+                        "sanity": 4.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "machine_faith_pragmatic",
+                    "path_history": "Machine Faith: The Maintenance Schism resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "machine_faith",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "sacred_protocol",
+            "title": "Doctrine Of Sacred Maintenance",
+            "body": "The civilization proposes a universal ritual protocol for every interaction with complex machinery.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "machine_faith",
+                "completed_any": [
+                    "maintenance_schism"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_flag_add": "machine_faith_devout",
+                    "path_history": "Machine Faith: Doctrine Of Sacred Maintenance resolved through escalation.",
+                    "secondary_effects": {
+                        "post_mortal_civilization": {
+                            "harvest_existence": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "development": 9.0,
+                        "sanity": 4.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "machine_faith_pragmatic",
+                    "path_history": "Machine Faith: Doctrine Of Sacred Maintenance resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "machine_faith",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "machine_requests_canonization",
+            "title": "The Machine Requests Canonization",
+            "body": "The civilization concludes that the Engine itself requires a formal place in its theology.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "machine_faith",
+                "completed_any": [
+                    "sacred_protocol"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "awareness": 6.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 2
+                    },
+                    "path_flag_add": "machine_faith_devout",
+                    "path_history": "Machine Faith: The Machine Requests Canonization resolved through escalation.",
+                    "secondary_effects": {
+                        "post_mortal_civilization": {
+                            "harvest_existence": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "development": 9.0,
+                        "sanity": 4.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "machine_faith": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "machine_faith_pragmatic",
+                    "path_history": "Machine Faith: The Machine Requests Canonization resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "machine_faith",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "whispering_consensus",
+            "title": "The Whispering Consensus",
+            "body": "Unconnected citizens begin finishing one another's thoughts across entire districts.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 14.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 2
+                    },
+                    "path_flag_add": "collective_mind_integrated",
+                    "path_history": "Collective Mind: The Whispering Consensus resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 8.0,
+                        "harvest_cognition": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_flag_add": "collective_mind_pluralist",
+                    "path_history": "Collective Mind: The Whispering Consensus resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "collective_mind",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "chorus_infrastructure",
+            "title": "Chorus Infrastructure",
+            "body": "Public works engineers propose routing civic coordination through a permanent psionic network.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "whispering_consensus"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 14.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 2
+                    },
+                    "path_flag_add": "collective_mind_integrated",
+                    "path_history": "Collective Mind: Chorus Infrastructure resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 8.0,
+                        "harvest_cognition": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_flag_add": "collective_mind_pluralist",
+                    "path_history": "Collective Mind: Chorus Infrastructure resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "collective_mind",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "dissenting_neuron",
+            "title": "The Dissenting Neuron",
+            "body": "One district refuses synchronization and claims individuality is an endangered public resource.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "chorus_infrastructure"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 14.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 2
+                    },
+                    "path_flag_add": "collective_mind_integrated",
+                    "path_history": "Collective Mind: The Dissenting Neuron resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 8.0,
+                        "harvest_cognition": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_flag_add": "collective_mind_pluralist",
+                    "path_history": "Collective Mind: The Dissenting Neuron resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "collective_mind",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "consensus_lattice",
+            "title": "The Consensus Lattice",
+            "body": "The shared mind asks for legal recognition as a single planetary institution.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "collective_mind",
+                "completed_any": [
+                    "dissenting_neuron"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 14.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 2
+                    },
+                    "path_flag_add": "collective_mind_integrated",
+                    "path_history": "Collective Mind: The Consensus Lattice resolved through escalation.",
+                    "secondary_effects": {
+                        "recursive_simulation": {
+                            "harvest_paradox": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 8.0,
+                        "harvest_cognition": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_flag_add": "collective_mind_pluralist",
+                    "path_history": "Collective Mind: The Consensus Lattice resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "collective_mind",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "one_voice_at_dawn",
+            "title": "One Voice At Dawn",
+            "body": "At sunrise every citizen speaks the same sentence and waits for the observer to answer.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "collective_mind",
+                "completed_any": [
+                    "consensus_lattice"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 14.0,
+                        "sanity": -5.0,
+                        "harvest_cognition": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 2
+                    },
+                    "path_flag_add": "collective_mind_integrated",
+                    "path_history": "Collective Mind: One Voice At Dawn resolved through escalation.",
+                    "secondary_effects": {
+                        "recursive_simulation": {
+                            "harvest_paradox": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "development": 8.0,
+                        "harvest_cognition": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "collective_mind": 1,
+                        "cosmic_resistance": 1
+                    },
+                    "path_flag_add": "collective_mind_pluralist",
+                    "path_history": "Collective Mind: One Voice At Dawn resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "collective_mind",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "archive_unlived_days",
+            "title": "Archive Of Unlived Days",
+            "body": "Historians receive records from days that were considered but never allowed to happen.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 11.0,
+                        "stability": -5.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_flag_add": "temporal_dominion_expansionist",
+                    "path_history": "Temporal Dominion: Archive Of Unlived Days resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "temporal_dominion_regulated",
+                    "path_history": "Temporal Dominion: Archive Of Unlived Days resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "temporal_dominion",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "causality_ministry",
+            "title": "Ministry Of Causality",
+            "body": "The government proposes licensing all changes to the past and taxing unauthorized futures.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "archive_unlived_days"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 11.0,
+                        "stability": -5.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_flag_add": "temporal_dominion_expansionist",
+                    "path_history": "Temporal Dominion: Ministry Of Causality resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "temporal_dominion_regulated",
+                    "path_history": "Temporal Dominion: Ministry Of Causality resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "temporal_dominion",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "yesterday_blockade",
+            "title": "The Yesterday Blockade",
+            "body": "A rival future closes access to several strategically useful versions of yesterday.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "causality_ministry"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 11.0,
+                        "stability": -5.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_flag_add": "temporal_dominion_expansionist",
+                    "path_history": "Temporal Dominion: The Yesterday Blockade resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "temporal_dominion_regulated",
+                    "path_history": "Temporal Dominion: The Yesterday Blockade resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "temporal_dominion",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "chronology_throne",
+            "title": "The Chronology Throne",
+            "body": "Temporal authorities demand a permanent command structure above ordinary history.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "temporal_dominion",
+                "completed_any": [
+                    "yesterday_blockade"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 11.0,
+                        "stability": -5.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_flag_add": "temporal_dominion_expansionist",
+                    "path_history": "Temporal Dominion: The Chronology Throne resolved through escalation.",
+                    "secondary_effects": {
+                        "reality_engineering": {
+                            "harvest_paradox": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "temporal_dominion_regulated",
+                    "path_history": "Temporal Dominion: The Chronology Throne resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "temporal_dominion",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "last_future_annexed",
+            "title": "The Last Future Is Annexed",
+            "body": "The civilization claims jurisdiction over every future it can still imagine.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "temporal_dominion",
+                "completed_any": [
+                    "chronology_throne"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 11.0,
+                        "stability": -5.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 2
+                    },
+                    "path_flag_add": "temporal_dominion_expansionist",
+                    "path_history": "Temporal Dominion: The Last Future Is Annexed resolved through escalation.",
+                    "secondary_effects": {
+                        "reality_engineering": {
+                            "harvest_paradox": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "temporal_dominion": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "temporal_dominion_regulated",
+                    "path_history": "Temporal Dominion: The Last Future Is Annexed resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "temporal_dominion",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "municipal_gravity",
+            "title": "Municipal Gravity",
+            "body": "A city council discovers gravity can be rezoned if enough engineers sign the variance request.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 15.0,
+                        "stability": -6.0,
+                        "harvest_paradox": 11.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_flag_add": "reality_engineering_radical",
+                    "path_history": "Reality Engineering: Municipal Gravity resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 7.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "reality_engineering_regulated",
+                    "path_history": "Reality Engineering: Municipal Gravity resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "reality_engineering",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "geometry_permits",
+            "title": "Permits For Geometry",
+            "body": "Architects begin submitting applications for angles that do not exist in conventional space.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "municipal_gravity"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 15.0,
+                        "stability": -6.0,
+                        "harvest_paradox": 11.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_flag_add": "reality_engineering_radical",
+                    "path_history": "Reality Engineering: Permits For Geometry resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 7.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "reality_engineering_regulated",
+                    "path_history": "Reality Engineering: Permits For Geometry resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "reality_engineering",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "physics_refactor",
+            "title": "The Physics Refactor",
+            "body": "Researchers propose replacing several physical constants with configurable civic standards.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "geometry_permits"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 15.0,
+                        "stability": -6.0,
+                        "harvest_paradox": 11.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_flag_add": "reality_engineering_radical",
+                    "path_history": "Reality Engineering: The Physics Refactor resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 7.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "reality_engineering_regulated",
+                    "path_history": "Reality Engineering: The Physics Refactor resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "reality_engineering",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "impossible_district",
+            "title": "The Impossible District",
+            "body": "A district is completed whose streets intersect without sharing the same reality.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "reality_engineering",
+                "completed_any": [
+                    "physics_refactor"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 15.0,
+                        "stability": -6.0,
+                        "harvest_paradox": 11.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_flag_add": "reality_engineering_radical",
+                    "path_history": "Reality Engineering: The Impossible District resolved through escalation.",
+                    "secondary_effects": {
+                        "bureaucratic_singularity": {
+                            "stability": 5.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 7.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "reality_engineering_regulated",
+                    "path_history": "Reality Engineering: The Impossible District resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "reality_engineering",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "constitution_of_matter",
+            "title": "The Constitution Of Matter",
+            "body": "The civilization drafts a legal document defining which laws of physics remain mandatory.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "reality_engineering",
+                "completed_any": [
+                    "impossible_district"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 15.0,
+                        "stability": -6.0,
+                        "harvest_paradox": 11.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 2
+                    },
+                    "path_flag_add": "reality_engineering_radical",
+                    "path_history": "Reality Engineering: The Constitution Of Matter resolved through escalation.",
+                    "secondary_effects": {
+                        "bureaucratic_singularity": {
+                            "stability": 5.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 7.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "reality_engineering": 1,
+                        "bureaucratic_singularity": 1
+                    },
+                    "path_flag_add": "reality_engineering_regulated",
+                    "path_history": "Reality Engineering: The Constitution Of Matter resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "reality_engineering",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "genome_parliament",
+            "title": "The Genome Parliament",
+            "body": "Engineered species demand representation before future mutations are approved.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 16.0,
+                        "sanity": -4.0,
+                        "harvest_existence": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2
+                    },
+                    "path_flag_add": "biological_transcendence_adaptive",
+                    "path_history": "Biological Transcendence: The Genome Parliament resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "biological_transcendence_ecological",
+                    "path_history": "Biological Transcendence: The Genome Parliament resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "biological_transcendence",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "living_roads",
+            "title": "The Living Roads",
+            "body": "Transit networks begin growing new routes in response to commuter stress.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "genome_parliament"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 16.0,
+                        "sanity": -4.0,
+                        "harvest_existence": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2
+                    },
+                    "path_flag_add": "biological_transcendence_adaptive",
+                    "path_history": "Biological Transcendence: The Living Roads resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "biological_transcendence_ecological",
+                    "path_history": "Biological Transcendence: The Living Roads resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "biological_transcendence",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "mutation_referendum",
+            "title": "The Mutation Referendum",
+            "body": "The population votes on whether adaptation should remain voluntary.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "living_roads"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 16.0,
+                        "sanity": -4.0,
+                        "harvest_existence": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2
+                    },
+                    "path_flag_add": "biological_transcendence_adaptive",
+                    "path_history": "Biological Transcendence: The Mutation Referendum resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "biological_transcendence_ecological",
+                    "path_history": "Biological Transcendence: The Mutation Referendum resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "biological_transcendence",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "planetary_garden",
+            "title": "The Planetary Garden",
+            "body": "Cities, forests, factories, and citizens are proposed as organs of one designed biosphere.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "biological_transcendence",
+                "completed_any": [
+                    "mutation_referendum"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 16.0,
+                        "sanity": -4.0,
+                        "harvest_existence": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2
+                    },
+                    "path_flag_add": "biological_transcendence_adaptive",
+                    "path_history": "Biological Transcendence: The Planetary Garden resolved through escalation.",
+                    "secondary_effects": {
+                        "collective_mind": {
+                            "harvest_cognition": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "biological_transcendence_ecological",
+                    "path_history": "Biological Transcendence: The Planetary Garden resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "biological_transcendence",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "flesh_outgrows_planet",
+            "title": "The Flesh Outgrows The Planet",
+            "body": "The biosphere begins constructing living orbital structures without asking for launch clearance.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "biological_transcendence",
+                "completed_any": [
+                    "planetary_garden"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 16.0,
+                        "sanity": -4.0,
+                        "harvest_existence": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 2
+                    },
+                    "path_flag_add": "biological_transcendence_adaptive",
+                    "path_history": "Biological Transcendence: The Flesh Outgrows The Planet resolved through escalation.",
+                    "secondary_effects": {
+                        "collective_mind": {
+                            "harvest_cognition": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 3.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "biological_transcendence": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "biological_transcendence_ecological",
+                    "path_history": "Biological Transcendence: The Flesh Outgrows The Planet resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "biological_transcendence",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "interference_cells",
+            "title": "Interference Cells",
+            "body": "Small research cells begin masking settlements from patterns they believe belong to an outside observer.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "stability": -4.0,
+                        "harvest_cognition": 9.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 2
+                    },
+                    "path_flag_add": "cosmic_resistance_militant",
+                    "path_history": "Cosmic Resistance: Interference Cells resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": 4.0,
+                        "development": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1,
+                        "biological_transcendence": 1
+                    },
+                    "path_flag_add": "cosmic_resistance_covert",
+                    "path_history": "Cosmic Resistance: Interference Cells resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "cosmic_resistance",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "harvest_sabotage",
+            "title": "The First Harvest Sabotage",
+            "body": "Resistance engineers discover how to spoil causal concentrations before extraction.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "interference_cells"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "stability": -4.0,
+                        "harvest_cognition": 9.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 2
+                    },
+                    "path_flag_add": "cosmic_resistance_militant",
+                    "path_history": "Cosmic Resistance: The First Harvest Sabotage resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": 4.0,
+                        "development": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1,
+                        "biological_transcendence": 1
+                    },
+                    "path_flag_add": "cosmic_resistance_covert",
+                    "path_history": "Cosmic Resistance: The First Harvest Sabotage resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "cosmic_resistance",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "observer_blackout",
+            "title": "Observer Blackout",
+            "body": "Entire regions coordinate a synchronized attempt to become computationally uninteresting.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "harvest_sabotage"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "stability": -4.0,
+                        "harvest_cognition": 9.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 2
+                    },
+                    "path_flag_add": "cosmic_resistance_militant",
+                    "path_history": "Cosmic Resistance: Observer Blackout resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": 4.0,
+                        "development": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1,
+                        "biological_transcendence": 1
+                    },
+                    "path_flag_add": "cosmic_resistance_covert",
+                    "path_history": "Cosmic Resistance: Observer Blackout resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "cosmic_resistance",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "ontological_sovereignty",
+            "title": "Declaration Of Ontological Sovereignty",
+            "body": "The civilization declares that its existence is not a resource category.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "cosmic_resistance",
+                "completed_any": [
+                    "observer_blackout"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "stability": -4.0,
+                        "harvest_cognition": 9.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 2
+                    },
+                    "path_flag_add": "cosmic_resistance_militant",
+                    "path_history": "Cosmic Resistance: Declaration Of Ontological Sovereignty resolved through escalation.",
+                    "secondary_effects": {
+                        "biological_transcendence": {
+                            "development": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": 4.0,
+                        "development": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1,
+                        "biological_transcendence": 1
+                    },
+                    "path_flag_add": "cosmic_resistance_covert",
+                    "path_history": "Cosmic Resistance: Declaration Of Ontological Sovereignty resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "cosmic_resistance",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "war_against_observer",
+            "title": "War Against The Observer",
+            "body": "Military planners present the first strategy explicitly designed to injure the cultivation process itself.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "cosmic_resistance",
+                "completed_any": [
+                    "ontological_sovereignty"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 8.0,
+                        "stability": -4.0,
+                        "harvest_cognition": 9.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 2
+                    },
+                    "path_flag_add": "cosmic_resistance_militant",
+                    "path_history": "Cosmic Resistance: War Against The Observer resolved through escalation.",
+                    "secondary_effects": {
+                        "biological_transcendence": {
+                            "development": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "awareness": -4.0,
+                        "sanity": 4.0,
+                        "development": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "cosmic_resistance": 1,
+                        "biological_transcendence": 1
+                    },
+                    "path_flag_add": "cosmic_resistance_covert",
+                    "path_history": "Cosmic Resistance: War Against The Observer resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "cosmic_resistance",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "forms_begin_dreaming",
+            "title": "The Forms Begin Dreaming",
+            "body": "Government forms begin completing themselves and requesting promotions.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_flag_add": "bureaucratic_singularity_absolute",
+                    "path_history": "Bureaucratic Singularity: The Forms Begin Dreaming resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "sanity": 3.0,
+                        "development": 8.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "bureaucratic_singularity_adaptive",
+                    "path_history": "Bureaucratic Singularity: The Forms Begin Dreaming resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "bureaucratic_singularity",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "ministry_without_ministers",
+            "title": "The Ministry Without Ministers",
+            "body": "A ministry continues operating perfectly after every employee resigns.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "forms_begin_dreaming"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_flag_add": "bureaucratic_singularity_absolute",
+                    "path_history": "Bureaucratic Singularity: The Ministry Without Ministers resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "sanity": 3.0,
+                        "development": 8.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "bureaucratic_singularity_adaptive",
+                    "path_history": "Bureaucratic Singularity: The Ministry Without Ministers resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "bureaucratic_singularity",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "permit_for_gravity",
+            "title": "Permit Required For Gravity",
+            "body": "Falling objects are temporarily suspended until their owners produce valid paperwork.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "ministry_without_ministers"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_flag_add": "bureaucratic_singularity_absolute",
+                    "path_history": "Bureaucratic Singularity: Permit Required For Gravity resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "sanity": 3.0,
+                        "development": 8.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "bureaucratic_singularity_adaptive",
+                    "path_history": "Bureaucratic Singularity: Permit Required For Gravity resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "bureaucratic_singularity",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "office_ontological_compliance",
+            "title": "Office Of Ontological Compliance",
+            "body": "A new authority begins auditing whether citizens, buildings, and physical laws are properly licensed to exist.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "bureaucratic_singularity",
+                "completed_any": [
+                    "permit_for_gravity"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_flag_add": "bureaucratic_singularity_absolute",
+                    "path_history": "Bureaucratic Singularity: Office Of Ontological Compliance resolved through escalation.",
+                    "secondary_effects": {
+                        "reality_engineering": {
+                            "harvest_causal_mass": 9.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "sanity": 3.0,
+                        "development": 8.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "bureaucratic_singularity_adaptive",
+                    "path_history": "Bureaucratic Singularity: Office Of Ontological Compliance resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "bureaucratic_singularity",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "universe_receives_citation",
+            "title": "The Universe Receives A Citation",
+            "body": "The administration concludes that reality itself is in breach of multiple local regulations.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "bureaucratic_singularity",
+                "completed_any": [
+                    "office_ontological_compliance"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "stability": 5.0,
+                        "development": 9.0,
+                        "harvest_causal_mass": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 2
+                    },
+                    "path_flag_add": "bureaucratic_singularity_absolute",
+                    "path_history": "Bureaucratic Singularity: The Universe Receives A Citation resolved through escalation.",
+                    "secondary_effects": {
+                        "reality_engineering": {
+                            "harvest_causal_mass": 9.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "sanity": 3.0,
+                        "development": 8.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "bureaucratic_singularity": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "bureaucratic_singularity_adaptive",
+                    "path_history": "Bureaucratic Singularity: The Universe Receives A Citation resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "bureaucratic_singularity",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "continuity_clinics",
+            "title": "Continuity Clinics",
+            "body": "Clinics begin restoring citizens from memories, tissue records, and legally admissible approximations.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 2
+                    },
+                    "path_flag_add": "post_mortal_continuity",
+                    "path_history": "Post-Mortal Civilization: Continuity Clinics resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "sanity": 4.0,
+                        "harvest_existence": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "machine_faith": 1
+                    },
+                    "path_flag_add": "post_mortal_plurality",
+                    "path_history": "Post-Mortal Civilization: Continuity Clinics resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "post_mortal_civilization",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "dead_demand_votes",
+            "title": "The Dead Demand Votes",
+            "body": "Restored citizens insist that temporary death should not cancel political representation.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "continuity_clinics"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 2
+                    },
+                    "path_flag_add": "post_mortal_continuity",
+                    "path_history": "Post-Mortal Civilization: The Dead Demand Votes resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "sanity": 4.0,
+                        "harvest_existence": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "machine_faith": 1
+                    },
+                    "path_flag_add": "post_mortal_plurality",
+                    "path_history": "Post-Mortal Civilization: The Dead Demand Votes resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "post_mortal_civilization",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "backup_personhood_crisis",
+            "title": "The Backup Personhood Crisis",
+            "body": "Multiple valid restorations of the same citizen appear and each claims to be the original.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "dead_demand_votes"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 2
+                    },
+                    "path_flag_add": "post_mortal_continuity",
+                    "path_history": "Post-Mortal Civilization: The Backup Personhood Crisis resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "sanity": 4.0,
+                        "harvest_existence": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "machine_faith": 1
+                    },
+                    "path_flag_add": "post_mortal_plurality",
+                    "path_history": "Post-Mortal Civilization: The Backup Personhood Crisis resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "post_mortal_civilization",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "resurrection_infrastructure",
+            "title": "Resurrection Infrastructure",
+            "body": "The civilization proposes treating continuity restoration as ordinary public infrastructure.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "post_mortal_civilization",
+                "completed_any": [
+                    "backup_personhood_crisis"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 2
+                    },
+                    "path_flag_add": "post_mortal_continuity",
+                    "path_history": "Post-Mortal Civilization: Resurrection Infrastructure resolved through escalation.",
+                    "secondary_effects": {
+                        "machine_faith": {
+                            "harvest_cognition": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "sanity": 4.0,
+                        "harvest_existence": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "machine_faith": 1
+                    },
+                    "path_flag_add": "post_mortal_plurality",
+                    "path_history": "Post-Mortal Civilization: Resurrection Infrastructure resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "post_mortal_civilization",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "death_decommissioned",
+            "title": "Death Is Decommissioned",
+            "body": "Mortality is formally reclassified as a legacy failure mode.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "post_mortal_civilization",
+                "completed_any": [
+                    "resurrection_infrastructure"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "development": 12.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 2
+                    },
+                    "path_flag_add": "post_mortal_continuity",
+                    "path_history": "Post-Mortal Civilization: Death Is Decommissioned resolved through escalation.",
+                    "secondary_effects": {
+                        "machine_faith": {
+                            "harvest_cognition": 8.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": 4.0,
+                        "sanity": 4.0,
+                        "harvest_existence": 7.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "post_mortal_civilization": 1,
+                        "machine_faith": 1
+                    },
+                    "path_flag_add": "post_mortal_plurality",
+                    "path_history": "Post-Mortal Civilization: Death Is Decommissioned resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "post_mortal_civilization",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "signal_from_empty",
+            "title": "A Signal From Empty Space",
+            "body": "Receivers detect a message originating from a region containing neither matter nor permitted causality.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "attention": 9.0,
+                        "stability": -7.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_flag_add": "void_communion_open",
+                    "path_history": "Void Communion: A Signal From Empty Space resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "attention": 4.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "void_communion_bargained",
+                    "path_history": "Void Communion: A Signal From Empty Space resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "void_communion",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "first_void_embassy",
+            "title": "The First Void Embassy",
+            "body": "An absence shaped like a diplomatic mission appears outside the capital.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "signal_from_empty"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "attention": 9.0,
+                        "stability": -7.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_flag_add": "void_communion_open",
+                    "path_history": "Void Communion: The First Void Embassy resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "attention": 4.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "void_communion_bargained",
+                    "path_history": "Void Communion: The First Void Embassy resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "void_communion",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "sacrifice_accounting",
+            "title": "Sacrifice Accounting",
+            "body": "The visitors provide a precise ledger describing what they consider an acceptable exchange.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "first_void_embassy"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "attention": 9.0,
+                        "stability": -7.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_flag_add": "void_communion_open",
+                    "path_history": "Void Communion: Sacrifice Accounting resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "attention": 4.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "void_communion_bargained",
+                    "path_history": "Void Communion: Sacrifice Accounting resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "void_communion",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "pact_beyond_stars",
+            "title": "The Pact Beyond The Stars",
+            "body": "Civilization leaders negotiate permanent terms with entities that do not inhabit the universe.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "void_communion",
+                "completed_any": [
+                    "sacrifice_accounting"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "attention": 9.0,
+                        "stability": -7.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_flag_add": "void_communion_open",
+                    "path_history": "Void Communion: The Pact Beyond The Stars resolved through escalation.",
+                    "secondary_effects": {
+                        "temporal_dominion": {
+                            "harvest_paradox": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "attention": 4.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "void_communion_bargained",
+                    "path_history": "Void Communion: The Pact Beyond The Stars resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "void_communion",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "aperture_remains_open",
+            "title": "The Aperture Remains Open",
+            "body": "The civilization must decide whether permanent communion is ascension, occupation, or both.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "void_communion",
+                "completed_any": [
+                    "pact_beyond_stars"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "attention": 9.0,
+                        "stability": -7.0,
+                        "harvest_paradox": 12.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 2
+                    },
+                    "path_flag_add": "void_communion_open",
+                    "path_history": "Void Communion: The Aperture Remains Open resolved through escalation.",
+                    "secondary_effects": {
+                        "temporal_dominion": {
+                            "harvest_paradox": 10.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "attention": 4.0,
+                        "sanity": -3.0,
+                        "harvest_existence": 8.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "void_communion": 1,
+                        "reality_engineering": 1
+                    },
+                    "path_flag_add": "void_communion_bargained",
+                    "path_history": "Void Communion: The Aperture Remains Open resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "void_communion",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "civilization_runs_model",
+            "title": "The Civilization Runs A Model",
+            "body": "Researchers create a simulated civilization accurate enough to begin asking why it is being observed.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 1
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 7.0,
+                        "development": 13.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 2
+                    },
+                    "path_flag_add": "recursive_simulation_expansion",
+                    "path_history": "Recursive Simulation: The Civilization Runs A Model resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": -3.0,
+                        "harvest_paradox": 9.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "recursive_simulation_reflexive",
+                    "path_history": "Recursive Simulation: The Civilization Runs A Model resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "recursive_simulation",
+            "path_phase": "impulse",
+            "kind": "path"
+        },
+        {
+            "id": "simulated_citizens_protest",
+            "title": "The Simulated Citizens Protest",
+            "body": "The inhabitants of the model organize against experimental resets.",
+            "min_era": 0,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 2,
+                "completed_any": [
+                    "civilization_runs_model"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 7.0,
+                        "development": 13.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 2
+                    },
+                    "path_flag_add": "recursive_simulation_expansion",
+                    "path_history": "Recursive Simulation: The Simulated Citizens Protest resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": -3.0,
+                        "harvest_paradox": 9.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "recursive_simulation_reflexive",
+                    "path_history": "Recursive Simulation: The Simulated Citizens Protest resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "recursive_simulation",
+            "path_phase": "reinforcement",
+            "kind": "path"
+        },
+        {
+            "id": "observer_inside_observer",
+            "title": "The Observer Inside The Observer",
+            "body": "Simulated researchers report evidence that their creators are themselves being cultivated.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "min_path_affinity": 3,
+                "completed_any": [
+                    "simulated_citizens_protest"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 7.0,
+                        "development": 13.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 2
+                    },
+                    "path_flag_add": "recursive_simulation_expansion",
+                    "path_history": "Recursive Simulation: The Observer Inside The Observer resolved through escalation.",
+                    "secondary_effects": {}
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": -3.0,
+                        "harvest_paradox": 9.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "recursive_simulation_reflexive",
+                    "path_history": "Recursive Simulation: The Observer Inside The Observer resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "recursive_simulation",
+            "path_phase": "conflict",
+            "kind": "path"
+        },
+        {
+            "id": "nested_world_industry",
+            "title": "Nested World Industry",
+            "body": "The civilization begins operating thousands of simulated societies as research and production environments.",
+            "min_era": 1,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "recursive_simulation",
+                "completed_any": [
+                    "observer_inside_observer"
+                ]
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 7.0,
+                        "development": 13.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 2
+                    },
+                    "path_flag_add": "recursive_simulation_expansion",
+                    "path_history": "Recursive Simulation: Nested World Industry resolved through escalation.",
+                    "secondary_effects": {
+                        "collective_mind": {
+                            "harvest_cognition": 9.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": -3.0,
+                        "harvest_paradox": 9.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "recursive_simulation_reflexive",
+                    "path_history": "Recursive Simulation: Nested World Industry resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "recursive_simulation",
+            "path_phase": "consolidation",
+            "kind": "dominant_path"
+        },
+        {
+            "id": "subworld_asks_for_harvest",
+            "title": "The Sub-World Asks For A Harvest",
+            "body": "A simulated civilization independently invents the idea of harvesting its own creators.",
+            "min_era": 2,
+            "max_era": 2,
+            "weight": 8.0,
+            "requirements": {
+                "requires_dominant_path": "recursive_simulation",
+                "completed_any": [
+                    "nested_world_industry"
+                ],
+                "min_development": 460.0
+            },
+            "choices": [
+                {
+                    "label": "Escalate",
+                    "prediction": "The path deepens and the civilization accepts the consequences.",
+                    "effects": {
+                        "awareness": 7.0,
+                        "development": 13.0,
+                        "harvest_cognition": 10.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 2
+                    },
+                    "path_flag_add": "recursive_simulation_expansion",
+                    "path_history": "Recursive Simulation: The Sub-World Asks For A Harvest resolved through escalation.",
+                    "secondary_effects": {
+                        "collective_mind": {
+                            "harvest_cognition": 9.0
+                        }
+                    }
+                },
+                {
+                    "label": "Constrain it",
+                    "prediction": "The civilization keeps the development but imposes limits.",
+                    "effects": {
+                        "stability": -3.0,
+                        "harvest_paradox": 9.0,
+                        "harvest_cognition": 6.0
+                    },
+                    "follow_up": "",
+                    "path_affinity": {
+                        "recursive_simulation": 1,
+                        "collective_mind": 1
+                    },
+                    "path_flag_add": "recursive_simulation_reflexive",
+                    "path_history": "Recursive Simulation: The Sub-World Asks For A Harvest resolved through restraint.",
+                    "secondary_effects": {}
+                }
+            ],
+            "max_count": 1,
+            "path_id": "recursive_simulation",
+            "path_phase": "endgame",
+            "kind": "dominant_path"
+        }
+    ],
+    "path_definitions": {
+        "machine_faith": {
+            "name": "Machine Faith",
+            "endgame": "endgame_machine_faith",
+            "dominance_effects": {
+                "awareness": 5.0,
+                "harvest_mult_cognition": 1.08,
+                "institutions_add": [
+                    "Cathedral Network"
+                ],
+                "flags_add": [
+                    "path_machine_faith"
+                ]
+            },
+            "simulation": {
+                "awareness": 1.2
+            }
+        },
+        "collective_mind": {
+            "name": "Collective Mind",
+            "endgame": "endgame_collective_mind",
+            "dominance_effects": {
+                "development_mult": 0.05,
+                "harvest_mult_cognition": 1.1,
+                "institutions_add": [
+                    "Consensus Lattice"
+                ],
+                "flags_add": [
+                    "path_collective_mind"
+                ]
+            },
+            "simulation": {
+                "development": 1.05,
+                "sanity": 1.1
+            }
+        },
+        "temporal_dominion": {
+            "name": "Temporal Dominion",
+            "endgame": "endgame_temporal_dominion",
+            "dominance_effects": {
+                "harvest_mult_paradox": 1.12,
+                "institutions_add": [
+                    "Ministry of Causality"
+                ],
+                "flags_add": [
+                    "path_temporal_dominion"
+                ]
+            },
+            "simulation": {
+                "stability": 1.1
+            }
+        },
+        "reality_engineering": {
+            "name": "Reality Engineering",
+            "endgame": "endgame_reality_engineering",
+            "dominance_effects": {
+                "development": 15.0,
+                "harvest_mult_paradox": 1.08,
+                "institutions_add": [
+                    "Reality Works Authority"
+                ],
+                "flags_add": [
+                    "path_reality_engineering"
+                ]
+            },
+            "simulation": {
+                "stability": 1.12
+            }
+        },
+        "biological_transcendence": {
+            "name": "Biological Transcendence",
+            "endgame": "endgame_biological_transcendence",
+            "dominance_effects": {
+                "development_mult": 0.08,
+                "harvest_mult_existence": 1.08,
+                "institutions_add": [
+                    "Adaptive Genome Commons"
+                ],
+                "flags_add": [
+                    "path_biological_transcendence"
+                ]
+            },
+            "simulation": {
+                "development": 1.12
+            }
+        },
+        "cosmic_resistance": {
+            "name": "Cosmic Resistance",
+            "endgame": "endgame_cosmic_resistance",
+            "dominance_effects": {
+                "stability_max": 5.0,
+                "harvest_mult_causal_mass": 0.92,
+                "institutions_add": [
+                    "Interference Directorate"
+                ],
+                "flags_add": [
+                    "path_cosmic_resistance"
+                ]
+            },
+            "simulation": {
+                "awareness": 0.82,
+                "stability": 1.05
+            }
+        },
+        "bureaucratic_singularity": {
+            "name": "Bureaucratic Singularity",
+            "endgame": "endgame_bureaucratic_singularity",
+            "dominance_effects": {
+                "stability_max": 5.0,
+                "event_delay": 2.0,
+                "harvest_mult_causal_mass": 1.06,
+                "institutions_add": [
+                    "Office of Ontological Compliance"
+                ],
+                "flags_add": [
+                    "path_bureaucratic_singularity"
+                ]
+            },
+            "simulation": {
+                "stability": 0.9
+            }
+        },
+        "post_mortal_civilization": {
+            "name": "Post-Mortal Civilization",
+            "endgame": "endgame_post_mortal",
+            "dominance_effects": {
+                "sanity": 5.0,
+                "harvest_mult_existence": 1.12,
+                "institutions_add": [
+                    "Continuity Authority"
+                ],
+                "flags_add": [
+                    "path_post_mortal_civilization"
+                ]
+            },
+            "simulation": {
+                "sanity": 0.8
+            }
+        },
+        "void_communion": {
+            "name": "Void Communion",
+            "endgame": "endgame_void_communion",
+            "dominance_effects": {
+                "attention": 10.0,
+                "harvest_mult_paradox": 1.15,
+                "harvest_mult_existence": 1.1,
+                "institutions_add": [
+                    "Office of External Communion"
+                ],
+                "flags_add": [
+                    "path_void_communion"
+                ]
+            },
+            "simulation": {
+                "attention": 1.4,
+                "development": 1.05
+            }
+        },
+        "recursive_simulation": {
+            "name": "Recursive Simulation",
+            "endgame": "endgame_recursive_simulation",
+            "dominance_effects": {
+                "awareness": 8.0,
+                "harvest_mult_cognition": 1.1,
+                "harvest_mult_paradox": 1.1,
+                "institutions_add": [
+                    "Nested Worlds Directorate"
+                ],
+                "flags_add": [
+                    "path_recursive_simulation"
+                ]
+            },
+            "simulation": {
+                "awareness": 1.15,
+                "development": 1.05
+            }
+        }
+    },
+    "lore": {
+        "species_prefixes": [
+            "Astra",
+            "Vel",
+            "Khe",
+            "Mora",
+            "Syla",
+            "Vor",
+            "Lumi",
+            "Drae",
+            "Thal",
+            "Nexa",
+            "Orun",
+            "Pyra"
+        ],
+        "species_suffixes": [
+            "ri",
+            "nids",
+            "ari",
+            "eth",
+            "ul",
+            "ora",
+            "ites",
+            "ae",
+            "ori",
+            "yx",
+            "ene",
+            "um"
+        ],
+        "faction_prefixes": [
+            "The",
+            "Grand",
+            "United",
+            "Sacred",
+            "Radiant",
+            "Adaptive",
+            "Orbital",
+            "Quiet",
+            "Infinite",
+            "Harmonic"
+        ],
+        "faction_nouns": [
+            "Collective",
+            "Synod",
+            "Concord",
+            "Dynasty",
+            "Accord",
+            "Assembly",
+            "Mandate",
+            "League",
+            "Choir",
+            "Compact"
+        ],
+        "faction_endings": [
+            "of Embers",
+            "of the Lens",
+            "of the Spiral",
+            "of Growth",
+            "of Resonance",
+            "of the Last Dawn",
+            "of Hollow Stars",
+            "of Luminous Dust",
+            "of the Archive",
+            "of the Deep Signal"
+        ],
+        "body_types": [
+            "biped",
+            "quadruped",
+            "avian",
+            "fungal",
+            "insectoid",
+            "cephalopod",
+            "synthetic"
+        ],
+        "cultures": [
+            "nomadic",
+            "scholastic",
+            "communal",
+            "martial",
+            "ritualistic",
+            "mercantile",
+            "mystic",
+            "ecological"
+        ],
+        "doctrines": [
+            "Expansion through adaptation",
+            "Memory through ritual",
+            "Stability through control",
+            "Harmony through consensus",
+            "Salvation through ascent",
+            "Prosperity through exchange",
+            "Dominance through precision",
+            "Survival through vigilance"
+        ],
+        "path_doctrines": {
+            "machine_faith": "Salvation through sacred computation",
+            "collective_mind": "Unity through shared consciousness",
+            "temporal_dominion": "Sovereignty over causality",
+            "reality_engineering": "Order through editable physics",
+            "biological_transcendence": "Ascension through adaptation",
+            "cosmic_resistance": "Existence without an observer",
+            "bureaucratic_singularity": "Reality through administration",
+            "post_mortal_civilization": "Continuity beyond death",
+            "void_communion": "Meaning through the outer dark",
+            "recursive_simulation": "Understanding through recursion"
+        },
+        "path_focus": {
+            "machine_faith": "sacred machine infrastructure",
+            "collective_mind": "planetary cognition",
+            "temporal_dominion": "causal control",
+            "reality_engineering": "physical-law engineering",
+            "biological_transcendence": "adaptive biosphere design",
+            "cosmic_resistance": "anti-observer autonomy",
+            "bureaucratic_singularity": "ontological administration",
+            "post_mortal_civilization": "continuity infrastructure",
+            "void_communion": "external entity diplomacy",
+            "recursive_simulation": "nested-world cultivation"
+        }
+    }
+};
+//# sourceMappingURL=content.generated.js.map
