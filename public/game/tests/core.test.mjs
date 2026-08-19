@@ -263,9 +263,9 @@ test('new browser save starts with layered progression', () => {
   assert.equal(Progression.canUseUpgrade(state, 'machine', 'prediction_core'), false);
 });
 
-test('new saves initialize the tactical v3 civilization contract', () => {
+test('new saves initialize the tactical v4 civilization contract', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 3);
+  assert.equal(state.saveVersion, 4);
   assert.equal(state.machine.cultivationCreditsThisUniverse, 0);
   assert.deepEqual(state.machine.runBuild.directiveOfferIds, []);
   assert.equal(state.machine.runBuild.nextCivilizationSeed, 0);
@@ -281,7 +281,7 @@ test('new saves initialize the tactical v3 civilization contract', () => {
   assert.equal(civ.directiveId, '');
 });
 
-test('v3 intentionally ignores the legacy v1 save key', () => {
+test('v4 intentionally ignores the legacy v1 save key', () => {
   const legacy = createNewState();
   legacy.saveVersion = 1;
   const storage = new Map([
@@ -292,7 +292,7 @@ test('v3 intentionally ignores the legacy v1 save key', () => {
     setItem: (key, value) => storage.set(key, value),
     removeItem: key => storage.delete(key),
   }});
-  assert.equal(engine.state.saveVersion, 3);
+  assert.equal(engine.state.saveVersion, 4);
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
@@ -1436,4 +1436,31 @@ test('a no-upgrade run with full reserve spending stays under seven minutes', ()
   for (const key of ['causal_mass', 'cognition', 'existence']) engine.state.machine.currencies[key] = 200_000;
   const result = runCivilization(engine, { seed: 4324, policy: ['safe', 'vent', 'reserve'] });
   assert.ok(result.elapsed <= 420, `survived ${result.elapsed}s`);
+});
+
+test('new state carries convergence and milestone statistics fields', () => {
+  const state = createNewState();
+  assert.equal(state.saveVersion, 4);
+  assert.equal(state.meta.convergences, 0);
+  assert.deepEqual(state.meta.victories, []);
+  const p = state.meta.progression;
+  assert.deepEqual(p.seenDominantPaths, []);
+  assert.equal(p.bestDepth, 0);
+  assert.equal(p.bestGrade, '');
+  assert.equal(p.maxDevelopment, 0);
+  assert.equal(p.maxEra, 0);
+  assert.equal(p.objectivesCompleted, 0);
+  assert.equal(p.longestRunSeconds, 0);
+  assert.equal(p.maxEndgamesInRun, 0);
+  assert.equal(GameEngine.createCivilizationForTest(7).terminal, false);
+});
+
+test('a save written under the previous version is discarded', () => {
+  const stored = JSON.stringify({ ...createNewState(), saveVersion: 3 });
+  const engine = new GameEngine({
+    autosave: false,
+    storage: { getItem: () => stored, setItem: () => {}, removeItem: () => {} },
+  });
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.state.saveVersion, 4);
 });

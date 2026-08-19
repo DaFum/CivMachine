@@ -1,6 +1,6 @@
 export type ResourceKey = 'causal_mass' | 'cognition' | 'paradox' | 'existence';
 export type Layer = 'machine' | 'universe' | 'axiom';
-export type Phase = 'machine' | 'civilization';
+export type Phase = 'machine' | 'civilization' | 'victory';
 export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe' | 'vent';
 export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant' | 'singular';
 
@@ -97,6 +97,7 @@ export interface Civilization {
   tactical: TacticalState;
   directiveId: string;
   directiveObjective: DirectiveObjectiveState;
+  terminal: boolean;
   runInterventionUses: Record<string, number>;
 }
 
@@ -111,6 +112,25 @@ export interface ProgressionState {
   announcedUnlocks: string[];
   controlledHarvestsTotal: number;
   chaoticHarvestsTotal: number;
+  seenDominantPaths: string[];
+  bestDepth: number;
+  bestGrade: HarvestGrade | '';
+  maxDevelopment: number;
+  maxEra: number;
+  objectivesCompleted: number;
+  longestRunSeconds: number;
+  maxEndgamesInRun: number;
+}
+
+export interface VictoryRecord {
+  convergence: number;
+  seed: number;
+  years: number;
+  era: number;
+  depth: number;
+  development: number;
+  dominantPath: string;
+  endgameStates: string[];
 }
 
 export interface GameState {
@@ -143,6 +163,8 @@ export interface GameState {
     axioms: number;
     axiomLevels: Record<string, number>;
     multiversesConsumed: number;
+    convergences: number;
+    victories: VictoryRecord[];
     progression: ProgressionState;
   };
   civilization: Civilization | null;
