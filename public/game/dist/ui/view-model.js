@@ -1,4 +1,5 @@
 import { CivilizationPaths } from '../game/paths.js';
+import { milestoneProgress } from '../game/milestones.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, secondsToCascade } from '../game/pressure.js';
@@ -70,6 +71,11 @@ export function buildViewModel(engine) {
     const chaoticHarvest = civ ? engine.previewHarvestDetails(true) : null;
     const activeObjective = civ ? objectiveForDirective(civ.directiveId) : null;
     const directiveRequired = engine.systemUnlocked('directives') && state.machine.runBuild.directiveOfferIds.length > 0;
+    const convergenceIsUnlocked = engine.convergenceUnlocked();
+    const convergenceEntries = engine.convergenceRequirements();
+    const convergenceTargetDepth = engine.convergenceTargetDepth();
+    const milestoneEntries = milestoneProgress(state, convergenceIsUnlocked);
+    const openRequirement = convergenceEntries.find(entry => !entry.met);
     return {
         phase: state.phase,
         machineInsight: engine.machineInsight(),
@@ -82,6 +88,20 @@ export function buildViewModel(engine) {
         universesThisMultiverse: state.meta.universesThisMultiverse,
         multiverseRequirement: 4,
         previews: engine.nextPreviews(),
+        milestones: {
+            entries: milestoneEntries,
+            completed: milestoneEntries.filter(entry => entry.completed).length,
+            total: milestoneEntries.length,
+        },
+        convergence: {
+            visible: state.meta.multiversesConsumed >= 1,
+            unlocked: convergenceIsUnlocked,
+            requirements: convergenceEntries,
+            targetDepth: convergenceTargetDepth,
+            convergences: state.meta.convergences,
+            reason: openRequirement ? `${openRequirement.label}: ${openRequirement.current}/${openRequirement.target}` : 'All requirements met.',
+        },
+        victory: state.phase === 'victory' ? { record: engine.lastVictory(), convergences: state.meta.convergences } : null,
         runBuild: { ...state.machine.runBuild },
         directives: engine.availableDirectives().map((directive) => ({ ...directive, objective: objectiveForDirective(directive.id) })),
         matrices: engine.availableMatrices(),
@@ -123,9 +143,9 @@ export function buildViewModel(engine) {
         tactical: civ ? {
             entropy: civ.tactical.entropy,
             entropyBand: entropyBand(civ.tactical.entropy),
-            entropyRate: entropyRate(civ.years, bonuses.containmentRating),
+            entropyRate: entropyRate(civ.years, bonuses.containmentRating, civ.terminal),
             pressureMultiplier: pressureMultiplier(civ.years),
-            secondsToCascade: secondsToCascade(civ.years, civ.tactical.entropy, bonuses.containmentRating),
+            secondsToCascade: secondsToCascade(civ.years, civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
             controlCapacity: civ.tactical.controlCapacity,
             controlMax: 3,
             containmentRating: bonuses.containmentRating,
@@ -140,6 +160,7 @@ export function buildViewModel(engine) {
             depth: cultivationDepth(civ),
             depthBand: depthBand(cultivationDepth(civ)),
             nextBand: nextDepthBand(cultivationDepth(civ)),
+            convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
         } : null,
         machineReserve: civ ? engine.runInterventions() : [],
         directiveObjective: activeObjective ? {
@@ -151,6 +172,7 @@ export function buildViewModel(engine) {
         lastHarvest: { ...state.machine.lastHarvest },
         civilization: civ ? {
             seed: civ.seed,
+            terminal: civ.terminal,
             years: civ.years,
             era: civ.era,
             development: civ.development,
@@ -180,6 +202,8 @@ export function civilizationRenderKey(vm) {
     return [
         vm.phase,
         civilization.seed,
+        civilization.terminal ? 'terminal' : 'normal',
+        vm.harvest?.convergenceReady ? 'convergence-ready' : 'convergence-open',
         civilization.era,
         vm.event?.id ?? 'monitoring',
         civilization.path.dominantId ?? '',

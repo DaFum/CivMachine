@@ -881,3 +881,57 @@ test('every precached game asset actually exists on disk', async () => {
     await assert.doesNotReject(readFile(onDisk), `sw.js precaches ${path}, which is not committed`);
   }
 });
+
+test('the view model reports milestone progress and the convergence gate', () => {
+  const engine = freshEngine();
+  const vm = buildViewModel(engine);
+  assert.equal(vm.milestones.total, 28);
+  assert.equal(vm.milestones.completed, 0);
+  assert.equal(vm.milestones.entries.length, 28);
+  assert.equal(vm.convergence.visible, false);
+  assert.equal(vm.convergence.unlocked, false);
+  assert.equal(vm.convergence.requirements.length, 4);
+  assert.equal(vm.convergence.targetDepth, 14);
+  assert.ok(vm.convergence.reason.length > 0);
+  assert.equal(vm.victory, null);
+});
+
+test('the convergence card becomes visible after the first multiverse', () => {
+  const engine = freshEngine();
+  engine.state.meta.multiversesConsumed = 1;
+  assert.equal(buildViewModel(engine).convergence.visible, true);
+});
+
+test('the render key ignores live depth but tracks convergence readiness', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(77);
+  civ.terminal = true;
+  civ.development = 400;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  const before = civilizationRenderKey(buildViewModel(engine));
+  civ.development = 460;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before);
+  civ.development = 2000;
+  civ.pathState.endgameStates = ['a', 'b', 'c', 'd'];
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before);
+});
+
+test('a terminal run gets its own cached world layer', () => {
+  const plain = GameEngine.createCivilizationForTest(78);
+  const terminal = { ...GameEngine.createCivilizationForTest(78), terminal: true };
+  assert.notEqual(structuralWorldKey(terminal, 800), structuralWorldKey(plain, 800));
+});
+
+test('the tactical rail shows the terminal run its real entropy pressure', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(79);
+  civ.years = 14000;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  const normal = buildViewModel(engine).tactical;
+  civ.terminal = true;
+  const terminal = buildViewModel(engine).tactical;
+  assert.ok(Math.abs(terminal.entropyRate - normal.entropyRate * 1.6) < 1e-9);
+  assert.ok(terminal.secondsToCascade < normal.secondsToCascade);
+});
