@@ -4,6 +4,8 @@ import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
+import { PATH_IDS } from '../dist/game/paths.js';
+import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 
 test('world expands from sparse camps to an arcology world', () => {
   const civ = GameEngine.createCivilizationForTest(11);
@@ -182,4 +184,21 @@ test('tactical decisions and crises select distinct world impulse kinds', () => 
   assert.equal(decisionImpulseKind('synthetic_saint'), 'decision');
   assert.notEqual(entropyThresholdColor('entropy_crisis_25'), entropyThresholdColor('entropy_crisis_50'));
   assert.notEqual(entropyThresholdColor('entropy_crisis_50'), entropyThresholdColor('entropy_crisis_75'));
+});
+
+test('render primitives are deterministic and cover every path', () => {
+  assert.equal(hash01(42), hash01(42));
+  assert.ok(hash01(42) >= 0 && hash01(42) < 1);
+  assert.notEqual(hash01(42), hash01(43));
+  assert.equal(mixColor(0x000000, 0xffffff, 0), 0x000000);
+  assert.equal(mixColor(0x000000, 0xffffff, 1), 0xffffff);
+  assert.equal(mixColor(0x000000, 0xffffff, .5), 0x808080);
+  assert.equal(mixColor(0x000000, 0xffffff, 5), 0xffffff, 'amount is clamped');
+  assert.equal(pathAccentFor('machine_faith'), 0xf0ca6f);
+  assert.equal(pathAccentFor(''), DEFAULT_ACCENT);
+  assert.equal(pathAccentFor('not_a_path'), DEFAULT_ACCENT);
+  for (const id of PATH_IDS) {
+    assert.ok(id in PATH_ACCENTS, `${id} needs an accent color`);
+    assert.ok(id in FACTION_SIGILS, `${id} needs a sigil`);
+  }
 });
