@@ -14,7 +14,7 @@ import {
   recordRecentIntervention,
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
-import { advancePressure, entropyRate } from '../dist/game/pressure.js';
+import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, secondsToCascade } from '../dist/game/pressure.js';
 import { calculateCultivationCredits, evaluateHarvestQuality } from '../dist/game/harvest-quality.js';
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
@@ -338,10 +338,47 @@ test('v3 intentionally ignores the legacy v1 save key', () => {
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
-test('containment deficit accelerates entropy while rating suppresses it', () => {
-  assert.equal(entropyRate(0, 0, 1), 0.32);
-  assert.ok(entropyRate(1, 0, 1) > 0.8);
-  assert.ok(entropyRate(2, 4, 1) < 0.31);
+test('the entropy rate rises with years and falls with containment levels', () => {
+  assert.equal(Number(entropyRate(0, 0).toFixed(4)), 0.48);
+  assert.equal(Number(entropyRate(6500, 0).toFixed(4)), 0.96);
+  assert.equal(Number(entropyRate(0, 4).toFixed(4)), 0.1846);
+  assert.equal(Number(entropyRate(6500, 28).toFixed(4)), 0.0787);
+  assert.equal(Number(pressureMultiplier(6500).toFixed(4)), 2);
+  assert.ok(entropyRate(20000, 28) < entropyRate(20000, 14));
+  for (let containment = 0; containment < 28; containment++) {
+    assert.ok(entropyRate(6500, containment + 1) < entropyRate(6500, containment), `level ${containment + 1} must matter`);
+  }
+});
+
+test('secondsToCascade matches numeric integration of the rate', () => {
+  for (const containment of [0, 1, 4, 8, 14, 20, 28]) {
+    const closed = secondsToCascade(0, 0, containment);
+    let entropy = 0;
+    let years = 0;
+    let elapsed = 0;
+    const step = 0.05;
+    while (entropy < 100 && elapsed < 4000) {
+      entropy += entropyRate(years, containment) * step;
+      years += 25 * step;
+      elapsed += step;
+    }
+    assert.ok(Math.abs(closed - elapsed) / elapsed < 0.01, `containment ${containment}: closed ${closed} vs numeric ${elapsed}`);
+  }
+});
+
+test('the survival curve hits the published targets', () => {
+  const expected = [[0, 159.4], [1, 208.3], [2, 252.4], [4, 331.0], [8, 462.9], [14, 624.6], [20, 761.1], [28, 918.7]];
+  for (const [containment, target] of expected) {
+    const actual = secondsToCascade(0, 0, containment);
+    assert.ok(Math.abs(actual - target) <= 0.5, `containment ${containment}: ${actual}s, expected ${target}s`);
+  }
+});
+
+test('cascade decay is proportional to maximum Stability', () => {
+  assert.equal(cascadeDecay(99.9, 100), 0);
+  assert.equal(Number(cascadeDecay(100, 100).toFixed(4)), 7);
+  assert.equal(Number(cascadeDecay(100, 425).toFixed(2)), 29.75);
+  assert.equal(100 / cascadeDecay(100, 100), 425 / cascadeDecay(100, 425));
 });
 
 test('pressure queues every crossed crisis exactly once', () => {
@@ -735,7 +772,7 @@ test('v1.3.1 machine curve uses the approved balanced prices and growth', () => 
   const actual = Object.fromEntries(balancedMachineUpgrades(CONTENT.machine_upgrades)
     .map(definition => [definition.id, [definition.base_cost, definition.growth]]));
   assert.deepEqual(actual, {
-    reality_lattice: [90, 1.62],
+    reality_lattice: [60, 1.55],
     prediction_core: [90, 1.60],
     cultivation_accelerator: [120, 1.68],
     historical_compressor: [120, 1.68],
@@ -749,7 +786,7 @@ test('v1.3.1 machine curve uses the approved balanced prices and growth', () => 
     temporal_injector: [220, 1.75],
   });
 
-  assert.ok(balancedUniverseUpgrades(CONTENT.universe_upgrades).every(definition => definition.growth >= 1.9));
+  assert.ok(balancedUniverseUpgrades(CONTENT.universe_upgrades).every(definition => definition.growth === 1.75));
   assert.ok(balancedAxiomUpgrades(CONTENT.axiom_upgrades).every(definition => definition.growth >= 2.15));
 });
 
@@ -824,7 +861,7 @@ test('Temporal Injector improves Accelerate while Stable Constants and Bureaucra
   assert.equal(bonuses.accelerateYears, 450);
   assert.equal(bonuses.accelerateTimer, 16);
   assert.equal(bonuses.eventDelay, 0);
-  assert.ok(bonuses.entropyGainMult < 1);
+  assert.equal(bonuses.containmentRating, 2);
   assert.equal(bonuses.controlRecharge, 3);
 });
 
@@ -931,4 +968,49 @@ test('eraForYears is the single source of truth for the four eras', () => {
   assert.deepEqual([...ERA_YEAR_THRESHOLDS], [0, 2500, 6500, 14000]);
   assert.equal(ERA_NAMES.length, 4);
   assert.equal(ERA_NAMES[3], 'APOTHEOSIS');
+});
+
+test('containment sums upgrade levels across both layers', () => {
+  const engine = freshEngine();
+  assert.equal(engine.runtimeBonuses().containmentRating, 0);
+  engine.state.machine.upgradeLevels.reality_lattice = 3;
+  assert.equal(engine.runtimeBonuses().containmentRating, 3);
+  engine.state.machine.upgradeLevels.awareness_scrubber = 2;
+  engine.state.machine.upgradeLevels.sanity_protocol = 1;
+  engine.state.machine.upgradeLevels.cosmic_muffling = 1;
+  engine.state.meta.universeUpgradeLevels.stable_constants = 5;
+  assert.equal(engine.runtimeBonuses().containmentRating, 12);
+  assert.equal(engine.runtimeBonuses().entropyGainMult, undefined);
+});
+
+test('Reality Lattice is reachable from the first cascade harvest', () => {
+  const engine = freshEngine();
+  const lattice = engine.upgradeById('machine', 'reality_lattice');
+  assert.equal(lattice.base_cost, 60);
+  assert.equal(lattice.growth, 1.55);
+  assert.deepEqual(
+    [0, 1, 2, 3].map(level => upgradeCost(lattice.base_cost, lattice.growth, level)),
+    [60, 93, 144, 223],
+  );
+});
+
+test('Wide Lattice preserves Reality Lattice levels through Universe consumption', () => {
+  const engine = freshEngine();
+  engine.state.machine.upgradeLevels.reality_lattice = 5;
+  engine.state.machine.upgradeLevels.awareness_scrubber = 3;
+  engine.state.meta.universeUpgradeLevels.wide_lattice = 2;
+  engine.state.meta.progression.unlockedSystems.push('universe_prestige');
+  engine.state.machine.cultivationCreditsThisUniverse = 18;
+  assert.equal(engine.consumeUniverse(), true);
+  assert.equal(engine.state.machine.upgradeLevels.reality_lattice, 2);
+  assert.equal(engine.state.machine.upgradeLevels.awareness_scrubber, undefined);
+});
+
+test('the universe upgrade growth floor leaves the ladder walkable', () => {
+  const engine = freshEngine();
+  const stable = engine.upgradeById('universe', 'stable_constants');
+  assert.equal(stable.growth, 1.75);
+  const ladder = [0, 1, 2, 3, 4].map(level => upgradeCost(stable.base_cost, stable.growth, level));
+  assert.deepEqual(ladder, [4, 7, 12, 21, 38]);
+  assert.equal(ladder.reduce((sum, cost) => sum + cost, 0), 82);
 });

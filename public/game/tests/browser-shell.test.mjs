@@ -130,7 +130,7 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(app, /aria-describedby/);
   assert.match(app, /TACTICAL ACTIONS/);
   assert.ok(app.indexOf('tacticalRail') < app.indexOf('<details>'));
-  assert.match(viewModel, /requiredContainment/);
+  assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /entropyBand/);
 });

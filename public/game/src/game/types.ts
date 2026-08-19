@@ -163,7 +163,6 @@ export interface RuntimeBonuses {
   allHarvestMult: number;
   chaoticRetention: number;
   containmentRating: number;
-  entropyGainMult: number;
   controlRecharge: number;
   accelerateYears: number;
   accelerateTimer: number;

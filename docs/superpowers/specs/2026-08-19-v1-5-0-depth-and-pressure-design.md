@@ -97,14 +97,16 @@ Resulting survival curve, integrating the rate from year 0 to Entropy 100:
 
 | Containment | Cascade year | Elapsed at 1x |
 | ---: | ---: | ---: |
-| 0 | 3,985 | 159 s |
-| 1 | 5,206 | 208 s |
-| 2 | 6,309 | 252 s |
-| 4 | 8,274 | 331 s |
-| 8 | 11,573 | 463 s |
-| 14 | 15,613 | 625 s |
-| 20 | 19,027 | 761 s |
-| 28 | 23,024 | 921 s |
+| 0 | 3,985 | 159.4 s |
+| 1 | 5,208 | 208.3 s |
+| 2 | 6,310 | 252.4 s |
+| 4 | 8,275 | 331.0 s |
+| 8 | 11,573 | 462.9 s |
+| 14 | 15,615 | 624.6 s |
+| 20 | 19,028 | 761.1 s |
+| 28 | 22,968 | 918.7 s |
+
+These are the values `secondsToCascade` returns, verified against numeric integration of the rate to within 1%. The tests assert them to 0.5 s.
 
 `cascadeDecay` becomes **7% of `stabilityMax` per second** instead of a flat 7, changing its signature from `cascadeDecay(entropy)` to `cascadeDecay(entropy, stabilityMax)`. At the current ceiling of 425 maximum Stability, the flat value granted 60 seconds of grace instead of 14; the proportional rule holds the cascade at 14.3 seconds for every build.
 
@@ -214,7 +216,7 @@ This is the highest yield per unit of work in the whole design: it is pure rule 
 
 ### Apotheosis era
 
-A fourth era named `APOTHEOSIS` begins at **14,000 years**, which is 560 seconds at 1x speed. It is reachable only by developed builds: containment 28 cascades at year 23,024, so Apotheosis covers about 361 seconds of a 921-second run, while containment 14 barely enters it.
+A fourth era named `APOTHEOSIS` begins at **14,000 years**, which is 560 seconds at 1x speed. It is reachable only by developed builds: containment 28 cascades at year 22,968, so Apotheosis covers about 359 seconds of a 919-second run, while containment 14 barely enters it.
 
 Implementation touches exactly these places:
 
@@ -242,7 +244,7 @@ universeResidueAward(credits, bank, multiplier) = floor((credits^1.15 / 1.2 + sq
 multiverseAxiomAward(universes, universeLevels) = floor(universes^1.1 / 2 + universeLevels / 3)
 ```
 
-The residue award drops the civilization count, which the credit cap had pinned at six, in favour of credits actually earned. At 18 credits and a bank of 8,000 it returns 32 residue against 5 today. The universe growth floor in `balancedUniverseUpgrades` drops from 1.9 to **1.75**, which brings the `stable_constants` ladder from 124 to 81 residue and the full catalog from about 900 to about 550, so the Universe layer becomes meaningfully complete in ten to fifteen Universes instead of 180.
+The residue award drops the civilization count, which the credit cap had pinned at six, in favour of credits actually earned. At 18 credits and a bank of 8,000 it returns 32 residue against 5 today. `balancedUniverseUpgrades` replaces its growth **floor** of 1.9 with a growth **ceiling** of **1.75**. The floor was inert: every generated Universe upgrade already declares a growth between 1.75 and 2.25, so `Math.max` never bound and lowering it would have changed nothing. Capping instead brings the `stable_constants` ladder from 124 to 82 residue and the full catalog from about 900 to 567, so the Universe layer becomes meaningfully complete in ten to fifteen Universes instead of 180.
 
 Two Universe upgrades are repurposed through `UNIVERSE_DESCRIPTIONS` in `game/upgrade-balance.ts`, since the generated catalog is frozen:
 
@@ -322,9 +324,9 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 A headless harness drives the compiled engine with fixed seeds and declared policies. The harness built for this analysis is committed as a test helper under `public/game/tests/`.
 
 - No-upgrade run under the safety policy cascades between 150 and 185 seconds.
-- Containment 4 reaches between 300 and 360 seconds; containment 28 between 870 and 960 seconds.
+- Containment 4 reaches between 300 and 360 seconds; containment 28 between 870 and 950 seconds.
 - **No tactical-action policy extends a no-upgrade run past 240 seconds**, including Vent spam, Stabilize spam, Accelerate spam and every combination. This is the acceptance test for the requirement that survival without upgrades is not possible for long.
-- A no-upgrade run that additionally spends every reserve intervention does not exceed **420 seconds**, and ends with strictly fewer net resources than the same run without them. Three `emergency_lattice` uses restore about 180 Stability, which is the only way to stretch a containment-free run past the tactical bound; escalation and the depth factor make it a losing trade, and the ceiling stays far below the 921 seconds a fully contained build reaches. Containment upgrades remain the only route to depth.
+- A no-upgrade run that additionally spends every reserve intervention does not exceed **420 seconds**, and ends with strictly fewer net resources than the same run without them. Three `emergency_lattice` uses restore about 180 Stability, which is the only way to stretch a containment-free run past the tactical bound; escalation and the depth factor make it a losing trade, and the ceiling stays far below the 919 seconds a fully contained build reaches. Containment upgrades remain the only route to depth.
 - 18 credits are reachable in at most six runs at containment 4 and in two runs at containment 28.
 - **Anti-self-funding:** for a deep run, a policy that uses every reserve intervention at every opportunity ends with strictly fewer net resources than the same run without them.
 - A Universe cycle after the first is strictly shorter than the first, proving `wide_lattice` removed the throwaway run.
@@ -342,7 +344,7 @@ A headless harness drives the compiled engine with fixed seeds and declared poli
 ## Acceptance criteria
 
 - `entropyRate` matches the published formula and the survival table within test tolerance for containment 0 through 28.
-- A no-upgrade run cannot be extended past 240 seconds by any tactical-action policy, nor past 420 seconds even with full reserve spending, against 921 seconds for a fully contained build.
+- A no-upgrade run cannot be extended past 240 seconds by any tactical-action policy, nor past 420 seconds even with full reserve spending, against 919 seconds for a fully contained build.
 - Every containment level measurably changes survival time; no level is a no-op.
 - A fully developed build sustains a run of roughly 15 minutes at 1x speed and is rewarded for it by a continuous depth curve.
 - Cultivation Credits scale from 1 to 20 with depth, and Universe cadence drops from six runs to two as investment grows.

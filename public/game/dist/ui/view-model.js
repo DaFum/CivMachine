@@ -1,6 +1,5 @@
 import { CivilizationPaths } from '../game/paths.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
-import { requiredContainment } from '../game/pressure.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { TACTICAL_ACTIONS } from '../game/tactical-actions.js';
 const RESOURCE_NAMES = {
@@ -112,7 +111,6 @@ export function buildViewModel(engine) {
             controlCapacity: civ.tactical.controlCapacity,
             controlMax: 3,
             containmentRating: bonuses.containmentRating,
-            requiredContainment: requiredContainment(civ.era),
             actions: Object.keys(TACTICAL_ACTIONS).map(id => ({
                 ...TACTICAL_ACTIONS[id],
                 ...engine.tacticalAvailability(id),
