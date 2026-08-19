@@ -15,6 +15,7 @@ export interface WeightedIntervention<T extends SchedulerEvent> {
 export interface SchedulerOptions<T extends SchedulerEvent> {
   pathMultiplier(event: T, civilization: Civilization): number;
   stateMultiplier(event: T, civilization: Civilization): number;
+  exhausted(event: T, civilization: Civilization): boolean;
 }
 
 const PHASE_WEIGHTS: ReadonlyArray<Readonly<Record<string, number>>> = [
@@ -46,11 +47,13 @@ function buildPool<T extends SchedulerEvent>(
   civ: Civilization,
   options: SchedulerOptions<T>,
   excludeRecent: boolean,
+  allowExhausted: boolean,
 ): WeightedIntervention<T>[] {
   const recent = new Set(recentEventIds(civ));
   const pool: WeightedIntervention<T>[] = [];
   for (const event of events) {
     if (excludeRecent && recent.has(event.id)) continue;
+    if (!allowExhausted && options.exhausted(event, civ)) continue;
     const base = Math.max(0.01, Number(event.weight ?? 1));
     const path = Math.max(0, options.pathMultiplier(event, civ));
     const state = Math.max(0, options.stateMultiplier(event, civ));
@@ -63,13 +66,18 @@ function buildPool<T extends SchedulerEvent>(
   return pool;
 }
 
+// Three stages, tried in order. The third exists because the catalog holds only 96 finite draws:
+// without it a run past roughly 48 interventions collapses onto the single unbounded fallback event.
 export function buildInterventionPool<T extends SchedulerEvent>(
   events: readonly T[],
   civ: Civilization,
   options: SchedulerOptions<T>,
 ): WeightedIntervention<T>[] {
-  const fresh = buildPool(events, civ, options, true);
-  return fresh.length ? fresh : buildPool(events, civ, options, false);
+  const fresh = buildPool(events, civ, options, true, false);
+  if (fresh.length) return fresh;
+  const recentInclusive = buildPool(events, civ, options, false, false);
+  if (recentInclusive.length) return recentInclusive;
+  return buildPool(events, civ, options, true, true);
 }
 
 export function chooseWeightedIntervention<T extends SchedulerEvent>(

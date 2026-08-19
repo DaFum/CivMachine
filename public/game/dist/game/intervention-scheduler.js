@@ -22,11 +22,13 @@ function phaseMultiplier(event, civ) {
         return 1;
     return PHASE_WEIGHTS[Math.max(0, Math.min(2, civ.era))]?.[event.path_phase] ?? 1;
 }
-function buildPool(events, civ, options, excludeRecent) {
+function buildPool(events, civ, options, excludeRecent, allowExhausted) {
     const recent = new Set(recentEventIds(civ));
     const pool = [];
     for (const event of events) {
         if (excludeRecent && recent.has(event.id))
+            continue;
+        if (!allowExhausted && options.exhausted(event, civ))
             continue;
         const base = Math.max(0.01, Number(event.weight ?? 1));
         const path = Math.max(0, options.pathMultiplier(event, civ));
@@ -41,9 +43,16 @@ function buildPool(events, civ, options, excludeRecent) {
     }
     return pool;
 }
+// Three stages, tried in order. The third exists because the catalog holds only 96 finite draws:
+// without it a run past roughly 48 interventions collapses onto the single unbounded fallback event.
 export function buildInterventionPool(events, civ, options) {
-    const fresh = buildPool(events, civ, options, true);
-    return fresh.length ? fresh : buildPool(events, civ, options, false);
+    const fresh = buildPool(events, civ, options, true, false);
+    if (fresh.length)
+        return fresh;
+    const recentInclusive = buildPool(events, civ, options, false, false);
+    if (recentInclusive.length)
+        return recentInclusive;
+    return buildPool(events, civ, options, true, true);
 }
 export function chooseWeightedIntervention(pool, roll01) {
     const total = pool.reduce((sum, item) => sum + item.weight, 0);

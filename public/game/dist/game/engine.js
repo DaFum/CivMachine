@@ -420,7 +420,7 @@ export class GameEngine {
             weight *= 2; if (s.awareness > 50 && ['machine_signal', 'civilization_resists', 'final_question'].includes(id))
             weight *= 2; if (s.stability < 45 && ['sun_goes_missing', 'reality_unionizes', 'edge_of_simulation'].includes(id))
             weight *= 2; return weight; };
-        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier });
+        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier, exhausted: (event) => (civ.eventCounts[event.id] ?? 0) >= Number(event.max_count ?? 2) });
         const rng = new SeededRng(civ.rngState);
         const selected = chooseWeightedIntervention(pool, rng.next()) ?? this.eventById('routine_compliance_audit');
         civ.rngState = rng.state;
@@ -432,7 +432,6 @@ export class GameEngine {
     }
     eventEligible(e, civ) { if (civ.era < Number(e.min_era ?? 0) || civ.era > Number(e.max_era ?? 2))
         return false; const r = e.requirements ?? {}; if (r.scheduled_only)
-        return false; if ((civ.eventCounts[e.id] ?? 0) >= Number(e.max_count ?? 2))
         return false; if (!CivilizationPaths.eventIsEligible(e, civ))
         return false; const s = civ.stats; if (r.min_attention != null && s.attention < Number(r.min_attention))
         return false; if (r.max_attention != null && s.attention > Number(r.max_attention))

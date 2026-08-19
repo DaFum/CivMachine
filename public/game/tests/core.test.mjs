@@ -137,6 +137,7 @@ test('scheduler excludes the six most recent interventions', () => {
   const pool = buildInterventionPool(events, civ, {
     pathMultiplier: () => 1,
     stateMultiplier: () => 1,
+    exhausted: () => false,
   });
 
   assert.deepEqual(pool.map(item => item.event.id), ['event_g']);
@@ -152,6 +153,7 @@ test('scheduler makes a deterministic weighted selection for an identical roll',
   const options = {
     pathMultiplier: event => event.id === 'aligned_event' ? 4.5 : 1,
     stateMultiplier: () => 1,
+    exhausted: () => false,
   };
   const firstPool = buildInterventionPool(events, civ, options);
   const secondPool = buildInterventionPool(events, civ, options);
@@ -1085,4 +1087,34 @@ test('the harvest era term extends into Apotheosis', () => {
   const apotheosis = calculateHarvest(civ, false, bonuses);
   assert.ok(apotheosis.existence > transcendence.existence, 'Existence must keep scaling in Apotheosis');
   assert.ok(apotheosis.paradox > transcendence.paradox, 'Paradox must keep scaling in Apotheosis');
+});
+
+test('the pool falls back to seen events before it falls back to one event', () => {
+  const civ = GameEngine.createCivilizationForTest(310);
+  const events = [
+    { id: 'a', weight: 1 },
+    { id: 'b', weight: 1 },
+    { id: 'c', weight: 1 },
+  ];
+  const options = {
+    pathMultiplier: () => 1,
+    stateMultiplier: () => 1,
+    exhausted: event => (civ.eventCounts[event.id] ?? 0) >= 1,
+  };
+  assert.equal(buildInterventionPool(events, civ, options).length, 3);
+  civ.eventCounts = { a: 1, b: 1, c: 1 };
+  const saturated = buildInterventionPool(events, civ, options);
+  assert.equal(saturated.length, 3, 'every exhausted event must return once nothing fresh is left');
+  recordRecentIntervention(civ, 'a');
+  const withoutRecent = buildInterventionPool(events, civ, options);
+  assert.deepEqual(withoutRecent.map(entry => entry.event.id).sort(), ['b', 'c'], 'the most recent event must stay excluded');
+});
+
+test('freshness spreads saturated repetition instead of concentrating it', () => {
+  const civ = GameEngine.createCivilizationForTest(311);
+  civ.eventCounts = { often: 6, rarely: 1 };
+  const options = { pathMultiplier: () => 1, stateMultiplier: () => 1, exhausted: () => true };
+  const pool = buildInterventionPool([{ id: 'often', weight: 1 }, { id: 'rarely', weight: 1 }], civ, options);
+  const weights = new Map(pool.map(entry => [entry.event.id, entry.weight]));
+  assert.ok(weights.get('rarely') > weights.get('often') * 2);
 });
