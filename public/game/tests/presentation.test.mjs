@@ -8,6 +8,7 @@ import { PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
+import { factionRoster, factionSignature } from '../dist/render/factions.js';
 
 function recordingSurface(calls) {
   const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
@@ -327,4 +328,43 @@ test('drawCreature emits geometry for every archetype and caste', () => {
       assert.ok(calls.every(([, ...args]) => args.every(value => typeof value !== 'number' || Number.isFinite(value))), `${trait}/${caste} emitted a non-finite coordinate`);
     }
   }
+});
+
+test('faction roster ranks paths by affinity and normalizes shares', () => {
+  const civ = GameEngine.createCivilizationForTest(21);
+  civ.pathState.affinity.machine_faith = 6;
+  civ.pathState.affinity.void_communion = 3;
+  civ.pathState.affinity.collective_mind = 1;
+  const roster = factionRoster(civ);
+  assert.equal(roster.length, 3);
+  assert.deepEqual(roster.map(f => f.pathId), ['machine_faith', 'void_communion', 'collective_mind']);
+  assert.ok(Math.abs(roster.reduce((sum, f) => sum + f.share, 0) - 1) < 1e-9);
+  assert.equal(roster[0].color, 0xf0ca6f);
+  assert.equal(roster[0].sigil, 'spire');
+  assert.ok(roster[0].label.length > 0);
+});
+
+test('faction roster puts the dominant path first even below the leader', () => {
+  const civ = GameEngine.createCivilizationForTest(22);
+  civ.pathState.affinity.machine_faith = 8;
+  civ.pathState.affinity.void_communion = 2;
+  civ.pathState.dominantPath = 'void_communion';
+  assert.equal(factionRoster(civ)[0].pathId, 'void_communion');
+});
+
+test('faction roster is empty before any affinity exists', () => {
+  assert.deepEqual(factionRoster(GameEngine.createCivilizationForTest(23)), []);
+  assert.equal(factionSignature(GameEngine.createCivilizationForTest(23)), 'unaligned');
+});
+
+test('faction signature bands shares into quarters', () => {
+  const civ = GameEngine.createCivilizationForTest(24);
+  civ.pathState.affinity.machine_faith = 8;
+  civ.pathState.affinity.void_communion = 2;
+  const base = factionSignature(civ);
+  civ.pathState.affinity.machine_faith = 8.2;
+  assert.equal(factionSignature(civ), base, 'a share change inside a quarter must not churn the key');
+  civ.pathState.affinity.machine_faith = 2;
+  civ.pathState.affinity.void_communion = 8;
+  assert.notEqual(factionSignature(civ), base, 'crossing quarters must change the key');
 });
