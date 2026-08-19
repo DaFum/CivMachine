@@ -1,22 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { CONTENT } from '../public/game/dist/data/content.generated.js';
 
-test('bundled game preserves the full release catalog', async () => {
-  const content = await readFile(
-    new URL('../public/game/src/data/content.generated.json', import.meta.url),
-    'utf8',
-  );
-  const parsed = JSON.parse(content);
-
-  assert.equal(parsed.events.length, 75);
-  assert.equal(Object.keys(parsed.path_definitions).length, 10);
-  assert.equal(parsed.traits.length, 12);
-  assert.equal(parsed.machine_upgrades.length, 12);
-  assert.equal(parsed.universe_upgrades.length, 8);
-  assert.equal(parsed.axiom_upgrades.length, 6);
-  assert.equal(parsed.directives.length, 6);
-  assert.equal(parsed.breeding_matrices.length, 6);
+test('bundled game preserves the full release catalog', () => {
+  assert.equal(CONTENT.events.length, 75);
+  assert.equal(Object.keys(CONTENT.path_definitions).length, 10);
+  assert.equal(CONTENT.traits.length, 12);
+  assert.equal(CONTENT.machine_upgrades.length, 12);
+  assert.equal(CONTENT.universe_upgrades.length, 8);
+  assert.equal(CONTENT.axiom_upgrades.length, 6);
+  assert.equal(CONTENT.directives.length, 6);
+  assert.equal(CONTENT.breeding_matrices.length, 6);
 });
 
 test('bundled game exposes the playable surfaces', async () => {
