@@ -742,3 +742,12 @@ test('the render key tracks the depth band, never the depth itself', () => {
   civ.development = 1600;
   assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before, 'crossing a band must change the key');
 });
+
+test('the service worker precaches every new game module', async () => {
+  const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
+  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler']) {
+    assert.ok(source.includes(`'/game/dist/game/${name}.js'`), `sw.js must precache game/${name}.js`);
+  }
+  assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
+  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.5.0'"), 'CACHE_NAME must be bumped');
+});
