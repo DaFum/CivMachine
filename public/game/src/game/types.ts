@@ -2,7 +2,7 @@ export type ResourceKey = 'causal_mass' | 'cognition' | 'paradox' | 'existence';
 export type Layer = 'machine' | 'universe' | 'axiom';
 export type Phase = 'machine' | 'civilization';
 export type TacticalActionId = 'stabilize' | 'accelerate' | 'probe';
-export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant';
+export type HarvestGrade = 'premature' | 'established' | 'transcendent' | 'ascendant' | 'singular';
 
 export interface Stats {
   stability: number;
@@ -20,6 +20,9 @@ export interface PathState {
   recentPaths: string[];
   recentDeltas: Record<string, number>;
   endgameState: string;
+  endgameStates: string[];
+  successions: number;
+  successionAtChoice: number;
 }
 
 export interface DecisionMetricDelta {

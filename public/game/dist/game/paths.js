@@ -8,15 +8,22 @@ export const DOMINANCE_MIN_LEAD = 2;
 const DEFINITIONS = CONTENT.path_definitions;
 export class CivilizationPaths {
     static newState() {
-        return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '' };
+        return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '', endgameStates: [], successions: 0, successionAtChoice: 0 };
     }
     static ensure(civ) {
         if (!civ.pathState)
             civ.pathState = this.newState();
+        const ps = civ.pathState;
         for (const id of PATH_IDS)
-            if (!(id in civ.pathState.affinity))
-                civ.pathState.affinity[id] = 0;
-        return civ.pathState;
+            if (!(id in ps.affinity))
+                ps.affinity[id] = 0;
+        if (!Array.isArray(ps.endgameStates))
+            ps.endgameStates = ps.endgameState ? [ps.endgameState] : [];
+        if (typeof ps.successions !== 'number')
+            ps.successions = 0;
+        if (typeof ps.successionAtChoice !== 'number')
+            ps.successionAtChoice = 0;
+        return ps;
     }
     static displayName(id) { return DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
     static affinity(civ, id) { return PATH_IDS.includes(id) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }

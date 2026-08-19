@@ -11,12 +11,16 @@ const DEFINITIONS = CONTENT.path_definitions as unknown as Record<string, any>;
 
 export class CivilizationPaths {
   static newState(): PathState {
-    return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '' };
+    return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '', endgameStates: [], successions: 0, successionAtChoice: 0 };
   }
   static ensure(civ: Civilization): PathState {
     if (!civ.pathState) civ.pathState = this.newState();
-    for (const id of PATH_IDS) if (!(id in civ.pathState.affinity)) civ.pathState.affinity[id] = 0;
-    return civ.pathState;
+    const ps = civ.pathState;
+    for (const id of PATH_IDS) if (!(id in ps.affinity)) ps.affinity[id] = 0;
+    if (!Array.isArray(ps.endgameStates)) ps.endgameStates = ps.endgameState ? [ps.endgameState] : [];
+    if (typeof ps.successions !== 'number') ps.successions = 0;
+    if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
+    return ps;
   }
   static displayName(id: string): string { return DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
   static affinity(civ: Civilization, id: string): number { return PATH_IDS.includes(id as any) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }

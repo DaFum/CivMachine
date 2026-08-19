@@ -15,7 +15,7 @@ import {
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, secondsToCascade } from '../dist/game/pressure.js';
-import { calculateCultivationCredits, evaluateHarvestQuality } from '../dist/game/harvest-quality.js';
+import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
@@ -66,7 +66,7 @@ function simulatedBalanceRun(seed, { accelerateWheneverAvailable = false, collap
 
   while (engine.state.phase === 'civilization' && elapsed < 600) {
     const civ = engine.state.civilization;
-    if (!collapse && civ.era >= 1 && civ.eventChoices >= 3) break;
+    if (!collapse && civ.eventChoices >= 3 && evaluateHarvestQuality(civ, false).grade !== 'premature') break;
     const event = engine.currentEvent();
     if (event) {
       engine.chooseEvent(safestChoiceIndex(event));
@@ -577,34 +577,79 @@ test('a Directive cannot turn a Premature harvest into a credited harvest', () =
   assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 0);
 });
 
-test('qualified grades award two, three, or four Cultivation Credits', () => {
+test('cultivation depth derives from development and completed path arcs', () => {
   const civ = GameEngine.createCivilizationForTest(82);
-  civ.eventChoices = 4;
-  civ.era = 1;
-  assert.deepEqual(evaluateHarvestQuality(civ, false), { grade: 'established', multiplier: .75, credits: 2 });
-  civ.era = 2;
-  assert.equal(evaluateHarvestQuality(civ, false).credits, 3);
-  civ.pathState.endgameState = 'endgame_machine_faith';
-  assert.equal(evaluateHarvestQuality(civ, false).credits, 4);
+  civ.development = 80;
+  assert.equal(cultivationDepth(civ), 1);
+  civ.development = 400;
+  assert.equal(cultivationDepth(civ), 5);
+  civ.pathState.endgameStates = ['endgame_machine_faith', 'endgame_void_communion'];
+  assert.equal(cultivationDepth(civ), 8);
 });
 
-test('chaotic harvests lose exactly one qualified Cultivation Credit', () => {
-  const qualities = [
-    { grade: 'premature', multiplier: 0.2, credits: 0 },
-    { grade: 'established', multiplier: 0.75, credits: 2 },
-    { grade: 'transcendent', multiplier: 1, credits: 3 },
-    { grade: 'ascendant', multiplier: 1.2, credits: 4 },
-  ];
+test('depth bands cover the five grades at their published boundaries', () => {
+  assert.equal(depthBand(0), 'premature');
+  assert.equal(depthBand(1.49), 'premature');
+  assert.equal(depthBand(1.5), 'established');
+  assert.equal(depthBand(3.99), 'established');
+  assert.equal(depthBand(4), 'transcendent');
+  assert.equal(depthBand(8.99), 'transcendent');
+  assert.equal(depthBand(9), 'ascendant');
+  assert.equal(depthBand(15.99), 'ascendant');
+  assert.equal(depthBand(16), 'singular');
+  assert.equal(depthBand(40), 'singular');
+  assert.equal(HARVEST_GRADE_LABELS.singular, 'Singular');
+});
 
-  assert.deepEqual(qualities.map(quality => [
-    calculateCultivationCredits(quality, false, false),
-    calculateCultivationCredits(quality, true, false),
-  ]), [[0, 0], [2, 1], [3, 2], [4, 3]]);
+test('harvest quality scales continuously with depth', () => {
+  const civ = GameEngine.createCivilizationForTest(83);
+  civ.eventChoices = 4;
+  civ.era = 1;
+  civ.development = 400;
+  const quality = evaluateHarvestQuality(civ, false);
+  assert.equal(quality.grade, 'transcendent');
+  assert.equal(quality.depth, 5);
+  assert.equal(Number(quality.multiplier.toFixed(4)), 1.35);
+  assert.equal(quality.credits, 3);
+  civ.development = 1920;
+  const deep = evaluateHarvestQuality(civ, false);
+  assert.equal(deep.grade, 'singular');
+  assert.equal(deep.credits, 14);
+  assert.equal(Number(deep.multiplier.toFixed(2)), 5.53);
+});
 
-  assert.deepEqual(qualities.map(quality => [
-    calculateCultivationCredits(quality, false, true),
-    calculateCultivationCredits(quality, true, true),
-  ]), [[0, 0], [3, 2], [4, 3], [5, 4]]);
+test('the credit curve is capped at twenty', () => {
+  const civ = GameEngine.createCivilizationForTest(84);
+  civ.eventChoices = 9;
+  civ.era = 3;
+  civ.development = 100_000;
+  assert.equal(evaluateHarvestQuality(civ, false).credits, 20);
+});
+
+test('a premature harvest stays premature at any depth', () => {
+  const civ = GameEngine.createCivilizationForTest(85);
+  civ.development = 4000;
+  civ.era = 0;
+  civ.eventChoices = 9;
+  const zeroEra = evaluateHarvestQuality(civ, false);
+  assert.equal(zeroEra.grade, 'premature');
+  assert.equal(zeroEra.multiplier, 0.2);
+  assert.equal(zeroEra.credits, 0);
+  civ.era = 2;
+  civ.eventChoices = 2;
+  assert.equal(evaluateHarvestQuality(civ, false).grade, 'premature');
+});
+
+test('a chaotic harvest keeps sixty percent of its credits', () => {
+  const quality = { grade: 'singular', multiplier: 5.53, credits: 14, depth: 24 };
+  assert.equal(calculateCultivationCredits(quality, false, false), 14);
+  assert.equal(calculateCultivationCredits(quality, true, false), 8);
+  assert.equal(calculateCultivationCredits(quality, false, true), 15);
+  assert.equal(calculateCultivationCredits(quality, true, true), 9);
+  const premature = { grade: 'premature', multiplier: 0.2, credits: 0, depth: 0.4 };
+  assert.equal(calculateCultivationCredits(premature, false, true), 0);
+  const shallow = { grade: 'established', multiplier: 0.63, credits: 1, depth: 1.7 };
+  assert.equal(calculateCultivationCredits(shallow, true, false), 0);
 });
 
 test('chaotic resource yield uses forty percent retention and a 1.50 Paradox multiplier', () => {
@@ -681,15 +726,17 @@ test('Directive completion boosts rewards by fifteen percent and grants one cred
   const civ = engine.state.civilization;
   civ.era = 1;
   civ.eventChoices = 3;
+  civ.development = 400;
   civ.stats.stability = 90;
   civ.tactical.entropy = 40;
   const preview = engine.previewHarvestDetails(false);
   assert.equal(preview.objectiveCompleted, true);
-  assert.equal(preview.credits, 3);
-  assert.equal(preview.rewardMultiplier, 0.75 * 1.15);
+  assert.equal(preview.depth, 5);
+  assert.equal(preview.credits, 4);
+  assert.equal(Number(preview.rewardMultiplier.toFixed(6)), Number((1.35 * 1.15).toFixed(6)));
   engine.harvest(false);
   assert.equal(engine.state.machine.lastHarvest.objective_completed, true);
-  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 3);
+  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 4);
 });
 
 test('chaotic Credit penalty is identical in harvest preview and committed record', () => {
@@ -702,10 +749,11 @@ test('chaotic Credit penalty is identical in harvest preview and committed recor
   const civ = engine.state.civilization;
   civ.era = 1;
   civ.eventChoices = 3;
+  civ.development = 400;
   civ.stats.stability = 90;
   civ.tactical.entropy = 40;
 
-  assert.equal(engine.previewHarvestDetails(false).credits, 3);
+  assert.equal(engine.previewHarvestDetails(false).credits, 4);
   assert.equal(engine.previewHarvestDetails(true).credits, 2);
   engine.harvest(true);
   assert.equal(engine.state.machine.lastHarvest.credits, 2);
@@ -826,18 +874,33 @@ test('Temporal Injector improves Accelerate while Stable Constants and Bureaucra
   assert.equal(bonuses.controlRecharge, 3);
 });
 
-test('a normal first run can afford at least one available machine upgrade', () => {
+test('a first run played to its cascade funds at least one machine upgrade', () => {
   const engine = freshEngine();
-  engine.startCivilization(20260819);
-  while (engine.state.phase === 'civilization') {
-    const civ = engine.state.civilization;
-    if (civ.era >= 1 && civ.eventChoices >= 3) break;
-    const event = engine.currentEvent();
-    if (event) engine.chooseEvent(safestChoiceIndex(event));
-    else engine.tick(0.25);
-  }
-  engine.harvest(false);
+  runCivilization(engine, { seed: 20260819 });
+  assert.equal(engine.state.machine.lastHarvest.grade, 'established');
   assert.ok(engine.visibleUpgradeEntries('machine').some(entry => entry.status === 'available' && engine.canPurchaseUpgrade('machine', entry.definition.id)));
+  assert.equal(engine.canPurchaseUpgrade('machine', 'reality_lattice'), true);
+});
+
+test('harvesting the instant Expansion begins is worse than playing the run out', () => {
+  const rush = freshEngine();
+  rush.startCivilization(20260819);
+  while (rush.state.phase === 'civilization') {
+    const civ = rush.state.civilization;
+    if (civ.era >= 1 && civ.eventChoices >= 3) break;
+    const event = rush.currentEvent();
+    if (event) rush.chooseEvent(safestChoiceIndex(event));
+    else rush.tick(0.25);
+  }
+  rush.harvest(false);
+  const played = freshEngine();
+  runCivilization(played, { seed: 20260819 });
+  assert.equal(rush.state.machine.lastHarvest.grade, 'premature');
+  assert.ok(
+    rush.state.machine.lastHarvest.rewards.causal_mass < played.state.machine.lastHarvest.rewards.causal_mass,
+    'the rush must yield less than the completed run',
+  );
+  assert.equal(rush.canPurchaseUpgrade('machine', 'reality_lattice'), false);
 });
 
 test('path dominance requires five affinity and a two-point lead', () => {
