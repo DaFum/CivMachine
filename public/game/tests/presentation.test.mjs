@@ -7,6 +7,12 @@ import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPr
 import { PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
+import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
+
+function recordingSurface(calls) {
+  const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
+  return surface;
+}
 
 test('world expands from sparse camps to an arcology world', () => {
   const civ = GameEngine.createCivilizationForTest(11);
@@ -247,4 +253,78 @@ test('canvas surface never emits a negative radius', () => {
   };
   canvasSurface(context, () => '#000').fillCircle(0, 0, -5).strokeCircle(0, 0, -1);
   assert.deepEqual(radii, [0, 0]);
+});
+
+test('species profile is deterministic and independent of trait order', () => {
+  const a = GameEngine.createCivilizationForTest(11);
+  a.traits.push('chronically_lucky', 'fungal_consensus', 'museum_planet');
+  const b = GameEngine.createCivilizationForTest(11);
+  b.traits.push('museum_planet', 'fungal_consensus', 'chronically_lucky');
+  assert.equal(speciesProfile(a).archetype, 'mycelic');
+  assert.deepEqual(speciesProfile(a), speciesProfile(b));
+  assert.deepEqual(speciesProfile(a), speciesProfile(a));
+});
+
+test('species archetype follows the trait priority table', () => {
+  const cases = [
+    ['fungal_consensus', 'mycelic'], ['liquid_mathematics', 'fluidic'], ['telepathic_species', 'cerebral'],
+    ['physics_optional', 'phasic'], ['sentient_moon', 'lithic'], ['recurring_nightmare', 'umbral'],
+    ['ritual_engineering', 'chitinous'], ['born_after_end', 'revenant'], ['last_species', 'attenuated'],
+  ];
+  for (const [trait, archetype] of cases) {
+    const civ = GameEngine.createCivilizationForTest(5);
+    civ.traits.push(trait);
+    assert.equal(speciesProfile(civ).archetype, archetype, `${trait} should yield ${archetype}`);
+  }
+  const higher = GameEngine.createCivilizationForTest(5);
+  higher.traits.push('last_species', 'fungal_consensus');
+  assert.equal(speciesProfile(higher).archetype, 'mycelic', 'table order wins over trait order');
+});
+
+test('species falls back to a seed archetype when no trait implies a body', () => {
+  const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+  const archetypes = new Set();
+  for (const seed of seeds) {
+    const civ = GameEngine.createCivilizationForTest(seed);
+    civ.traits.push('chronically_lucky', 'extreme_bureaucracy', 'museum_planet');
+    const profile = speciesProfile(civ);
+    assert.ok(['bipedal', 'tripodal', 'swarm'].includes(profile.archetype));
+    archetypes.add(profile.archetype);
+  }
+  assert.ok(archetypes.size > 1, 'different seeds must not all collapse to one archetype');
+});
+
+test('species body color bends toward the dominant path accent', () => {
+  const neutral = GameEngine.createCivilizationForTest(9);
+  neutral.traits.push('sentient_moon');
+  const aligned = GameEngine.createCivilizationForTest(9);
+  aligned.traits.push('sentient_moon');
+  aligned.pathState.dominantPath = 'cosmic_resistance';
+  assert.notEqual(speciesProfile(aligned).bodyColor, speciesProfile(neutral).bodyColor);
+  assert.equal(speciesProfile(aligned).archetype, speciesProfile(neutral).archetype);
+});
+
+test('castes are assigned by settlement class', () => {
+  assert.equal(casteFor('camp'), 'labourer');
+  assert.equal(casteFor('village'), 'labourer');
+  assert.equal(casteFor('town'), 'citizen');
+  assert.equal(casteFor('city'), 'citizen');
+  assert.equal(casteFor('metropolis'), 'augmented');
+  assert.equal(casteFor('arcology'), 'augmented');
+  assert.equal(casteFor('unknown'), 'citizen');
+});
+
+test('drawCreature emits geometry for every archetype and caste', () => {
+  for (const trait of ['fungal_consensus', 'liquid_mathematics', 'telepathic_species', 'physics_optional', 'sentient_moon', 'recurring_nightmare', 'ritual_engineering', 'born_after_end', 'last_species', 'museum_planet']) {
+    const civ = GameEngine.createCivilizationForTest(3);
+    civ.traits.push(trait);
+    const profile = speciesProfile(civ);
+    for (const caste of ['labourer', 'citizen', 'augmented']) {
+      const calls = [];
+      const surface = recordingSurface(calls);
+      drawCreature(surface, profile, caste, 100, 200, 1, .5, 0x6fe7e1);
+      assert.ok(calls.length >= 3, `${trait}/${caste} drew ${calls.length} primitives`);
+      assert.ok(calls.every(([, ...args]) => args.every(value => typeof value !== 'number' || Number.isFinite(value))), `${trait}/${caste} emitted a non-finite coordinate`);
+    }
+  }
 });
