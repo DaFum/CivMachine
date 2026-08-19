@@ -3,7 +3,7 @@ import { startWorldRenderer } from './render/world.js';
 import { createGameUI } from './ui/app.js';
 
 const engine = new GameEngine();
-const worldHost = document.querySelector('#phaser-world') as HTMLElement;
+const worldHost = document.querySelector('#world-surface') as HTMLElement;
 const world = startWorldRenderer(engine, worldHost);
 createGameUI(engine, world);
 

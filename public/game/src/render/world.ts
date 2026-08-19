@@ -4,7 +4,7 @@ import { CivilizationPaths } from '../game/paths.js';
 import { worldSnapshot } from './world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { hash01, mixColor } from './primitives.js';
-import { canvasSurface, phaserSurface, type DrawSurface } from './draw-surface.js';
+import { canvasSurface, type DrawSurface } from './draw-surface.js';
 import { settlementLayout, type Settlement, type Structure } from './settlements.js';
 import { drawBanner, drawStructure } from './structures.js';
 import { casteFor, drawCreature, speciesProfile, type SpeciesProfile } from './species.js';
@@ -19,8 +19,6 @@ const devicePixelRatio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 const CONSTRUCTION_DURATION = reducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
 const GROUND_RATIO = .72;
-
-interface WorldLayers { skyLayer: any; terrainLayer: any; settlementLayer: any; atmosphereLayer: any; impulseLayer: any; }
 
 interface WorldScene {
   civ: Civilization;
@@ -337,7 +335,7 @@ function drawDecisionImpulse(surface: DrawSurface, feedback: DecisionFeedback | 
   }
 }
 
-class FallbackWorld implements WorldController {
+class CanvasWorld implements WorldController {
   private staticCanvas: HTMLCanvasElement;
   private dynamicCanvas: HTMLCanvasElement;
   private staticContext: CanvasRenderingContext2D;
@@ -450,153 +448,18 @@ class FallbackWorld implements WorldController {
 }
 
 export function startWorldRenderer(engine: GameEngine, host: HTMLElement): WorldController {
-  let game: any = null;
-  let scene: any = null;
-  let layers: WorldLayers | null = null;
-  let fallback: FallbackWorld | null = null;
-  let lastStructuralKey = '';
-  let lastDynamicFrame = 0;
-  let lastStage = -1;
-  let worldScene: WorldScene | null = null;
-  let feedbackSequence = 0;
-  let feedbackStartTime = 0;
-  let activeFeedback: DecisionFeedback | null = null;
-  let rendererFailed = false;
-  const tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
-
-  const resetRenderState = (): void => {
-    lastStructuralKey = '';
-    lastDynamicFrame = 0;
-    lastStage = -1;
-    worldScene = null;
-    feedbackSequence = 0;
-    feedbackStartTime = 0;
-    activeFeedback = null;
-    tracker.reset();
-  };
-
-  const activateFallback = (): void => {
-    rendererFailed = true;
-    try { game?.destroy(true); } catch { /* Renderer teardown must never block the UI. */ }
-    game = null; scene = null; layers = null; resetRenderState(); host.replaceChildren();
-    if (engine.state.phase === 'civilization' && engine.state.civilization && !fallback) {
-      fallback = new FallbackWorld(engine, host);
-    }
-  };
+  let world: CanvasWorld | null = null;
 
   const ensure = (): void => {
-    if (engine.state.phase !== 'civilization' || !engine.state.civilization) {
-      if (game) { game.destroy(true); game = null; scene = null; layers = null; host.replaceChildren(); }
-      fallback?.destroy(); fallback = null; rendererFailed = false; resetRenderState();
-      return;
-    }
-    if (game || fallback) return;
-    const PhaserRuntime = (globalThis as any).Phaser;
-    if (!PhaserRuntime) { fallback = new FallbackWorld(engine, host); return; }
-
-    const sceneConfig = {
-      create(this: any) {
-        try {
-          scene = this;
-          this.scale.resize(Math.max(320, host.clientWidth), Math.max(300, host.clientHeight));
-          const skyLayer = this.add.graphics().setDepth(0).setScrollFactor(.1, 1);
-          const terrainLayer = this.add.graphics().setDepth(1).setScrollFactor(.52, 1);
-          const settlementLayer = this.add.graphics().setDepth(2).setScrollFactor(1, 1);
-          const atmosphereLayer = this.add.graphics().setDepth(3).setScrollFactor(1, 1);
-          const impulseLayer = this.add.graphics().setDepth(4).setScrollFactor(0, 0);
-          layers = { skyLayer, terrainLayer, settlementLayer, atmosphereLayer, impulseLayer };
-          this.input.on('pointerdown', (pointer: any) => { this.__dragX = pointer.x; this.__startScroll = this.cameras.main.scrollX; });
-          this.input.on('pointermove', (pointer: any) => {
-            if (!pointer.isDown) return;
-            const max = Math.max(0, this.cameras.main.getBounds().width - this.scale.width);
-            this.cameras.main.scrollX = Math.max(0, Math.min(max, this.__startScroll + (this.__dragX - pointer.x)));
-          });
-          this.input.on('wheel', (_pointer: any, _objects: any, deltaX: number, deltaY: number) => {
-            const max = Math.max(0, this.cameras.main.getBounds().width - this.scale.width);
-            this.cameras.main.scrollX = Math.max(0, Math.min(max, this.cameras.main.scrollX + deltaX + deltaY * .35));
-          });
-        } catch {
-          if (!rendererFailed) { rendererFailed = true; queueMicrotask(activateFallback); }
-        }
-      },
-      update(this: any, time: number) {
-        try {
-          const civ = engine.state.civilization;
-          if (!civ || !layers || rendererFailed) return;
-          const width = this.scale.width; const height = this.scale.height;
-          const key = `${structuralWorldKey(civ, width)}|${Math.round(height / 40)}|${civ.traits.join(',')}`;
-          if (key !== lastStructuralKey) {
-            lastStructuralKey = key;
-            worldScene = buildScene(civ, width, height);
-            tracker.sync(worldScene.structures, time);
-            drawSkyContent(phaserSurface(layers.skyLayer.clear()), worldScene, height);
-            drawTerrainContent(phaserSurface(layers.terrainLayer.clear()), worldScene, height);
-            drawSettlementContent(phaserSurface(layers.settlementLayer.clear()), worldScene, height);
-            this.cameras.main.setBounds(0, 0, worldScene.snapshot.worldWidth, height);
-            if (lastStage !== worldScene.snapshot.stage) {
-              lastStage = worldScene.snapshot.stage;
-              this.cameras.main.centerOn(worldScene.snapshot.worldWidth * .5, height * .5);
-            }
-          }
-          if (!worldScene) return;
-          const feedback = engine.worldImpulse;
-          if (feedback && feedback.sequence !== feedbackSequence) {
-            feedbackSequence = feedback.sequence; feedbackStartTime = time; activeFeedback = feedback;
-          }
-          if (time - lastDynamicFrame < (reducedMotion ? 180 : DYNAMIC_FRAME_MS)) return;
-          lastDynamicFrame = time;
-          tracker.prune(time);
-          const dynamicSnapshot = worldSnapshot(civ, width);
-          const dynamicPresentation = worldPresentation(civ);
-          drawDynamicContent(phaserSurface(layers.atmosphereLayer.clear()), worldScene, dynamicSnapshot, dynamicPresentation, width, height, time, tracker);
-          drawDecisionImpulse(phaserSurface(layers.impulseLayer.clear()), activeFeedback, feedbackStartTime, time, width, height);
-        } catch {
-          if (!rendererFailed) { rendererFailed = true; queueMicrotask(activateFallback); }
-        }
-      },
-    };
-
-    try {
-      game = new PhaserRuntime.Game({
-        type: PhaserRuntime.AUTO,
-        parent: host,
-        width: Math.max(320, host.clientWidth),
-        height: Math.max(300, host.clientHeight),
-        backgroundColor: '#05070b',
-        transparent: false,
-        render: { antialias: true, pixelArt: false },
-        scale: { mode: PhaserRuntime.Scale.RESIZE, autoCenter: PhaserRuntime.Scale.CENTER_BOTH },
-        scene: sceneConfig,
-      });
-    } catch {
-      activateFallback();
-    }
+    const active = engine.state.phase === 'civilization' && !!engine.state.civilization;
+    if (active && !world) world = new CanvasWorld(engine, host);
+    else if (!active && world) { world.destroy(); world = null; host.replaceChildren(); }
   };
-
-  const onPhaserReady = (): void => {
-    if (fallback && (globalThis as any).Phaser) { fallback.destroy(); fallback = null; rendererFailed = false; resetRenderState(); host.replaceChildren(); ensure(); }
-  };
-  window.addEventListener('phaser-ready', onPhaserReady);
   const unsubscribe = engine.onChange(ensure);
   ensure();
-  const resize = new ResizeObserver(() => {
-    if (game && scene) { lastStructuralKey = ''; game.scale.resize(Math.max(320, host.clientWidth), Math.max(300, host.clientHeight)); }
-  });
-  resize.observe(host);
 
   return {
-    nudge(direction: number) {
-      if (fallback) return fallback.nudge(direction);
-      if (scene) {
-        const camera = scene.cameras.main;
-        const max = Math.max(0, camera.getBounds().width - scene.scale.width);
-        camera.scrollX = Math.max(0, Math.min(max, camera.scrollX + direction * scene.scale.width * .65));
-      }
-    },
-    destroy() {
-      unsubscribe(); resize.disconnect(); window.removeEventListener('phaser-ready', onPhaserReady);
-      if (game) game.destroy(true);
-      fallback?.destroy(); resetRenderState(); host.replaceChildren();
-    },
+    nudge(direction: number) { world?.nudge(direction); },
+    destroy() { unsubscribe(); world?.destroy(); world = null; host.replaceChildren(); },
   };
 }

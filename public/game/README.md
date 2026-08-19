@@ -47,7 +47,7 @@ npm test
 ## Browser architecture
 
 - `src/game/` — deterministic simulation, progression, prestige, saves, intervention paths
-- `src/render/` — Phaser civilization renderer and Canvas fallback
+- `src/render/` — deterministic Canvas civilization renderer
 - `src/ui/` — responsive DOM HUD, panels, controls, intervention choices
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
@@ -96,7 +96,7 @@ Balance is unchanged from v1.3.1; v1.4.0 only rebuilds the Civilization world re
 
 ## Renderer behavior
 
-The production boot uses the built-in deterministic Canvas renderer. Structural scenery is cached and rebuilt only when meaningful state bands change; atmosphere, settlement lights, traffic, and decision impulses update independently. The runtime remains compatible with an optional Phaser host, but the game never depends on it to display the Civilization world.
+The production boot uses the built-in deterministic Canvas renderer. Structural scenery is cached and rebuilt only when meaningful state bands change; atmosphere, settlement lights, traffic, and decision impulses update independently. There is no second renderer and no game framework: the Civilization world is drawn entirely with Canvas 2D.
 
 ## Save data
 

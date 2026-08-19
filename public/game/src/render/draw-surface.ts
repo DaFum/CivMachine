@@ -1,3 +1,7 @@
+/**
+ * The drawing vocabulary every world module writes against. Keeping it separate from the 2D
+ * context lets the drawing code stay free of transform bookkeeping and lets tests record calls.
+ */
 export interface DrawSurface {
   fillStyle(color: number, alpha?: number): DrawSurface;
   lineStyle(width: number, color: number, alpha?: number): DrawSurface;
@@ -8,21 +12,6 @@ export interface DrawSurface {
   fillTriangle(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): DrawSurface;
   line(x1: number, y1: number, x2: number, y2: number): DrawSurface;
   fillPoly(points: ReadonlyArray<readonly [number, number]>): DrawSurface;
-}
-
-export function phaserSurface(graphics: any): DrawSurface {
-  const surface: DrawSurface = {
-    fillStyle(color, alpha = 1) { graphics.fillStyle(color, alpha); return surface; },
-    lineStyle(width, color, alpha = 1) { graphics.lineStyle(width, color, alpha); return surface; },
-    fillRect(x, y, width, height) { graphics.fillRect(x, y, width, height); return surface; },
-    strokeRect(x, y, width, height) { graphics.strokeRect(x, y, width, height); return surface; },
-    fillCircle(x, y, radius) { graphics.fillCircle(x, y, Math.max(0, radius)); return surface; },
-    strokeCircle(x, y, radius) { graphics.strokeCircle(x, y, Math.max(0, radius)); return surface; },
-    fillTriangle(ax, ay, bx, by, cx, cy) { graphics.fillTriangle(ax, ay, bx, by, cx, cy); return surface; },
-    line(x1, y1, x2, y2) { graphics.lineBetween(x1, y1, x2, y2); return surface; },
-    fillPoly(points) { graphics.fillPoints(points.map(([x, y]) => ({ x, y })), true, true); return surface; },
-  };
-  return surface;
 }
 
 export function canvasSurface(context: any, toColor: (value: number, alpha?: number) => string): DrawSurface {

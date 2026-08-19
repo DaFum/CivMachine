@@ -64,8 +64,8 @@ main{padding:1rem}
 .world-shell.tone-positive{--impact-color:var(--mint)}
 .world-shell.tone-negative{--impact-color:var(--danger)}
 .world-shell.tone-mixed{--impact-color:var(--violet)}
-.phaser-world{position:absolute;inset:0}
-.phaser-world canvas{display:block!important}
+.world-surface{position:absolute;inset:0}
+.world-surface canvas{display:block!important}
 .fallback-canvas{position:absolute;inset:0;display:block}
 .fallback-dynamic{pointer-events:none}
 .world-hud{position:absolute;inset:0;pointer-events:none}

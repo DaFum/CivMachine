@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Two independent tiers, deployed as one Next.js app on Vercel:
 
 - `app/` — a thin Next.js App Router shell (~150 lines): registers the service worker, offers PWA install, toggles fullscreen, and embeds the game in an `<iframe src="/game/index.html">`. It contains no game logic.
-- `public/game/` — the actual game: a self-contained, framework-free TypeScript bundle with its own `tsconfig.json`, its own `package.json`, its own test suites, vendored Phaser, and a **committed** `dist/`. Next serves it verbatim as static assets; no bundler touches it.
+- `public/game/` — the actual game: a self-contained, framework-free TypeScript bundle with its own `tsconfig.json`, its own `package.json`, its own test suites, and a **committed** `dist/`. Next serves it verbatim as static assets; no bundler touches it.
 
 That separation is deliberate — the game survives shell/platform rewrites untouched. Do not move game code into the Next build graph.
 
@@ -45,7 +45,7 @@ Strict one-directional layering under `public/game/src/`:
 - **`game/engine.ts`** is the single source of truth. `GameEngine` holds all mutable `state`, exposes `onChange(fn)` for subscribers, and delegates every rule to a small pure module: `rules.ts` (harvest/cost math), `progression.ts` (unlocks, Machine Insight), `paths.ts` (path affinity), `pressure.ts` (Entropy/cascade), `tactical-actions.ts`, `intervention-scheduler.ts` (seeded weighted draw with repetition protection), `harvest-quality.ts`, `run-directives.ts`, `decision-feedback.ts`. Keep new rules in such modules — they are what the tests target.
 - **`main.ts`** owns the `requestAnimationFrame` loop, ticks the engine only in the `civilization` phase, autosaves every 5 s plus on `beforeunload`/`pagehide`/`visibilitychange`, and binds keys 1/2/3 to the tactical actions.
 - **`ui/view-model.ts`** turns engine state into presentation data (labels, bands, redaction by Prediction Core level). **`ui/app.ts`** renders it into the static DOM from `index.html` using template strings plus `replaceIfChanged` (innerHTML comparison). All escaping goes through `esc()`.
-- **`render/world.ts`** is a dual renderer: Phaser when `vendor/phaser.min.js` loaded, otherwise a deterministic Canvas 2D fallback. Both must derive visuals from `render/world-model.ts` (`worldSnapshot`, `developmentStage`) and `render/world-presentation.ts` (`worldPresentation`, `structuralWorldKey`) so the two paths stay in agreement. Tests assert the Canvas path exists and caps at 2× device pixels.
+- **`render/world.ts`** owns the renderer lifecycle and a deterministic Canvas 2D world on two stacked canvases: a cached static layer (sky, terrain, settlements) redrawn only when `structuralWorldKey` changes, and a dynamic layer redrawn every throttled frame. All drawing goes through the `DrawSurface` interface in `render/draw-surface.ts`, which keeps the drawing code free of canvas transform bookkeeping and lets tests record primitives. Visuals must derive from `render/world-model.ts` (`worldSnapshot`, `developmentStage`) and `render/world-presentation.ts` (`worldPresentation`, `structuralWorldKey`). There is no second renderer — tests assert no Phaser naming survives.
 
 ### Two invariants the tests enforce
 
@@ -72,7 +72,6 @@ The engine composes these over the generated catalogs in its field initializers.
 
 - Adding or renaming a module under `public/game/dist/` requires adding it to `APP_ASSETS`. `public/game/tests/presentation.test.mjs` asserts that all eleven `dist/render/*.js` modules are listed.
 - Any release requires bumping `CACHE_NAME`, or returning players keep the old files forever.
-- Phaser is deliberately absent from the precache list; offline sessions use the Canvas fallback.
 
 ## Version coupling
 

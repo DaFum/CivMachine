@@ -2,7 +2,7 @@ import { GameEngine } from './game/engine.js';
 import { startWorldRenderer } from './render/world.js';
 import { createGameUI } from './ui/app.js';
 const engine = new GameEngine();
-const worldHost = document.querySelector('#phaser-world');
+const worldHost = document.querySelector('#world-surface');
 const world = startWorldRenderer(engine, worldHost);
 createGameUI(engine, world);
 const tacticalKeys = {

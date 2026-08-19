@@ -7,7 +7,7 @@ import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/r
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
 import { PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
-import { phaserSurface, canvasSurface } from '../dist/render/draw-surface.js';
+import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
@@ -216,17 +216,7 @@ test('render primitives are deterministic and cover every path', () => {
   }
 });
 
-test('draw surface adapters emit the same primitive sequence on both backends', () => {
-  const phaserCalls = [];
-  const graphics = new Proxy({}, { get: (_t, name) => (...args) => { phaserCalls.push([name, ...args]); } });
-  phaserSurface(graphics).fillStyle(0x112233, .5).fillRect(1, 2, 3, 4).line(5, 6, 7, 8).fillCircle(9, 10, 11);
-  assert.deepEqual(phaserCalls, [
-    ['fillStyle', 0x112233, .5],
-    ['fillRect', 1, 2, 3, 4],
-    ['lineBetween', 5, 6, 7, 8],
-    ['fillCircle', 9, 10, 11],
-  ]);
-
+test('canvas surface translates the drawing vocabulary into 2D context calls', () => {
   const canvasCalls = [];
   const context = {
     set fillStyle(value) { canvasCalls.push(['fillStyle', value]); },
@@ -642,8 +632,7 @@ test('world module no longer carries its own layout or hash helpers', async () =
   assert.ok(!source.includes('function hash01'), 'hash01 must move to primitives.ts');
   assert.ok(!source.includes('interface BuildingShape'), 'BuildingShape is replaced by Structure');
   assert.ok(!source.includes('drawCanvasDecisionImpulse'), 'the impulse renderer must be unified via DrawSurface');
-  assert.ok(source.includes('canvasSurface('), 'the Canvas path must draw through DrawSurface');
-  assert.ok(source.includes('phaserSurface('), 'the Phaser path must draw through DrawSurface');
+  assert.ok(source.includes('canvasSurface('), 'drawing must go through DrawSurface');
   assert.ok(source.includes('drawCreature('), 'inhabitants must be rendered');
   assert.ok(source.includes('drawBanner('), 'faction banners must be rendered');
   assert.ok(source.includes('ConstructionTracker'), 'construction animation must be wired in');

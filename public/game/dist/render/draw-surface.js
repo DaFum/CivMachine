@@ -1,17 +1,3 @@
-export function phaserSurface(graphics) {
-    const surface = {
-        fillStyle(color, alpha = 1) { graphics.fillStyle(color, alpha); return surface; },
-        lineStyle(width, color, alpha = 1) { graphics.lineStyle(width, color, alpha); return surface; },
-        fillRect(x, y, width, height) { graphics.fillRect(x, y, width, height); return surface; },
-        strokeRect(x, y, width, height) { graphics.strokeRect(x, y, width, height); return surface; },
-        fillCircle(x, y, radius) { graphics.fillCircle(x, y, Math.max(0, radius)); return surface; },
-        strokeCircle(x, y, radius) { graphics.strokeCircle(x, y, Math.max(0, radius)); return surface; },
-        fillTriangle(ax, ay, bx, by, cx, cy) { graphics.fillTriangle(ax, ay, bx, by, cx, cy); return surface; },
-        line(x1, y1, x2, y2) { graphics.lineBetween(x1, y1, x2, y2); return surface; },
-        fillPoly(points) { graphics.fillPoints(points.map(([x, y]) => ({ x, y })), true, true); return surface; },
-    };
-    return surface;
-}
 export function canvasSurface(context, toColor) {
     const surface = {
         fillStyle(color, alpha = 1) { context.fillStyle = toColor(color, alpha); return surface; },

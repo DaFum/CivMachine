@@ -1,9 +1,7 @@
 # Third-party runtime
 
-## Phaser 3.90.0
+None.
 
-The browser edition is configured to load Phaser 3.90.0 from cdnjs at runtime.
-
-Phaser is an open-source HTML5 game framework distributed under the MIT License.
-
-The game also includes a native Canvas rendering fallback so the management UI and civilization visualization remain usable if the Phaser CDN is unavailable.
+The browser edition ships no third-party runtime code. The Civilization world is drawn with
+Canvas 2D from `src/render/`, and the management UI is plain DOM. Phaser 3.90.0 was vendored in
+earlier releases but was never loaded by `index.html`, so it was removed in v1.4.0.
