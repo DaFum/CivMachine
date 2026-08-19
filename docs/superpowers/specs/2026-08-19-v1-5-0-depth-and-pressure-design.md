@@ -7,13 +7,15 @@
 
 ## Problem
 
-The v1.3.1 economy is internally consistent but produces a flat game. Headless simulation of the committed engine shows three structural defects.
+The v1.3.1 economy is internally consistent but produces a flat game. Headless simulation of the committed engine shows four structural defects.
 
 **Survival is a switch, not a curve.** The only real cause of death is Entropy reaching 100, which triggers `cascadeDecay` at 7 Stability per second. Ordinary Stability decay is irrelevant: 100 Stability survives 5,556 seconds in Emergence and 2,646 seconds in Transcendence. Entropy resistance comes from `containmentRating`, which counts *installed modules* rather than levels, so it has exactly five states. A run with no upgrades cascades at 205 seconds; `reality_lattice` level 1, costing 90 Causal Mass, is enough to reach Transcendence and harvest at 260 seconds with roughly ten times the yield. The first, doomed run already produces 131 Causal Mass. One purchase therefore resolves the entire survival problem permanently, and levels 2 through 8 of the same module contribute nothing to survival.
 
 **Run duration is a constant.** Harvest grade is capped at `transcendent`, reached with Era 2 at 6,500 years, which arrives at 260 seconds at 1x speed. No build has any reason to stay longer, so every run after the second lasts exactly 260 seconds regardless of investment. The v1.3.0 target of five to eight minutes for a developed build is unreachable by construction.
 
 **The incremental loop never accelerates.** Cultivation Credits are capped at 3 per Controlled Transcendent run and 4 for a path endgame, against an unchanged requirement of 18, so a Universe always takes five to six runs. Simulation across four Universes: 6 runs and 25.1 minutes, 6 runs and 25.4 minutes, 6 runs and 25.4 minutes, 6 runs and 16.0 minutes. `universeResidueAward` returns 4 or 5 residue per Universe because its `civilizations^1.15 / 2.6` term is pinned by the credit cap; the `stable_constants` ladder alone costs 124 residue and the full Universe catalog roughly 900, which is about 180 Universes. Machine upgrades cost `1.62^n` to `1.75^n` while their benefit is additive at 12% per level, and every Universe wipes them, so Universe 2 replays Universe 1 verbatim, including a guaranteed throwaway first run.
+
+**The intervention supply runs out before a long run does.** The catalog offers 96 finite draws, not the 1,093 a naive sum of `max_count` suggests: 52 events allow one appearance per run, 22 allow two, and one, `routine_compliance_audit`, allows 999 and skews the average. Path gating narrows it further. Of 50 path events, the 20 in the `consolidation` and `endgame` phases require `requires_dominant_path`, and a Civilization locks exactly one dominant path forever, because `resolveDominance` returns early once `dominantPath` is set. Eighteen fully written events are therefore unreachable in any given run. Simulated over 1,007 seconds, the pool sustains 48 interventions and then collapses: interventions 49 to 83 are `routine_compliance_audit` **35 times in a row**. The wall sits at roughly 590 seconds. A 260-second run consumes 21 interventions and never reaches it, which is why it has not been observed.
 
 Two smaller defects compound this. Paradox is produced by low Stability, high Attention and low Sanity, so the credit-optimal Controlled Transcendent run yields about 50 Paradox against 600 of every other resource; the campaign simulation held 4 to 8 Paradox throughout, making `paradox_sieve`, `cosmic_muffling` and `contingency_vat` unbuyable. And Control Capacity is not a resource: the cap is 3, every resolved intervention restores 1, and a run resolves 21 interventions, so the surplus is discarded and the budget never binds.
 
@@ -35,7 +37,19 @@ Entropy seconds to cascade if held in a single era, current formula:
 | 1 | 422 | 208 | 91 |
 | 4 | 750 | 500 | 333 |
 
-Interventions per run: 21, one decision every 12.4 seconds. Era 2 admits 73 eligible interventions and 1,093 total draws, so content is not the constraint on longer runs.
+Interventions per run: 21, one decision every 12.4 seconds. Intervention supply measured over a 1,007-second run with maximum current containment:
+
+| Metric | Value |
+| --- | ---: |
+| Interventions resolved | 92 |
+| Distinct events drawn | 42 |
+| First fallback appearance | intervention 9 |
+| Pool collapse | intervention 49, at 590 s |
+| `routine_compliance_audit` share after collapse | 35 of 35 consecutive |
+| Finite draws in the whole catalog | 96 |
+| Path events unreachable per run (`requires_dominant_path`) | 18 of 50 |
+
+A 15-minute run needs roughly 90 interventions against a usable supply of about 48. Content is the binding constraint on longer runs, and it must be addressed for the depth curve to mean anything.
 
 ## Goals
 
@@ -46,12 +60,14 @@ Interventions per run: 21, one decision every 12.4 seconds. Era 2 admits 73 elig
 - Give Paradox a source inside the credit-optimal playstyle.
 - Fill the interval between interventions with cost-bearing decisions, without requiring reflexes.
 - Connect the two layers: banked resources become a tactical reserve during a run.
+- Supply enough varied interventions for a 15-minute run, and never serve the same event repeatedly.
+- Open the written path content that dominance locking currently makes unreachable.
 - Preserve deterministic simulation, exact decision feedback, dirty rendering, per-frame cheapness, mobile usability, reduced-motion support and English game copy.
 
 ## Non-goals
 
-- No fourth era. Every intervention declares `max_era` 2 or lower, so Era 3 would collapse the pool to the fallback event.
-- No edit to `data/content.generated.ts`. All catalog changes are layered through `game/upgrade-balance.ts`.
+- No edit to `data/content.generated.ts` and no revival of the removed generator. Catalog changes are layered through `game/upgrade-balance.ts` and `data/intervention-copy.ts`, and new events arrive through a sibling of `data/entropy-crises.ts`, which `engine.ts` already appends to the event pool.
+- No fifth era, and no starting Civilization in Apotheosis: the `startingEra` clamp from `inherited_time` stays at 2.
 - No save migration and no offline progression.
 - No reflex minigame, no failure timer while an intervention is open, no clickable world zones, no renderer rewrite.
 - No reduction of the existing intervention cadence.
@@ -109,12 +125,14 @@ This is exact for the pressure model, not a linear extrapolation of the current 
 `game/harvest-quality.ts` replaces the four-step grade function with a continuous scale. `development` already integrates era multipliers, `cultivation_accelerator`, directives, matrices and `Accelerate`, so it is the natural progress measure.
 
 ```
-depth       = development / 80
+depth       = development / 80 + 1.5 * endgameStatesReached
 yieldMult   = 0.25 + 0.22 * depth
 credits     = min(20, floor(0.6 * depth))
 ```
 
-The four existing grade names survive as display bands over `depth`, matching the band convention already used for Entropy and Stability:
+`endgameStatesReached` is the count of path end-states the Civilization has resolved, which Path Succession below makes reachable more than once per run. It rewards narrative completion rather than raw duration, so a deep run that actually finishes path arcs beats one that merely survives.
+
+The four existing grade names survive as display bands over `depth`, joined by a fifth, `singular`, which extends the `HarvestGrade` type and `HARVEST_GRADE_LABELS`. This matches the band convention already used for Entropy and Stability:
 
 | Band | Depth | Typical run |
 | --- | ---: | --- |
@@ -167,6 +185,56 @@ The depth factor is essential. Spending resources to survive longer produces mor
 
 This is the highest-risk part of the design and is therefore written as a testable invariant rather than a hope: see the anti-self-funding test below.
 
+## Intervention supply
+
+Four measures together raise the usable supply from about 48 interventions to well past the 90 a 15-minute run needs. They are ordered by cost, and the first is mandatory: without it every deep run degenerates into one repeated event, which would make the depth curve actively unpleasant.
+
+### Scheduler saturation stage
+
+`game/intervention-scheduler.ts` gains a third pool stage. `SchedulerOptions` takes an explicit `exhausted(event, civilization)` predicate so the `max_count` rule moves out of `GameEngine.eventEligible` and into the scheduler, where the staging logic lives.
+
+1. Fresh: exclude the recent six and every exhausted event.
+2. Recent-inclusive: exclude exhausted events only.
+3. Saturated: admit exhausted events, still excluding the recent six.
+
+Stage 3 keeps the existing freshness weight of `1 / (1 + timesSeen * 0.55)`, so an event seen three times carries 0.38 against 0.65 for one seen once, and repetition spreads across the pool instead of concentrating. It also self-suppresses `routine_compliance_audit`, whose `max_count` of 999 keeps it permanently eligible: after 36 sightings its weight is 0.048. The hard-coded fallback in `presentNextEvent` and `selectEvent` remains only as a true last resort, reachable only when no event is era-eligible at all.
+
+### Path succession
+
+`CivilizationPaths.resolveDominance` currently returns early once `dominantPath` is set, which permanently locks 18 written events. From Transcendence onward, dominance can change:
+
+- Era 2 or higher.
+- A non-dominant path exceeds the current dominant path's affinity by `DOMINANCE_MIN_LEAD` and holds at least `DOMINANCE_MIN_AFFINITY`.
+- At least four interventions resolved since the previous succession.
+- At most three successions per run.
+
+Each succession applies the new path's `dominance_effects`, shifts `eventWeightMultiplier` so the successor gets the 4.5 multiplier, and opens that path's `consolidation` and `endgame` events. `PathState` gains `successions: number` and `endgameStates: string[]`, the latter replacing the single `endgameState` while keeping a compatible summary field for presentation. Reaching an end-state stays a one-time event per path.
+
+This is the highest yield per unit of work in the whole design: it is pure rule work, adds no prose, and gives a deep run a narrative arc that pivots instead of a plateau that repeats.
+
+### Apotheosis era
+
+A fourth era named `APOTHEOSIS` begins at **14,000 years**, which is 560 seconds at 1x speed. It is reachable only by developed builds: containment 28 cascades at year 23,024, so Apotheosis covers about 361 seconds of a 921-second run, while containment 14 barely enters it.
+
+Implementation touches exactly these places:
+
+- `ERA_YEARS` becomes `[0, 2500, 6500, 14000]` and `ERA_NAMES` gains `APOTHEOSIS`.
+- The era computation is duplicated at `engine.ts:133` and `engine.ts:185`; it is extracted into a pure `eraForYears(years)` in `game/rules.ts` so there is one source of truth.
+- `PHASE_WEIGHTS` in the scheduler gains a fourth row favouring late phases: `{ impulse: 0.3, reinforcement: 0.5, conflict: 0.9, consolidation: 1.3, endgame: 2.0 }`.
+- `eventDelayWindow` gains a fourth entry of `{ min: 6, max: 9 }`.
+- The era clamp in `calculateHarvest` moves from `min(2, era)` to `min(3, era)`, so the existing `era * 18` Paradox and `era * 55` Existence terms extend naturally.
+- A new layering function beside `applyInterventionCopy` raises `max_era` to 3 for every catalog event that currently declares 2. Without it, the entire pool becomes ineligible on entering Apotheosis and the game would serve nothing but the fallback. Events declaring `max_era` 0 or 1 are early-game flavour and stay as they are.
+- `Progression` gains an `era_apotheosis` milestone worth 2 Insight, matching `era_transcendence`.
+- `render/world-model.ts` already clamps `populationDots`, so era 3 is safe there; no renderer change is required.
+
+The continuous pressure term needs no fourth step: at year 14,000 the multiplier is already 3.15.
+
+### Deep intervention content
+
+A new `data/apotheosis-events.ts`, appended to the pool exactly as `ENTROPY_CRISES` is, contributes **12 events** with `min_era: 3` and `max_count: 2`, adding 24 draws with a voice specific to Apotheosis: the civilization noticing the harvest, negotiating with the machine, post-causal economics, and the machine's own maintenance. Each event declares a title, body, two or three choices with a prediction, effects and `path_affinity`. At least four must carry an `entropy` effect so they interact with the Vent economy, and at least two must carry a `harvest_mult_*` effect so Apotheosis can change the shape of a harvest rather than only its size.
+
+Twelve rather than the twenty-five that raw volume would demand: the saturation stage and path succession already cover the count, so this module exists to give the era a distinct voice, not to fill a quota.
+
 ## Prestige economy
 
 ```
@@ -202,14 +270,17 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 - `game/harvest-quality.ts` owns depth, bands, the yield multiplier and the credit curve, including the chaotic factor.
 - `game/tactical-actions.ts` owns Vent and the revised `Accelerate` surcharge.
 - `game/run-interventions.ts` is new and owns the three reserve actions, the cost escalation and the per-run use limits.
-- `game/rules.ts` owns the two prestige award formulas and `reality_lattice` bootstrap reachability.
+- `game/intervention-scheduler.ts` owns the three pool stages, the `exhausted` predicate contract, the fourth `PHASE_WEIGHTS` row and the fourth delay window. The `max_count` rule moves here from `GameEngine.eventEligible`.
+- `game/paths.ts` owns path succession, its guards and the `endgameStates` list.
+- `game/rules.ts` owns the two prestige award formulas, `eraForYears`, the era clamp in `calculateHarvest` and `reality_lattice` bootstrap reachability.
+- `data/intervention-copy.ts` gains the `max_era` layering function; `data/apotheosis-events.ts` is new and holds the twelve Apotheosis events. Neither touches the generated catalog.
 - `game/upgrade-balance.ts` owns the repurposed Universe descriptions and the 1.75 growth floor.
 - `game/engine.ts` composes them, sums containment from levels, and preserves `wide_lattice` levels in `resetMachineLayer()`.
 - `ui/view-model.ts` and `ui/app.ts` present them; no simulation rule moves into presentation.
 
 ## Save policy
 
-`SAVE_VERSION` becomes 3. `Civilization` gains `runInterventionUses: Record<string, number>` and `tactical.actionUsage` gains a `vent` key, so the state shape changes and a v2 save cannot be loaded. Existing saves are silently discarded by the current version gate, which is the intended behaviour. There is no migration path.
+`SAVE_VERSION` becomes 3. `Civilization` gains `runInterventionUses: Record<string, number>`, `tactical.actionUsage` gains a `vent` key, and `PathState` gains `successions: number` and `endgameStates: string[]`. The state shape therefore changes and a v2 save cannot be loaded. Existing saves are silently discarded by the current version gate, which is the intended behaviour. There is no migration path.
 
 ## Failure handling and invariants
 
@@ -220,6 +291,10 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 - `premature` grants zero credits in every Directive and depth state.
 - Chaotic credits are `floor(credits * 0.6)` and never negative.
 - Entropy crisis thresholds at 25, 50 and 75 still queue exactly once each, including after a discrete jump past two thresholds and after a Vent drops Entropy back below a threshold already triggered.
+- The same intervention is never served twice in a row, in any pool stage, including the saturated stage.
+- The hard-coded fallback event is served only when no event is era-eligible at all, never because the pool is exhausted.
+- A succession never fires below Era 2, never twice within four resolved interventions, and never more than three times per run.
+- Entering Apotheosis leaves the eligible pool non-empty for every reachable Civilization state.
 - Ticking writes no `localStorage` and rebuilds no interactive controls; notifications stay batched.
 - Structural keys change on bands and interventions only, never on a continuously ticking number.
 
@@ -236,6 +311,11 @@ The one-directional layering is preserved and every new rule lands in a pure, se
 - Reserve interventions: the cost formula at three depths and three use counts, the per-run cap of 3, the Insight gates.
 - Both prestige award formulas at declared inputs, including 32 residue at 18 credits and a bank of 8,000.
 - `wide_lattice` preserves exactly `min(reality_lattice, wide_lattice)` levels across `resetMachineLayer()`.
+- The three pool stages are selected in order, and the saturated stage never returns an event from the recent six.
+- `eraForYears` returns 0, 1, 2 and 3 at the four thresholds and at the boundaries either side of each.
+- The `max_era` layering function raises exactly the events declaring 2 and leaves 0 and 1 untouched.
+- Succession guards: era, lead, affinity, interval and the cap of three, each rejected independently.
+- The twelve Apotheosis events all declare `min_era` 3, at least two choices, a prediction per choice, at least four with an `entropy` effect and at least two with a `harvest_mult_*` effect.
 
 ### Deterministic balance tests
 
@@ -248,6 +328,8 @@ A headless harness drives the compiled engine with fixed seeds and declared poli
 - 18 credits are reachable in at most six runs at containment 4 and in two runs at containment 28.
 - **Anti-self-funding:** for a deep run, a policy that uses every reserve intervention at every opportunity ends with strictly fewer net resources than the same run without them.
 - A Universe cycle after the first is strictly shorter than the first, proving `wide_lattice` removed the throwaway run.
+- **Supply:** a 900-second run at containment 28 resolves at least 90 interventions, draws at least 55 distinct events, serves no single event more than 5 times, and serves the hard-coded fallback at most 3 times. This is the regression test for the measured collapse of 35 consecutive identical interventions.
+- A deep run reaches at least one path succession, and a run that never leaves Expansion reaches none.
 
 ### Release verification
 
@@ -269,5 +351,8 @@ A headless harness drives the compiled engine with fixed seeds and declared poli
 - Reserve interventions are never net-positive on resources.
 - The first Universe consumption returns about 32 residue, and the Universe catalog is substantially completable within fifteen Universes.
 - The first run of a new Universe is no longer a guaranteed loss once `wide_lattice` is owned.
+- A 15-minute run never serves the same intervention more than five times and never falls back to a single repeated event; the measured collapse at intervention 49 does not reproduce.
+- The 18 path events currently locked behind `requires_dominant_path` are reachable through succession.
+- Apotheosis is reachable only by developed builds, has its own name, cadence and phase weighting, and never empties the eligible pool.
 - Per-frame cheapness and structural-key stability tests still pass; no continuous value enters a structural key.
 - `SAVE_VERSION` is 3, v2 saves are discarded without error, and game copy stays English.
