@@ -215,4 +215,13 @@ export function applyInterventionCopy(events) {
         };
     });
 }
+// APOTHEOSIS is the fourth era. Every generated intervention declares max_era 2, so without raising
+// that ceiling the whole pool becomes ineligible the moment a Civilization crosses 14,000 years.
+// Events declaring 0 or 1 are early-game flavour and keep their ceiling.
+export function applyEraCeiling(events) {
+    return events.map(event => {
+        const declared = Number(event.max_era ?? 2);
+        return declared === 2 ? { ...event, max_era: 3 } : { ...event };
+    });
+}
 //# sourceMappingURL=intervention-copy.js.map

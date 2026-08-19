@@ -5,7 +5,8 @@ import { CivilizationPaths } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
-import { applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
+import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
+import { APOTHEOSIS_EVENTS } from '../dist/data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../dist/data/entropy-crises.js';
 import {
   buildInterventionPool,
@@ -1117,4 +1118,74 @@ test('freshness spreads saturated repetition instead of concentrating it', () =>
   const pool = buildInterventionPool([{ id: 'often', weight: 1 }, { id: 'rarely', weight: 1 }], civ, options);
   const weights = new Map(pool.map(entry => [entry.event.id, entry.weight]));
   assert.ok(weights.get('rarely') > weights.get('often') * 2);
+});
+
+test('Apotheosis has its own cadence and phase weighting', () => {
+  const civ = GameEngine.createCivilizationForTest(320);
+  civ.era = 3;
+  assert.deepEqual(eventDelayWindow(civ), { min: 6, max: 9 });
+  const endgame = { id: 'x', weight: 1, path_id: 'machine_faith', path_phase: 'endgame' };
+  const impulse = { id: 'y', weight: 1, path_id: 'machine_faith', path_phase: 'impulse' };
+  const options = { pathMultiplier: () => 1, stateMultiplier: () => 1, exhausted: () => false };
+  const pool = new Map(buildInterventionPool([endgame, impulse], civ, options).map(e => [e.event.id, e.weight]));
+  assert.ok(pool.get('x') > pool.get('y') * 5, 'Apotheosis must favour endgame phases');
+});
+
+test('the era ceiling keeps the catalog eligible in Apotheosis', () => {
+  const raised = applyEraCeiling(CONTENT.events);
+  assert.equal(raised.length, CONTENT.events.length);
+  for (let index = 0; index < raised.length; index++) {
+    const original = Number(CONTENT.events[index].max_era ?? 2);
+    const expected = original === 2 ? 3 : original;
+    assert.equal(Number(raised[index].max_era), expected, `${raised[index].id} ceiling`);
+  }
+  assert.ok(raised.some(event => Number(event.max_era) === 3));
+});
+
+test('a civilization in Apotheosis still has an eligible pool', () => {
+  const engine = freshEngine();
+  engine.startCivilization(321);
+  const civ = engine.state.civilization;
+  civ.era = 3;
+  civ.years = 15000;
+  civ.eventChoices = 12;
+  civ.pendingEvent = '';
+  civ.eventTimer = 0;
+  engine.tick(0.25);
+  assert.ok(civ.pendingEvent, 'an intervention must be presented in Apotheosis');
+  assert.notEqual(civ.pendingEvent, 'routine_compliance_audit');
+});
+
+test('the Apotheosis event module meets its content contract', () => {
+  assert.equal(APOTHEOSIS_EVENTS.length, 12);
+  let entropyEffects = 0;
+  let harvestEffects = 0;
+  for (const event of APOTHEOSIS_EVENTS) {
+    assert.equal(Number(event.min_era), 3, `${event.id} must be Apotheosis-only`);
+    assert.ok(event.title && event.body, `${event.id} needs copy`);
+    assert.ok(event.choices.length >= 2, `${event.id} needs at least two choices`);
+    for (const choice of event.choices) {
+      assert.ok(choice.label, `${event.id} choice needs a label`);
+      assert.ok(choice.prediction, `${event.id} choice needs a prediction`);
+      assert.ok(choice.effects && Object.keys(choice.effects).length, `${event.id} choice needs effects`);
+    }
+    if (event.choices.some(choice => 'entropy' in (choice.effects ?? {}))) entropyEffects++;
+    if (event.choices.some(choice => Object.keys(choice.effects ?? {}).some(key => key.startsWith('harvest_mult_')))) harvestEffects++;
+  }
+  assert.ok(entropyEffects >= 4, `only ${entropyEffects} events touch Entropy`);
+  assert.ok(harvestEffects >= 2, `only ${harvestEffects} events touch harvest multipliers`);
+  const ids = new Set(APOTHEOSIS_EVENTS.map(event => event.id));
+  assert.equal(ids.size, 12);
+  for (const event of CONTENT.events) assert.ok(!ids.has(event.id), `${event.id} collides with the catalog`);
+});
+
+test('reaching Apotheosis awards Machine Insight', () => {
+  const engine = freshEngine();
+  engine.startCivilization(322);
+  const civ = engine.state.civilization;
+  civ.era = 3;
+  civ.development = 400;
+  civ.stats.awareness = 60;
+  Progression.recordCivilizationProgress(engine.state, civ);
+  assert.equal(engine.state.meta.progression.milestones.era_apotheosis, true);
 });

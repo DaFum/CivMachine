@@ -1,5 +1,6 @@
 import { CONTENT } from '../data/content.generated.js';
-import { applyInterventionCopy } from '../data/intervention-copy.js';
+import { applyEraCeiling, applyInterventionCopy } from '../data/intervention-copy.js';
+import { APOTHEOSIS_EVENTS } from '../data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
@@ -36,7 +37,7 @@ export class GameEngine {
         this.tickEmitAccumulator = 0;
         this.feedbackSequence = 0;
         this.traits = C.traits;
-        this.events = [...applyInterventionCopy(C.events), ...ENTROPY_CRISES];
+        this.events = [...applyEraCeiling(applyInterventionCopy(C.events)), ...ENTROPY_CRISES, ...APOTHEOSIS_EVENTS];
         this.machineUpgrades = balancedMachineUpgrades(C.machine_upgrades);
         this.universeUpgrades = balancedUniverseUpgrades(C.universe_upgrades);
         this.axiomUpgrades = balancedAxiomUpgrades(C.axiom_upgrades);

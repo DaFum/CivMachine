@@ -1,5 +1,6 @@
 import { CONTENT } from '../data/content.generated.js';
-import { applyInterventionCopy } from '../data/intervention-copy.js';
+import { applyEraCeiling, applyInterventionCopy } from '../data/intervention-copy.js';
+import { APOTHEOSIS_EVENTS } from '../data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
@@ -44,7 +45,7 @@ export class GameEngine {
   private listeners=new Set<()=>void>();
   private tickEmitAccumulator=0;
   private feedbackSequence=0;
-  private traits:any[]=C.traits; private events:any[]=[...applyInterventionCopy(C.events),...ENTROPY_CRISES]; private machineUpgrades:any[]=balancedMachineUpgrades(C.machine_upgrades); private universeUpgrades:any[]=balancedUniverseUpgrades(C.universe_upgrades); private axiomUpgrades:any[]=balancedAxiomUpgrades(C.axiom_upgrades); private directives:any[]=C.directives; private matrices:any[]=C.breeding_matrices; private mutations:any[]=C.mutations;
+  private traits:any[]=C.traits; private events:any[]=[...applyEraCeiling(applyInterventionCopy(C.events)),...ENTROPY_CRISES,...APOTHEOSIS_EVENTS]; private machineUpgrades:any[]=balancedMachineUpgrades(C.machine_upgrades); private universeUpgrades:any[]=balancedUniverseUpgrades(C.universe_upgrades); private axiomUpgrades:any[]=balancedAxiomUpgrades(C.axiom_upgrades); private directives:any[]=C.directives; private matrices:any[]=C.breeding_matrices; private mutations:any[]=C.mutations;
   constructor(options:EngineOptions={}){
     this.storage=options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave=options.autosave ?? true;

@@ -237,6 +237,19 @@ A new `data/apotheosis-events.ts`, appended to the pool exactly as `ENTROPY_CRIS
 
 Twelve rather than the twenty-five that raw volume would demand: the saturation stage and path succession already cover the count, so this module exists to give the era a distinct voice, not to fill a quota.
 
+**Entropy discipline in content.** Apotheosis is the pressure peak, so its Entropy effects are predominantly a cost. Relief is capped at **−3** per choice and is always paired with a loss the player feels. This is not a stylistic preference but a measured constraint: content relief is multiplied by `max_count` and by how often a long run draws the event, so a first draft with relief between −4 and −18 stretched the containment-28 median from 964 s to 1,386 s. Vent and `containment_pulse` are the designated sinks; content must not compete with them.
+
+**Measured curve after the era landed** (median of nine seeds, safety policy, 1x):
+
+| Build | Containment | Median |
+| --- | ---: | ---: |
+| No upgrades | 0 | 181 s |
+| Four modules at level 1 | 4 | 360 s |
+| Deep machine build | 14 | 654 s |
+| Maximum with `stable_constants` | 28 | 988 s |
+
+The 988 s ceiling is 16.5 minutes, slightly above the 15-minute target. It requires a maxed multiverse build **and** an entropy-optimal choice policy, so it is the theoretical ceiling rather than a typical run; the analytic curve with no player intervention stays at 918.7 s.
+
 ## Prestige economy
 
 ```

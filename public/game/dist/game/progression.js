@@ -55,7 +55,8 @@ export class Progression {
     } if (civ.era >= 1)
         this.milestone(state, 'era_expansion', 1, out); if (civ.development >= 180)
         this.milestone(state, 'development_180', 1, out); if (civ.era >= 2)
-        this.milestone(state, 'era_transcendence', 2, out); if (civ.development >= 340)
+        this.milestone(state, 'era_transcendence', 2, out); if (civ.era >= 3)
+        this.milestone(state, 'era_apotheosis', 2, out); if (civ.development >= 340)
         this.milestone(state, 'development_340', 2, out); if (civ.stats.awareness >= 50)
         this.milestone(state, 'awareness_50', 1, out); return this.refresh(state, out); }
     static recordHarvest(state, record) { const out = []; if (record.chaotic)

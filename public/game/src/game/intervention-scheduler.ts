@@ -22,6 +22,7 @@ const PHASE_WEIGHTS: ReadonlyArray<Readonly<Record<string, number>>> = [
   { impulse: 1.5, reinforcement: 1.2, conflict: 0.75, consolidation: 0.5, endgame: 0.2 },
   { impulse: 0.75, reinforcement: 1, conflict: 1.4, consolidation: 1.25, endgame: 0.6 },
   { impulse: 0.5, reinforcement: 0.75, conflict: 1.1, consolidation: 1.35, endgame: 1.55 },
+  { impulse: 0.3, reinforcement: 0.5, conflict: 0.9, consolidation: 1.3, endgame: 2 },
 ];
 
 export function recentEventIds(civ: Civilization): string[] {
@@ -39,7 +40,7 @@ export function recordRecentIntervention(civ: Civilization, id: string): void {
 
 function phaseMultiplier(event: SchedulerEvent, civ: Civilization): number {
   if (!event.path_phase) return 1;
-  return PHASE_WEIGHTS[Math.max(0, Math.min(2, civ.era))]?.[event.path_phase] ?? 1;
+  return PHASE_WEIGHTS[Math.max(0, Math.min(3, civ.era))]?.[event.path_phase] ?? 1;
 }
 
 function buildPool<T extends SchedulerEvent>(
@@ -99,5 +100,6 @@ export function eventDelayWindow(civ: Civilization): { min: number; max: number 
     { min: 10, max: 14 },
     { min: 8, max: 11 },
     { min: 7, max: 10 },
-  ][Math.max(0, Math.min(2, civ.era))]!;
+    { min: 6, max: 9 },
+  ][Math.max(0, Math.min(3, civ.era))]!;
 }
