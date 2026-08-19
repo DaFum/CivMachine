@@ -71,6 +71,18 @@ one more level on every Axiom and four more Cultivation Depth.
 **Saves from v1.5.0 and earlier are not carried over.** `SAVE_VERSION` is now 4 and older
 saves are discarded on load.
 
+Median of nine seeds in the terminal run under the safety choice policy with Vent and Stabilize:
+
+| Build | Median depth reached | Range | Median run |
+| --- | ---: | ---: | ---: |
+| Four modules at level 1 | 6.2 | 4.6 - 9.3 | 141 s |
+| Deep machine build | 18.6 | 14.8 - 24.6 | 525 s |
+| Maximum with Stable Constants | 53.9 | 41.6 - 68.2 | 1627 s |
+
+A shallow build cannot clear Depth 14, a deep build clears it with little margin, and a maximal
+build clears the scaled targets of several further convergences. The target is a single constant,
+`CONVERGENCE_BASE_DEPTH` in `public/game/src/game/convergence.ts`.
+
 ## Ported game systems
 
 - 90 production interventions, including three scheduled Entropy crises and twelve Apotheosis events
