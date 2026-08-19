@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewState, calculateHarvest, upgradeCost } from '../dist/game/rules.js';
+import { createNewState, calculateHarvest, upgradeCost, eraForYears, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
 import { CivilizationPaths } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
-import { GameEngine } from '../dist/game/engine.js';
+import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
 import { applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
 import { ENTROPY_CRISES } from '../dist/data/entropy-crises.js';
@@ -305,9 +305,9 @@ test('new browser save starts with layered progression', () => {
   assert.equal(Progression.canUseUpgrade(state, 'machine', 'prediction_core'), false);
 });
 
-test('new saves initialize the tactical v2 civilization contract', () => {
+test('new saves initialize the tactical v3 civilization contract', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 2);
+  assert.equal(state.saveVersion, 3);
   assert.equal(state.machine.cultivationCreditsThisUniverse, 0);
   assert.deepEqual(state.machine.runBuild.directiveOfferIds, []);
   assert.equal(state.machine.runBuild.nextCivilizationSeed, 0);
@@ -323,7 +323,7 @@ test('new saves initialize the tactical v2 civilization contract', () => {
   assert.equal(civ.directiveId, '');
 });
 
-test('v2 intentionally ignores the legacy v1 save key', () => {
+test('v3 intentionally ignores the legacy v1 save key', () => {
   const legacy = createNewState();
   legacy.saveVersion = 1;
   const storage = new Map([
@@ -334,7 +334,7 @@ test('v2 intentionally ignores the legacy v1 save key', () => {
     setItem: (key, value) => storage.set(key, value),
     removeItem: key => storage.delete(key),
   }});
-  assert.equal(engine.state.saveVersion, 2);
+  assert.equal(engine.state.saveVersion, 3);
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
@@ -916,4 +916,19 @@ test('simulation batches UI notifications instead of replacing controls every fr
   assert.equal(notifications, 0);
   engine.tick(1 / 60);
   assert.equal(notifications, 1);
+});
+
+test('eraForYears is the single source of truth for the four eras', () => {
+  assert.equal(eraForYears(0), 0);
+  assert.equal(eraForYears(2499), 0);
+  assert.equal(eraForYears(2500), 1);
+  assert.equal(eraForYears(6499), 1);
+  assert.equal(eraForYears(6500), 2);
+  assert.equal(eraForYears(13999), 2);
+  assert.equal(eraForYears(14000), 3);
+  assert.equal(eraForYears(999999), 3);
+  assert.equal(eraForYears(-50), 0);
+  assert.deepEqual([...ERA_YEAR_THRESHOLDS], [0, 2500, 6500, 14000]);
+  assert.equal(ERA_NAMES.length, 4);
+  assert.equal(ERA_NAMES[3], 'APOTHEOSIS');
 });

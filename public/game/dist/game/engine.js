@@ -3,7 +3,7 @@ import { applyInterventionCopy } from '../data/intervention-copy.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
-import { RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
+import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
 import { advancePressure, cascadeDecay } from './pressure.js';
@@ -11,8 +11,7 @@ import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './t
 import { applyHarvestQuality, calculateCultivationCredits, evaluateHarvestQuality } from './harvest-quality.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from './run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from './upgrade-balance.js';
-const ERA_YEARS = [0, 2500, 6500];
-export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE'];
+export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE', 'APOTHEOSIS'];
 const SAVE_KEY = 'reality_consumption_engine_browser_save_v2';
 const C = CONTENT;
 function mixSeed(value) {
@@ -174,7 +173,7 @@ export class GameEngine {
         const era = Math.max(0, Math.min(2, Math.trunc(bonuses.startingEra)));
         const civ = GameEngine.createCivilizationForTest(seed);
         civ.rngState = selection.rngState;
-        civ.years = ERA_YEARS[era];
+        civ.years = ERA_YEAR_THRESHOLDS[era];
         civ.era = era;
         civ.development = 1 + era * 80;
         civ.developmentMultiplier = bonuses.developmentMult;
@@ -230,7 +229,7 @@ export class GameEngine {
             this.post(`ENTROPY THRESHOLD: ${Math.trunc(civ.tactical.entropy)} // containment crisis queued.`);
             this.save();
         }
-        const newEra = civ.years >= 6500 ? 2 : civ.years >= 2500 ? 1 : 0;
+        const newEra = eraForYears(civ.years);
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const s = civ.stats;
@@ -320,7 +319,7 @@ export class GameEngine {
             this.emit();
             return false;
         }
-        const newEra = civ.years >= 6500 ? 2 : civ.years >= 2500 ? 1 : 0;
+        const newEra = eraForYears(civ.years);
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const dominant = CivilizationPaths.resolveDominance(civ);

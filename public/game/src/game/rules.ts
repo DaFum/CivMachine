@@ -1,7 +1,14 @@
 import type { Civilization, GameState, ResourceKey, RuntimeBonuses } from './types.js';
 
 export const RESOURCE_KEYS: ResourceKey[] = ['causal_mass', 'cognition', 'paradox', 'existence'];
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000] as const;
+
+export function eraForYears(years: number): number {
+  const safe = Math.max(0, Number(years) || 0);
+  for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--) if (safe >= ERA_YEAR_THRESHOLDS[era]!) return era;
+  return 0;
+}
 
 export function createNewState(): GameState {
   return {

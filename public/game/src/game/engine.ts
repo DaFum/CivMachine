@@ -3,7 +3,7 @@ import { applyInterventionCopy } from '../data/intervention-copy.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
-import { RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
+import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
 import { advancePressure, cascadeDecay } from './pressure.js';
@@ -13,8 +13,7 @@ import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from './upgrade-balance.js';
 import type { Civilization, DecisionFeedback, GameState, Layer, ResourceKey, RuntimeBonuses, StorageLike, TacticalActionId } from './types.js';
 
-const ERA_YEARS=[0,2500,6500];
-export const ERA_NAMES=['EMERGENCE','EXPANSION','TRANSCENDENCE'];
+export const ERA_NAMES=['EMERGENCE','EXPANSION','TRANSCENDENCE','APOTHEOSIS'];
 const SAVE_KEY='reality_consumption_engine_browser_save_v2';
 const C:any=CONTENT;
 
@@ -110,7 +109,7 @@ export class GameEngine {
     return b;
   }
   traitWeight(id:string){const matrixId=this.state.machine.runBuild.selectedBreedingMatrix;if(!matrixId)return 1;const matrix=this.matrices.find((x:any)=>x.id===matrixId);return (matrix?.effects?.trait_bias??[]).includes(id)?3:1;}
-  startCivilization(requestedSeed=0){if(this.state.phase!=='machine')return false;const run=this.state.machine.runBuild;if(this.systemUnlocked('directives')&&run.directiveOfferIds.length&&!run.selectedDirective){this.lastActionFailure='Select one Directive before starting the Civilization.';this.emit();return false;}this.decisionFeedback=null;this.worldImpulse=null;this.lastActionFailure='';const seed=requestedSeed||run.nextCivilizationSeed||mixSeed(Date.now());const selection=this.buildTraitSelection(seed);const usePreview=seed===run.nextCivilizationSeed&&run.previewTraitIds.length>0;const traitIds=usePreview?[...run.previewTraitIds]:selection.ids;const bonuses=this.runtimeBonuses();const era=Math.max(0,Math.min(2,Math.trunc(bonuses.startingEra)));const civ=GameEngine.createCivilizationForTest(seed);civ.rngState=selection.rngState;civ.years=ERA_YEARS[era]!;civ.era=era;civ.development=1+era*80;civ.developmentMultiplier=bonuses.developmentMult;civ.eventTimer=4;civ.stats.stability=bonuses.stabilityMax;civ.stats.stabilityMax=bonuses.stabilityMax;civ.harvestMult={causal_mass:bonuses.causal_massMult,cognition:bonuses.cognitionMult,paradox:bonuses.paradoxMult,existence:bonuses.existenceMult};civ.stabilityDecayMult=bonuses.stabilityDecayMult;civ.eventDelayBonus=bonuses.eventDelay;civ.predictionLevel=bonuses.predictionLevel;civ.directiveId=run.selectedDirective;const objective=objectiveForDirective(civ.directiveId);civ.directiveObjective={id:objective?.id??'',completed:false};
+  startCivilization(requestedSeed=0){if(this.state.phase!=='machine')return false;const run=this.state.machine.runBuild;if(this.systemUnlocked('directives')&&run.directiveOfferIds.length&&!run.selectedDirective){this.lastActionFailure='Select one Directive before starting the Civilization.';this.emit();return false;}this.decisionFeedback=null;this.worldImpulse=null;this.lastActionFailure='';const seed=requestedSeed||run.nextCivilizationSeed||mixSeed(Date.now());const selection=this.buildTraitSelection(seed);const usePreview=seed===run.nextCivilizationSeed&&run.previewTraitIds.length>0;const traitIds=usePreview?[...run.previewTraitIds]:selection.ids;const bonuses=this.runtimeBonuses();const era=Math.max(0,Math.min(2,Math.trunc(bonuses.startingEra)));const civ=GameEngine.createCivilizationForTest(seed);civ.rngState=selection.rngState;civ.years=ERA_YEAR_THRESHOLDS[era]!;civ.era=era;civ.development=1+era*80;civ.developmentMultiplier=bonuses.developmentMult;civ.eventTimer=4;civ.stats.stability=bonuses.stabilityMax;civ.stats.stabilityMax=bonuses.stabilityMax;civ.harvestMult={causal_mass:bonuses.causal_massMult,cognition:bonuses.cognitionMult,paradox:bonuses.paradoxMult,existence:bonuses.existenceMult};civ.stabilityDecayMult=bonuses.stabilityDecayMult;civ.eventDelayBonus=bonuses.eventDelay;civ.predictionLevel=bonuses.predictionLevel;civ.directiveId=run.selectedDirective;const objective=objectiveForDirective(civ.directiveId);civ.directiveObjective={id:objective?.id??'',completed:false};
     for(const id of traitIds){const trait=this.traitById(id);if(!trait)continue;civ.traits.push(id);this.applyEffects(civ,trait.effects,false);}
     for(const id of this.state.machine.activeMutations){const m=this.mutations.find((x:any)=>x.id===id);if(m)this.applyEffects(civ,m.effects,false);}this.state.machine.activeMutations=[];this.appendHistory(civ,`YEAR ${Math.trunc(civ.years)}: Cultivation begins. Traits: ${civ.traits.map(id=>this.traitById(id)?.name??id).join(', ')}`);this.state.civilization=civ;this.state.phase='civilization';this.state.simulationSpeed=1;this.post(`Cultivation link established for civilization seed ${seed}.`);this.save();this.emit();return true;}
   tick(delta:number){
@@ -130,7 +129,7 @@ export class GameEngine {
       this.post(`ENTROPY THRESHOLD: ${Math.trunc(civ.tactical.entropy)} // containment crisis queued.`);
       this.save();
     }
-    const newEra=civ.years>=6500?2:civ.years>=2500?1:0;
+    const newEra=eraForYears(civ.years);
     if(newEra!==civ.era)this.enterEra(civ,newEra);
     const s=civ.stats;
     const low=Math.max(0,Math.min(1,(100-s.stability)/100));
@@ -182,7 +181,7 @@ export class GameEngine {
     const before=captureDecisionSnapshot(civ);
     const outcome=applyTacticalAction(civ,id,this.runtimeBonuses());
     if(!outcome){this.lastActionFailure='The tactical action could not be resolved.';this.emit();return false;}
-    const newEra=civ.years>=6500?2:civ.years>=2500?1:0;
+    const newEra=eraForYears(civ.years);
     if(newEra!==civ.era)this.enterEra(civ,newEra);
     const dominant=CivilizationPaths.resolveDominance(civ);
     if(dominant)this.post(`DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(dominant).toUpperCase()}`);
