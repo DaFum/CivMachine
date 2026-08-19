@@ -1,3 +1,4 @@
+import { evaluateMilestones } from './milestones.js';
 const MACHINE = {
     reality_lattice: { insight: 0 }, historical_compressor: { insight: 0 }, temporal_injector: { insight: 0 }, prediction_core: { insight: 1, resource: 'cognition' }, cognitive_extractor: { insight: 4, resource: 'cognition' }, paradox_sieve: { insight: 5, resource: 'paradox' }, awareness_scrubber: { insight: 4, resource: 'cognition' }, sanity_protocol: { insight: 5, resource: 'cognition' }, cosmic_muffling: { insight: 6, resource: 'paradox' }, contingency_vat: { insight: 8, resource: 'paradox' }, cultivation_accelerator: { insight: 9, resource: 'existence' }, existence_furnace: { insight: 10, resource: 'existence' }
 };
@@ -27,9 +28,6 @@ export class Progression {
     }
     static announce(state, id, msg, out) { if (state.meta.progression.announcedUnlocks.includes(id))
         return; state.meta.progression.announcedUnlocks.push(id); out.push(msg); }
-    static milestone(state, id, award, out) { if (state.meta.progression.milestones[id])
-        return false; state.meta.progression.milestones[id] = true; state.meta.progression.machineInsight += award; if (award)
-        out.push(`MACHINE INSIGHT +${award}: ${id.replaceAll('_', ' ')}`); return true; }
     static discover(state, id, name, out) { if (this.resourceDiscovered(state, id))
         return; state.meta.progression.discoveredResources.push(id); this.announce(state, `resource:${id}`, `NEW RESOURCE IDENTIFIED: ${name}`, out); }
     static unlockSystem(state, id, name, out) { if (this.systemUnlocked(state, id))
@@ -49,36 +47,24 @@ export class Progression {
     } if (state.meta.universesTotal >= 2)
         this.unlockSystem(state, 'multiverse_prestige', 'MULTIVERSE PRESTIGE', out); if (state.meta.multiversesConsumed >= 1 && insight >= 18)
         this.unlockSystem(state, 'axioms', 'AXIOMATIC MANIPULATION', out); this.refreshKnown(state, 'directives', DIRECTIVE_INSIGHT, 'knownDirectives', out); this.refreshKnown(state, 'breeding_matrices', MATRIX_INSIGHT, 'knownBreedingMatrices', out); this.refreshKnown(state, 'axioms', AXIOM_KNOWLEDGE, 'knownAxioms', out); return out; }
-    static recordCivilizationProgress(state, civ) { const out = []; if (civ.development >= 70) {
-        this.milestone(state, 'development_70', 1, out);
-        this.discover(state, 'cognition', 'Cognition', out);
-    } if (civ.era >= 1)
-        this.milestone(state, 'era_expansion', 1, out); if (civ.development >= 180)
-        this.milestone(state, 'development_180', 1, out); if (civ.era >= 2)
-        this.milestone(state, 'era_transcendence', 2, out); if (civ.era >= 3)
-        this.milestone(state, 'era_apotheosis', 2, out); if (civ.development >= 340)
-        this.milestone(state, 'development_340', 2, out); if (civ.stats.awareness >= 50)
-        this.milestone(state, 'awareness_50', 1, out); return this.refresh(state, out); }
+    static recordMilestones(state, convergenceUnlocked, out = []) { const result = evaluateMilestones(state, convergenceUnlocked); for (const milestone of result.newlyCompleted)
+        if (milestone.insight)
+            out.push(`MACHINE INSIGHT +${milestone.insight}: ${milestone.title}`); return this.refresh(state, out); }
+    static recordCivilizationProgress(state, civ) { const out = []; if (civ.development >= 70)
+        this.discover(state, 'cognition', 'Cognition', out); return this.recordMilestones(state, false, out); }
     static recordHarvest(state, record) { const out = []; if (record.chaotic)
         state.meta.progression.chaoticHarvestsTotal++;
     else {
         state.meta.progression.controlledHarvestsTotal++;
-        const count = state.meta.progression.controlledHarvestsTotal;
-        if (count >= 1) {
-            this.milestone(state, 'controlled_harvest_1', 2, out);
+        if (state.meta.progression.controlledHarvestsTotal >= 1)
             this.discover(state, 'paradox', 'Paradox', out);
-        }
-        if (count >= 2)
-            this.milestone(state, 'controlled_harvest_2', 2, out);
     } if (Number(record.development ?? 0) >= 180)
-        this.discover(state, 'paradox', 'Paradox', out); return this.refresh(state, out); }
-    static recordUniverse(state) { const out = []; if (state.meta.universesTotal <= 1)
-        this.milestone(state, 'first_universe', 4, out);
-    else {
+        this.discover(state, 'paradox', 'Paradox', out); return this.recordMilestones(state, false, out); }
+    static recordUniverse(state) { const out = []; if (state.meta.universesTotal > 1) {
         state.meta.progression.machineInsight++;
         out.push('MACHINE INSIGHT +1: Repeated universe consumption');
-    } this.discover(state, 'existence', 'Existence', out); this.discover(state, 'universal_residue', 'Universal Residue', out); return this.refresh(state, out); }
-    static recordMultiverse(state) { const out = []; this.milestone(state, 'first_multiverse', 6, out); this.discover(state, 'axioms', 'Axioms', out); return this.refresh(state, out); }
+    } this.discover(state, 'existence', 'Existence', out); this.discover(state, 'universal_residue', 'Universal Residue', out); return this.recordMilestones(state, false, out); }
+    static recordMultiverse(state) { const out = []; this.discover(state, 'axioms', 'Axioms', out); return this.recordMilestones(state, false, out); }
     static visibleResourceKeys(state) { return state.meta.progression.discoveredResources.slice(); }
 }
 export function progressionRulesForLayer(layer) {

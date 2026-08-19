@@ -1,5 +1,5 @@
 export const RESOURCE_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000];
 export function eraForYears(years) {
     const safe = Math.max(0, Number(years) || 0);
@@ -24,13 +24,15 @@ export function createNewState() {
         },
         meta: {
             universalResidue: 0, universeUpgradeLevels: {}, universesTotal: 0, universesThisMultiverse: 0,
-            axioms: 0, axiomLevels: {}, multiversesConsumed: 0,
+            axioms: 0, axiomLevels: {}, multiversesConsumed: 0, convergences: 0, victories: [],
             progression: {
                 machineInsight: 0,
                 unlockedSystems: ['machine_upgrades', 'civilization', 'controlled_harvest'],
                 discoveredResources: ['causal_mass'],
                 knownDirectives: [], knownBreedingMatrices: [], knownAxioms: [], milestones: {}, announcedUnlocks: [],
-                controlledHarvestsTotal: 0, chaoticHarvestsTotal: 0
+                controlledHarvestsTotal: 0, chaoticHarvestsTotal: 0,
+                seenDominantPaths: [], bestDepth: 0, bestGrade: '', maxDevelopment: 0, maxEra: 0,
+                objectivesCompleted: 0, longestRunSeconds: 0, maxEndgamesInRun: 0
             }
         },
         civilization: null

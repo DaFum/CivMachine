@@ -21,6 +21,10 @@ import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
+import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
+import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
+import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
+import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -263,9 +267,9 @@ test('new browser save starts with layered progression', () => {
   assert.equal(Progression.canUseUpgrade(state, 'machine', 'prediction_core'), false);
 });
 
-test('new saves initialize the tactical v3 civilization contract', () => {
+test('new saves initialize the tactical v4 civilization contract', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 3);
+  assert.equal(state.saveVersion, 4);
   assert.equal(state.machine.cultivationCreditsThisUniverse, 0);
   assert.deepEqual(state.machine.runBuild.directiveOfferIds, []);
   assert.equal(state.machine.runBuild.nextCivilizationSeed, 0);
@@ -281,7 +285,7 @@ test('new saves initialize the tactical v3 civilization contract', () => {
   assert.equal(civ.directiveId, '');
 });
 
-test('v3 intentionally ignores the legacy v1 save key', () => {
+test('v4 intentionally ignores the legacy v1 save key', () => {
   const legacy = createNewState();
   legacy.saveVersion = 1;
   const storage = new Map([
@@ -292,7 +296,7 @@ test('v3 intentionally ignores the legacy v1 save key', () => {
     setItem: (key, value) => storage.set(key, value),
     removeItem: key => storage.delete(key),
   }});
-  assert.equal(engine.state.saveVersion, 3);
+  assert.equal(engine.state.saveVersion, 4);
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
@@ -1436,4 +1440,377 @@ test('a no-upgrade run with full reserve spending stays under seven minutes', ()
   for (const key of ['causal_mass', 'cognition', 'existence']) engine.state.machine.currencies[key] = 200_000;
   const result = runCivilization(engine, { seed: 4324, policy: ['safe', 'vent', 'reserve'] });
   assert.ok(result.elapsed <= 420, `survived ${result.elapsed}s`);
+});
+
+test('new state carries convergence and milestone statistics fields', () => {
+  const state = createNewState();
+  assert.equal(state.saveVersion, 4);
+  assert.equal(state.meta.convergences, 0);
+  assert.deepEqual(state.meta.victories, []);
+  const p = state.meta.progression;
+  assert.deepEqual(p.seenDominantPaths, []);
+  assert.equal(p.bestDepth, 0);
+  assert.equal(p.bestGrade, '');
+  assert.equal(p.maxDevelopment, 0);
+  assert.equal(p.maxEra, 0);
+  assert.equal(p.objectivesCompleted, 0);
+  assert.equal(p.longestRunSeconds, 0);
+  assert.equal(p.maxEndgamesInRun, 0);
+  assert.equal(GameEngine.createCivilizationForTest(7).terminal, false);
+});
+
+test('a save written under the previous version is discarded', () => {
+  const stored = JSON.stringify({ ...createNewState(), saveVersion: 3 });
+  const engine = new GameEngine({
+    autosave: false,
+    storage: { getItem: () => stored, setItem: () => {}, removeItem: () => {} },
+  });
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.state.saveVersion, 4);
+});
+
+const MIGRATED_MILESTONE_AWARDS = {
+  development_70: 1, development_180: 1, development_340: 2,
+  era_expansion: 1, era_transcendence: 2, era_apotheosis: 2, awareness_50: 1,
+  controlled_harvest_1: 2, controlled_harvest_2: 2,
+  first_universe: 4, first_multiverse: 6,
+};
+
+// Awards above 1 must sit behind Apotheosis, a deep harvest or the prestige layers, or the
+// existing unlock thresholds (directives at 3, axioms at 18-23) would move forward.
+const ALLOWED_LARGE_AWARDS = new Set([
+  ...Object.keys(MIGRATED_MILESTONE_AWARDS),
+  'development_600', 'development_1000', 'endurance_900',
+  'harvest_ascendant', 'harvest_singular',
+  'paths_seen_10', 'endgames_in_run_4',
+  'second_multiverse', 'axioms_all_level_1',
+  'convergence_gate', 'first_convergence',
+]);
+
+test('the milestone catalog has 28 entries with unique ids', () => {
+  assert.equal(MILESTONE_CATALOG.length, 28);
+  assert.equal(new Set(MILESTONE_CATALOG.map(m => m.id)).size, 28);
+  for (const milestone of MILESTONE_CATALOG) {
+    assert.ok(milestone.target > 0, `${milestone.id} needs a positive target`);
+    assert.ok(milestone.title.length > 0 && milestone.description.length > 0);
+  }
+});
+
+test('migrated milestones keep their identifiers and award amounts', () => {
+  for (const [id, insight] of Object.entries(MIGRATED_MILESTONE_AWARDS)) {
+    const milestone = MILESTONE_CATALOG.find(m => m.id === id);
+    assert.ok(milestone, `${id} is missing from the catalog`);
+    assert.equal(milestone.insight, insight, `${id} award changed`);
+  }
+});
+
+test('only late milestones award more than one Machine Insight', () => {
+  for (const milestone of MILESTONE_CATALOG) {
+    if (milestone.insight <= 1) continue;
+    assert.ok(ALLOWED_LARGE_AWARDS.has(milestone.id), `${milestone.id} awards ${milestone.insight} too early`);
+  }
+});
+
+test('harvest grades have a total order', () => {
+  assert.deepEqual([...HARVEST_GRADE_ORDER], ['premature', 'established', 'transcendent', 'ascendant', 'singular']);
+  assert.equal(gradeIndex(''), -1);
+  assert.equal(gradeIndex('ascendant'), 3);
+  assert.ok(gradeIndex('singular') > gradeIndex('ascendant'));
+});
+
+test('each milestone completes exactly once and pays its award once', () => {
+  const state = createNewState();
+  state.meta.progression.maxDevelopment = 2000;
+  state.meta.progression.maxEra = 3;
+  state.meta.progression.longestRunSeconds = 1200;
+  state.meta.progression.maxEndgamesInRun = 4;
+  state.meta.progression.controlledHarvestsTotal = 30;
+  state.meta.progression.bestGrade = 'singular';
+  state.meta.progression.objectivesCompleted = 9;
+  state.meta.progression.seenDominantPaths = [
+    'machine_faith', 'collective_mind', 'temporal_dominion', 'reality_engineering', 'biological_transcendence',
+    'cosmic_resistance', 'bureaucratic_singularity', 'post_mortal_civilization', 'void_communion', 'recursive_simulation',
+  ];
+  state.meta.progression.discoveredResources = ['causal_mass', 'cognition', 'paradox', 'existence'];
+  state.meta.universesTotal = 3;
+  state.meta.multiversesConsumed = 2;
+  state.meta.axiomLevels = {
+    axiom_stability: 1, axiom_recursive_memory: 1, axiom_paradox_food: 1,
+    axiom_compassionate_accounting: 1, axiom_impossible_birth: 1, axiom_multiple_choice: 1,
+  };
+  state.meta.convergences = 1;
+  state.civilization = { ...GameEngine.createCivilizationForTest(3), development: 2000, era: 3, elapsedSeconds: 1200 };
+  state.civilization.stats.awareness = 90;
+
+  const first = evaluateMilestones(state, true);
+  assert.equal(first.newlyCompleted.length, 28);
+  const total = MILESTONE_CATALOG.reduce((sum, m) => sum + m.insight, 0);
+  assert.equal(first.insightAwarded, total);
+  assert.equal(completedMilestoneCount(state), 28);
+
+  const second = evaluateMilestones(state, true);
+  assert.equal(second.newlyCompleted.length, 0);
+  assert.equal(second.insightAwarded, 0);
+});
+
+test('milestone progress reports current and target for open entries', () => {
+  const state = createNewState();
+  state.meta.progression.controlledHarvestsTotal = 4;
+  const view = milestoneProgress(state, false).find(m => m.id === 'controlled_harvest_10');
+  assert.equal(view.current, 4);
+  assert.equal(view.target, 10);
+  assert.equal(view.completed, false);
+  assert.equal(view.group, 'HARVEST');
+});
+
+test('the snapshot takes the better of live and recorded values', () => {
+  const state = createNewState();
+  state.meta.progression.maxDevelopment = 500;
+  state.civilization = { ...GameEngine.createCivilizationForTest(5), development: 120 };
+  assert.equal(milestoneSnapshot(state, false).development, 500);
+  state.civilization.development = 900;
+  assert.equal(milestoneSnapshot(state, false).development, 900);
+});
+
+test('a controlled harvest records the statistics milestones read', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(21);
+  civ.development = 420; civ.era = 2; civ.eventChoices = 6; civ.elapsedSeconds = 310;
+  civ.pathState.endgameStates = ['endgame_a', 'endgame_b'];
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  engine.harvest(false);
+  const p = engine.state.meta.progression;
+  assert.equal(p.maxDevelopment >= 420, true);
+  assert.equal(p.maxEra, 2);
+  assert.equal(p.longestRunSeconds, 310);
+  assert.equal(p.maxEndgamesInRun, 2);
+  assert.equal(p.bestGrade, 'transcendent');
+  assert.ok(p.bestDepth > 5);
+  assert.equal(p.milestones.development_340, true);
+  assert.equal(p.milestones.harvest_transcendent, true);
+});
+
+test('dominant paths are recorded once each across runs', () => {
+  const engine = freshEngine();
+  engine.recordDominantPath('machine_faith');
+  engine.recordDominantPath('machine_faith');
+  engine.recordDominantPath('void_communion');
+  engine.recordDominantPath('');
+  assert.deepEqual(engine.state.meta.progression.seenDominantPaths, ['machine_faith', 'void_communion']);
+});
+
+function convergenceInput(overrides = {}) {
+  return {
+    milestonesCompleted: 21,
+    milestonesTotal: 28,
+    multiverses: 2,
+    axioms: [
+      { id: 'axiom_stability', level: 1, maxLevel: 5 },
+      { id: 'axiom_paradox_food', level: 1, maxLevel: 4 },
+      { id: 'axiom_recursive_memory', level: 1, maxLevel: 5 },
+      { id: 'axiom_impossible_birth', level: 1, maxLevel: 1 },
+      { id: 'axiom_compassionate_accounting', level: 1, maxLevel: 4 },
+      { id: 'axiom_multiple_choice', level: 1, maxLevel: 3 },
+    ],
+    bestGradeIndex: CONVERGENCE_ASCENDANT_INDEX,
+    convergences: 0,
+    ...overrides,
+  };
+}
+
+test('the convergence gate opens only when all four requirements are met', () => {
+  assert.equal(convergenceUnlocked(convergenceInput()), true);
+  assert.equal(convergenceUnlocked(convergenceInput({ milestonesCompleted: 20 })), false);
+  assert.equal(convergenceUnlocked(convergenceInput({ multiverses: 1 })), false);
+  assert.equal(convergenceUnlocked(convergenceInput({ bestGradeIndex: 2 })), false);
+  const shallowAxioms = convergenceInput().axioms.map((a, index) => (index === 0 ? { ...a, level: 0 } : a));
+  assert.equal(convergenceUnlocked(convergenceInput({ axioms: shallowAxioms })), false);
+});
+
+test('requirements expose current and target for the UI', () => {
+  const requirements = convergenceRequirements(convergenceInput({ milestonesCompleted: 19 }));
+  assert.equal(requirements.length, 4);
+  const milestones = requirements.find(r => r.id === 'milestones');
+  assert.equal(milestones.current, 19);
+  assert.equal(milestones.target, 21);
+  assert.equal(milestones.met, false);
+  assert.ok(milestones.label.length > 0);
+});
+
+test('convergence targets scale with each victory and clamp to the catalog', () => {
+  assert.deepEqual(convergenceTargets(0), { milestones: 21, multiverses: 2, axiomLevel: 1, depth: 14 });
+  assert.deepEqual(convergenceTargets(1), { milestones: 24, multiverses: 4, axiomLevel: 2, depth: 18 });
+  assert.deepEqual(convergenceTargets(3), { milestones: 30, multiverses: 8, axiomLevel: 4, depth: 26 });
+  const clamped = convergenceRequirements(convergenceInput({ convergences: 3, milestonesCompleted: 28 }));
+  assert.equal(clamped.find(r => r.id === 'milestones').target, 28);
+});
+
+test('the axiom requirement clamps per upgrade at its own maximum level', () => {
+  const axioms = convergenceInput().axioms.map(a => ({ ...a, level: 2 }));
+  const requirements = convergenceRequirements(convergenceInput({ convergences: 1, axioms, multiverses: 4, milestonesCompleted: 24 }));
+  assert.equal(requirements.find(r => r.id === 'axioms').met, true);
+});
+
+test('only a controlled harvest at target depth wins', () => {
+  assert.equal(evaluateConvergence(14, false, 0), 'won');
+  assert.equal(evaluateConvergence(13.9, false, 0), 'failed');
+  assert.equal(evaluateConvergence(40, true, 0), 'failed');
+  assert.equal(evaluateConvergence(14, false, 1), 'failed');
+  assert.equal(evaluateConvergence(18, false, 1), 'won');
+});
+
+test('the terminal run starts in Apotheosis and convergence bonuses stack', () => {
+  const setup = terminalCivilizationSetup();
+  assert.equal(setup.era, 3);
+  assert.equal(setup.years, ERA_YEAR_THRESHOLDS[3]);
+  assert.equal(setup.development, 340);
+  assert.equal(TERMINAL_ENTROPY_MULTIPLIER, 1.6);
+  assert.deepEqual(convergenceBonuses(0), { allHarvestMult: 1, containment: 0 });
+  assert.deepEqual(convergenceBonuses(2), { allHarvestMult: 1.5, containment: 4 });
+});
+
+test('the terminal entropy multiplier feeds the displayed rate', () => {
+  const plain = entropyRate(14000, 0, false);
+  assert.ok(Math.abs(entropyRate(14000, 0, true) - plain * 1.6) < 1e-9);
+  assert.ok(secondsToCascade(14000, 0, 0, true) < secondsToCascade(14000, 0, 0, false));
+});
+
+function unlockedConvergenceEngine() {
+  const engine = freshEngine();
+  const p = engine.state.meta.progression;
+  for (const milestone of MILESTONE_CATALOG.slice(0, 21)) p.milestones[milestone.id] = true;
+  p.bestGrade = 'ascendant';
+  p.unlockedSystems.push('universe_prestige', 'universe_upgrades', 'multiverse_prestige', 'axioms');
+  engine.state.meta.multiversesConsumed = 2;
+  engine.state.meta.axiomLevels = {
+    axiom_stability: 1, axiom_paradox_food: 1, axiom_recursive_memory: 1,
+    axiom_impossible_birth: 1, axiom_compassionate_accounting: 1, axiom_multiple_choice: 1,
+  };
+  return engine;
+}
+
+test('the convergence run can only start once the gate is open', () => {
+  const blocked = freshEngine();
+  assert.equal(blocked.convergenceUnlocked(), false);
+  assert.equal(blocked.startConvergenceRun(4), false);
+  assert.equal(blocked.state.phase, 'machine');
+
+  const engine = unlockedConvergenceEngine();
+  assert.equal(engine.convergenceUnlocked(), true);
+  assert.equal(engine.startConvergenceRun(4), true);
+  assert.equal(engine.state.phase, 'civilization');
+  const civ = engine.state.civilization;
+  assert.equal(civ.terminal, true);
+  assert.equal(civ.era, 3);
+  assert.equal(civ.years, ERA_YEAR_THRESHOLDS[3]);
+  assert.equal(civ.development, 340);
+});
+
+test('the terminal run pays no credits and no resources', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(5);
+  engine.state.civilization.development = 400;
+  engine.state.machine.cultivationCreditsThisUniverse = 7;
+  engine.state.machine.currencies.causal_mass = 250;
+  const before = { ...engine.state.machine.currencies };
+  engine.harvest(false);
+  assert.deepEqual(engine.state.machine.currencies, before);
+  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 7);
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.convergenceUnlocked(), true);
+});
+
+test('a deep controlled harvest in the terminal run wins and pays a stacking bonus', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(6);
+  const civ = engine.state.civilization;
+  civ.development = 1200;
+  civ.eventChoices = 5;
+  civ.pathState.dominantPath = 'machine_faith';
+  civ.pathState.endgameStates = ['endgame_a', 'endgame_b'];
+  const baseHarvestMult = engine.runtimeBonuses().allHarvestMult;
+  engine.harvest(false);
+  assert.equal(engine.state.phase, 'victory');
+  assert.equal(engine.state.meta.convergences, 1);
+  assert.equal(engine.state.meta.victories.length, 1);
+  assert.equal(engine.lastVictory().dominantPath, 'machine_faith');
+  assert.equal(engine.state.meta.progression.milestones.first_convergence, true);
+  assert.ok(engine.runtimeBonuses().allHarvestMult > baseHarvestMult);
+  assert.equal(engine.runtimeBonuses().containmentRating, 2);
+
+  engine.acknowledgeVictory();
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.convergenceTargetDepth(), 18);
+});
+
+test('a cascade in the terminal run fails without losing the unlock', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(7);
+  const civ = engine.state.civilization;
+  // Depth alone would win; only the cascade must decide the outcome, and it has to arrive through
+  // the tick path rather than a hand-called harvest.
+  civ.development = 1200;
+  civ.eventChoices = 5;
+  civ.stats.stability = 1;
+  civ.tactical.entropy = 100;
+  let guard = 0;
+  while (engine.state.phase === 'civilization') {
+    if (++guard > 4000) throw new Error('the cascade never resolved');
+    engine.tick(0.25);
+  }
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.state.machine.lastHarvest.chaotic, true);
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.convergenceUnlocked(), true);
+});
+
+test('reaching the gate completes the convergence_gate milestone', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.refreshConvergenceMilestones();
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('a dominance change from a tactical action counts toward the path milestones', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(53);
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  civ.pathState.affinity.void_communion = 9;
+  civ.stats.stability = 40; // Stabilize is refused at full Reality Stability.
+  assert.equal(engine.useTacticalAction('stabilize'), true, engine.lastActionFailure);
+  assert.deepEqual(engine.state.meta.progression.seenDominantPaths, ['void_communion']);
+});
+
+test('the convergence gate milestone is awarded before the terminal run starts', () => {
+  const engine = unlockedConvergenceEngine();
+  assert.notEqual(engine.state.meta.progression.milestones.convergence_gate, true);
+  engine.startConvergenceRun(9);
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('a normal harvest that opens the gate awards it without waiting for a prestige', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.state.meta.progression.bestGrade = '';
+  assert.equal(engine.convergenceUnlocked(), false);
+  const civ = GameEngine.createCivilizationForTest(61);
+  civ.development = 800; civ.era = 2; civ.eventChoices = 5;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  engine.harvest(false);
+  assert.equal(engine.state.meta.progression.bestGrade, 'ascendant');
+  assert.equal(engine.convergenceUnlocked(), true);
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('installing the last Axiom opens the gate on the spot', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.state.meta.progression.machineInsight = 40;
+  delete engine.state.meta.axiomLevels.axiom_multiple_choice;
+  assert.equal(engine.convergenceUnlocked(), false);
+  engine.state.meta.axioms = 50;
+  assert.equal(engine.purchaseUpgrade('axiom', 'axiom_multiple_choice'), true);
+  assert.equal(engine.convergenceUnlocked(), true);
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
 });

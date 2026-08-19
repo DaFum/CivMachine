@@ -5,7 +5,7 @@ import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
-import { PATH_IDS } from '../dist/game/paths.js';
+import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
@@ -747,11 +747,11 @@ test('the render key tracks the depth band, never the depth itself', () => {
 
 test('the service worker precaches every new game module', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler']) {
+  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler', 'milestones', 'convergence']) {
     assert.ok(source.includes(`'/game/dist/game/${name}.js'`), `sw.js must precache game/${name}.js`);
   }
   assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
-  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.5.0'"), 'CACHE_NAME must be bumped');
+  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.6.0'"), 'CACHE_NAME must be bumped');
 });
 
 test('the construction tracker forgets structures the world no longer contains', () => {
@@ -880,4 +880,78 @@ test('every precached game asset actually exists on disk', async () => {
     const onDisk = new URL(`..${path.replace('/game', '')}`, import.meta.url);
     await assert.doesNotReject(readFile(onDisk), `sw.js precaches ${path}, which is not committed`);
   }
+});
+
+test('the view model reports milestone progress and the convergence gate', () => {
+  const engine = freshEngine();
+  const vm = buildViewModel(engine);
+  assert.equal(vm.milestones.total, 28);
+  assert.equal(vm.milestones.completed, 0);
+  assert.equal(vm.milestones.entries.length, 28);
+  assert.equal(vm.convergence.visible, false);
+  assert.equal(vm.convergence.unlocked, false);
+  assert.equal(vm.convergence.requirements.length, 4);
+  assert.equal(vm.convergence.targetDepth, 14);
+  assert.ok(vm.convergence.reason.length > 0);
+  assert.equal(vm.victory, null);
+});
+
+test('the convergence card becomes visible after the first multiverse', () => {
+  const engine = freshEngine();
+  engine.state.meta.multiversesConsumed = 1;
+  assert.equal(buildViewModel(engine).convergence.visible, true);
+});
+
+test('the render key ignores live depth but tracks convergence readiness', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(77);
+  civ.terminal = true;
+  civ.development = 400;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  const before = civilizationRenderKey(buildViewModel(engine));
+  civ.development = 460;
+  assert.equal(civilizationRenderKey(buildViewModel(engine)), before);
+  civ.development = 2000;
+  civ.pathState.endgameStates = ['a', 'b', 'c', 'd'];
+  assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before);
+});
+
+test('a terminal run gets its own cached world layer', () => {
+  const plain = GameEngine.createCivilizationForTest(78);
+  const terminal = { ...GameEngine.createCivilizationForTest(78), terminal: true };
+  assert.notEqual(structuralWorldKey(terminal, 800), structuralWorldKey(plain, 800));
+});
+
+test('the tactical rail shows the terminal run its real entropy pressure', () => {
+  const engine = freshEngine();
+  const civ = GameEngine.createCivilizationForTest(79);
+  civ.years = 14000;
+  engine.state.civilization = civ;
+  engine.state.phase = 'civilization';
+  const normal = buildViewModel(engine).tactical;
+  civ.terminal = true;
+  const terminal = buildViewModel(engine).tactical;
+  assert.ok(Math.abs(terminal.entropyRate - normal.entropyRate * 1.6) < 1e-9);
+  assert.ok(terminal.secondsToCascade < normal.secondsToCascade);
+});
+
+test('index.html hosts the victory view and the machine cards render', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.includes('id="victory-view"'));
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.ok(app.includes('MILESTONE REGISTER'));
+  assert.ok(app.includes('GREAT CONVERGENCE'));
+  assert.ok(app.includes('data-action="convergence"'));
+  assert.ok(app.includes('data-action="acknowledge-victory"'));
+  assert.ok(app.includes('TERMINAL CULTIVATION'));
+  // Every interpolated player value stays escaped.
+  assert.ok(!app.includes('${vm.convergence.reason}'));
+  assert.ok(app.includes('esc(vm.convergence.reason)'));
+});
+
+test('the victory screen names the dominant path instead of its identifier', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.ok(app.includes('CivilizationPaths.displayName(record.dominantPath)'));
+  assert.notEqual(CivilizationPaths.displayName('machine_faith'), 'machine_faith');
 });

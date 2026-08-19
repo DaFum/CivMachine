@@ -66,4 +66,8 @@ export function applyHarvestQuality(rawRewards, quality, options = {}) {
         rewards.causal_mass = Math.max(8, rewards.causal_mass);
     return { rewards, rewardMultiplier };
 }
+export const HARVEST_GRADE_ORDER = DEPTH_BANDS.map(band => band.grade);
+export function gradeIndex(grade) {
+    return grade ? HARVEST_GRADE_ORDER.indexOf(grade) : -1;
+}
 //# sourceMappingURL=harvest-quality.js.map

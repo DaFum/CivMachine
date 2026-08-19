@@ -63,6 +63,7 @@ export function structuralWorldKey(civ, viewportWidth) {
     const presentation = worldPresentation(civ);
     return [
         civ.seed,
+        civ.terminal ? 'terminal' : 'normal',
         Math.round(viewportWidth / 80),
         civ.era,
         snapshot.stage,
