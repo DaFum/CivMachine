@@ -368,3 +368,36 @@ test('faction signature bands shares into quarters', () => {
   civ.pathState.affinity.void_communion = 8;
   assert.notEqual(factionSignature(civ), base, 'crossing quarters must change the key');
 });
+
+test('agent budget never exceeds its per-class or total ceiling', () => {
+  let maxTotal = 0;
+  for (const era of [0, 1, 2, 3, 4]) {
+    for (const development of [1, 60, 200, 600, 2000, 9000]) {
+      for (const institutions of [0, 3, 9]) {
+        const civ = GameEngine.createCivilizationForTest(31 + era);
+        civ.era = era; civ.development = development; civ.eventChoices = institutions * 3;
+        for (let i = 0; i < institutions; i++) civ.institutions.push(`Institution ${i}`);
+        const budget = worldSnapshot(civ, 900).agentBudget;
+        assert.ok(budget.pedestrians <= 60, `pedestrians ${budget.pedestrians}`);
+        assert.ok(budget.vehicles <= 34, `vehicles ${budget.vehicles}`);
+        assert.ok(budget.aircraft <= 14, `aircraft ${budget.aircraft}`);
+        assert.ok(budget.orbital <= 8, `orbital ${budget.orbital}`);
+        assert.ok(budget.launches <= 4, `launches ${budget.launches}`);
+        const total = budget.pedestrians + budget.vehicles + budget.aircraft + budget.orbital + budget.launches;
+        assert.ok(total <= 120, `total ${total}`);
+        maxTotal = Math.max(maxTotal, total);
+      }
+    }
+  }
+  assert.ok(maxTotal > 60, 'a fully developed world should actually use the budget');
+});
+
+test('settlement count grows with development stage and stays bounded', () => {
+  const early = GameEngine.createCivilizationForTest(41);
+  assert.equal(worldSnapshot(early, 900).settlementCount, 1);
+  const late = GameEngine.createCivilizationForTest(41);
+  late.development = 600; late.era = 4; late.eventChoices = 15;
+  late.institutions.push('Consensus Lattice', 'Reality Works Authority');
+  const count = worldSnapshot(late, 900).settlementCount;
+  assert.ok(count >= 6 && count <= 9, `settlementCount was ${count}`);
+});

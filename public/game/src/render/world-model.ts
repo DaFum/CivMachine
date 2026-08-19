@@ -25,8 +25,18 @@ export function worldSnapshot(civ: Civilization, viewportWidth: number) {
   else if (stage === 2) buildingCount = Math.max(13, Math.min(30, 13 + civ.era * 3 + institutionCount * 2 + Math.trunc(development / 36)));
   else if (stage === 3) buildingCount = Math.max(22, Math.min(52, 22 + civ.era * 4 + institutionCount * 3 + Math.trunc(development / 24)));
   else buildingCount = Math.max(34, Math.min(84, 34 + civ.era * 5 + institutionCount * 4 + Math.trunc(development / 16)));
+  const settlementCount = Math.max(1, Math.min(9, 1 + stage * 2 + Math.trunc(civ.era / 2)));
+  const agentBudget = {
+    pedestrians: Math.max(4, Math.min(60, 4 + stage * 8 + Math.trunc(development / 26) + civ.era * 6)),
+    vehicles: stage >= 1 ? Math.max(2, Math.min(34, stage * 4 + Math.trunc(development / 45) + civ.era * 3)) : 0,
+    aircraft: stage >= 2 && civ.era >= 1 ? Math.max(1, Math.min(14, (stage - 1) * 2 + civ.era + Math.trunc(development / 220))) : 0,
+    orbital: stage >= 3 && civ.era >= 1 ? Math.max(1, Math.min(8, stage - 2 + Math.trunc(development / 320))) : 0,
+    launches: stage >= 3 && civ.era >= 2 ? Math.max(1, Math.min(4, stage - 2)) : 0,
+  };
   return {
     stage,
+    settlementCount,
+    agentBudget,
     worldWidth: Math.max(viewportWidth, Math.round(viewportWidth * worldWidthMultiplier(civ))),
     buildingCount,
     populationDots: Math.max(8, Math.min(230, 8 + stage * 12 + Math.trunc(development / 12) + civ.era * 18)),
