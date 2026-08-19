@@ -12,6 +12,8 @@ import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './t
 import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality, gradeIndex } from './harvest-quality.js';
 import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses } from './run-interventions.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from './run-directives.js';
+import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup } from './convergence.js';
+import { MILESTONE_CATALOG, completedMilestoneCount } from './milestones.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from './upgrade-balance.js';
 export const ERA_NAMES = ['EMERGENCE', 'EXPANSION', 'TRANSCENDENCE', 'APOTHEOSIS'];
 const SAVE_KEY = 'reality_consumption_engine_browser_save_v2';
@@ -152,15 +154,18 @@ export class GameEngine {
                     b[target] = b[target] * Number(val);
             }
         }
+        const convergence = convergenceBonuses(this.state.meta.convergences);
+        b.allHarvestMult *= convergence.allHarvestMult;
+        b.containmentRating += convergence.containment;
         return b;
     }
     traitWeight(id) { const matrixId = this.state.machine.runBuild.selectedBreedingMatrix; if (!matrixId)
         return 1; const matrix = this.matrices.find((x) => x.id === matrixId); return (matrix?.effects?.trait_bias ?? []).includes(id) ? 3 : 1; }
-    startCivilization(requestedSeed = 0) {
+    startCivilization(requestedSeed = 0, terminal = false) {
         if (this.state.phase !== 'machine')
             return false;
         const run = this.state.machine.runBuild;
-        if (this.systemUnlocked('directives') && run.directiveOfferIds.length && !run.selectedDirective) {
+        if (!terminal && this.systemUnlocked('directives') && run.directiveOfferIds.length && !run.selectedDirective) {
             this.lastActionFailure = 'Select one Directive before starting the Civilization.';
             this.emit();
             return false;
@@ -173,12 +178,14 @@ export class GameEngine {
         const usePreview = seed === run.nextCivilizationSeed && run.previewTraitIds.length > 0;
         const traitIds = usePreview ? [...run.previewTraitIds] : selection.ids;
         const bonuses = this.runtimeBonuses();
-        const era = Math.max(0, Math.min(2, Math.trunc(bonuses.startingEra)));
+        const setup = terminal ? terminalCivilizationSetup() : null;
+        const era = setup ? setup.era : Math.max(0, Math.min(2, Math.trunc(bonuses.startingEra)));
         const civ = GameEngine.createCivilizationForTest(seed);
+        civ.terminal = terminal;
         civ.rngState = selection.rngState;
-        civ.years = ERA_YEAR_THRESHOLDS[era];
+        civ.years = setup ? setup.years : ERA_YEAR_THRESHOLDS[era];
         civ.era = era;
-        civ.development = 1 + era * 80;
+        civ.development = setup ? setup.development : 1 + era * 80;
         civ.developmentMultiplier = bonuses.developmentMult;
         civ.eventTimer = 4;
         civ.stats.stability = bonuses.stabilityMax;
@@ -265,6 +272,8 @@ export class GameEngine {
         this.clampStats(civ);
         for (const m of Progression.recordCivilizationProgress(this.state, civ))
             this.post(m);
+        if (civ.terminal)
+            this.refreshConvergenceMilestones();
         if (s.stability <= 0) {
             this.harvest(true);
             return;
@@ -447,7 +456,8 @@ export class GameEngine {
         p.bestGrade = details.grade; if (details.objectiveCompleted)
         p.objectivesCompleted++; }
     harvest(chaotic = false) { const civ = this.state.civilization; if (!civ)
-        return { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }; const details = this.previewHarvestDetails(chaotic); civ.directiveObjective.completed = details.objectiveCompleted; this.recordRunStatistics(civ, details); const rewards = details.rewards; for (const k of RESOURCE_KEYS)
+        return { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }; const details = this.previewHarvestDetails(chaotic); if (civ.terminal)
+        return this.finishTerminalRun(civ, chaotic, details); civ.directiveObjective.completed = details.objectiveCompleted; this.recordRunStatistics(civ, details); const rewards = details.rewards; for (const k of RESOURCE_KEYS)
         this.state.machine.currencies[k] += rewards[k]; let mutationId = ''; if (chaotic && this.mutations.length) {
         const rng = new SeededRng(civ.rngState);
         mutationId = this.mutations[rng.int(0, this.mutations.length - 1)].id;
@@ -458,14 +468,56 @@ export class GameEngine {
         this.post(m); this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(mixSeed(civ.seed + this.state.machine.civilizationsTotal), false); this.post(`${chaotic ? 'CHAOTIC' : 'CONTROLLED'} ${details.grade.toUpperCase()} HARVEST complete. +${details.credits} Cultivation Credits.`); if (details.objectiveCompleted)
         this.post('DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.'); this.post(`Yield: Causal ${rewards.causal_mass}, Cognition ${rewards.cognition}, Paradox ${rewards.paradox}, Existence ${rewards.existence}.`); if (mutationId)
         this.post(`Machine mutation acquired: ${this.mutations.find((x) => x.id === mutationId)?.name ?? mutationId}.`); this.save(); this.emit(); return rewards; }
+    finishTerminalRun(civ, chaotic, details) {
+        const zero = { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 };
+        this.recordRunStatistics(civ, details);
+        this.state.machine.civilizationsTotal++;
+        const outcome = evaluateConvergence(details.depth, chaotic, this.state.meta.convergences);
+        this.state.machine.lastHarvest = { chaotic, rewards: { ...zero }, terminal: true, seed: civ.seed, years: Math.trunc(civ.years), era: civ.era, development: civ.development, grade: details.grade, depth: details.depth, credits: 0, reward_multiplier: 0, outcome };
+        if (outcome === 'won') {
+            const record = { convergence: this.state.meta.convergences + 1, seed: civ.seed, years: Math.trunc(civ.years), era: civ.era, depth: details.depth, development: civ.development, dominantPath: civ.pathState.dominantPath, endgameStates: [...civ.pathState.endgameStates] };
+            this.state.meta.convergences++;
+            this.state.meta.victories.unshift(record);
+            this.state.meta.victories = this.state.meta.victories.slice(0, 5);
+            this.post(`GREAT CONVERGENCE ${record.convergence} ACHIEVED at Cultivation Depth ${details.depth.toFixed(1)}.`);
+        }
+        else
+            this.post(`CONVERGENCE FAILED at Cultivation Depth ${details.depth.toFixed(1)}. Authorization retained.`);
+        this.state.civilization = null;
+        this.state.simulationSpeed = 1;
+        this.decisionFeedback = null;
+        this.worldImpulse = null;
+        this.state.phase = outcome === 'won' ? 'victory' : 'machine';
+        if (outcome !== 'won')
+            this.prepareNextRun(mixSeed(civ.seed + this.state.machine.civilizationsTotal), false);
+        this.refreshConvergenceMilestones();
+        this.save();
+        this.emit();
+        return zero;
+    }
     canConsumeUniverse() { return this.state.phase === 'machine' && this.state.machine.cultivationCreditsThisUniverse >= 18 && this.systemUnlocked('universe_prestige'); }
     consumeUniverse() { if (!this.canConsumeUniverse())
         return false; const bank = RESOURCE_KEYS.reduce((s, k) => s + this.state.machine.currencies[k], 0); const award = universeResidueAward(this.state.machine.cultivationCreditsThisUniverse, bank, 1 + .2 * this.upgradeLevel('universe', 'residue_refinery')); this.state.meta.universalResidue += award; this.state.meta.universesTotal++; this.state.meta.universesThisMultiverse++; for (const m of Progression.recordUniverse(this.state))
-        this.post(m); this.resetMachineLayer(); this.post(`UNIVERSE CONSUMED. ${award} Universal Residue recovered.`); this.save(); this.emit(); return true; }
+        this.post(m); this.resetMachineLayer(); this.post(`UNIVERSE CONSUMED. ${award} Universal Residue recovered.`); this.refreshConvergenceMilestones(); this.save(); this.emit(); return true; }
     canConsumeMultiverse() { return this.state.phase === 'machine' && this.state.meta.universesThisMultiverse >= 4 && this.systemUnlocked('multiverse_prestige'); }
     consumeMultiverse() { if (!this.canConsumeMultiverse())
         return false; const totalLevels = Object.values(this.state.meta.universeUpgradeLevels).reduce((a, b) => a + Number(b), 0); const award = multiverseAxiomAward(this.state.meta.universesThisMultiverse, totalLevels); this.state.meta.axioms += award; this.state.meta.multiversesConsumed++; for (const m of Progression.recordMultiverse(this.state))
-        this.post(m); this.state.meta.universalResidue = 0; this.state.meta.universeUpgradeLevels = {}; this.state.meta.universesThisMultiverse = 0; this.resetMachineLayer(); this.post(`MULTIVERSE COLLAPSED. ${award} Axiom units extracted.`); this.save(); this.emit(); return true; }
+        this.post(m); this.state.meta.universalResidue = 0; this.state.meta.universeUpgradeLevels = {}; this.state.meta.universesThisMultiverse = 0; this.resetMachineLayer(); this.post(`MULTIVERSE COLLAPSED. ${award} Axiom units extracted.`); this.refreshConvergenceMilestones(); this.save(); this.emit(); return true; }
+    convergenceInput() { const axioms = this.catalog('axiom').map((definition) => ({ id: String(definition.id), level: this.upgradeLevel('axiom', String(definition.id)), maxLevel: Number(definition.max_level) })); return { milestonesCompleted: completedMilestoneCount(this.state), milestonesTotal: MILESTONE_CATALOG.length, multiverses: this.state.meta.multiversesConsumed, axioms, bestGradeIndex: gradeIndex(this.state.meta.progression.bestGrade), convergences: this.state.meta.convergences }; }
+    convergenceRequirements() { return convergenceRequirements(this.convergenceInput()); }
+    convergenceUnlocked() { return convergenceUnlocked(this.convergenceInput()); }
+    convergenceTargetDepth() { return convergenceTargets(this.state.meta.convergences).depth; }
+    lastVictory() { return this.state.meta.victories[0] ?? null; }
+    refreshConvergenceMilestones() { for (const m of Progression.recordMilestones(this.state, this.convergenceUnlocked()))
+        this.post(m); }
+    startConvergenceRun(requestedSeed = 0) { if (this.state.phase !== 'machine' || !this.convergenceUnlocked()) {
+        this.lastActionFailure = 'The Great Convergence is not authorized.';
+        this.emit();
+        return false;
+    } if (!this.startCivilization(requestedSeed, true))
+        return false; this.post('GREAT CONVERGENCE INITIATED. Terminal cultivation begins in APOTHEOSIS.'); this.save(); this.emit(); return true; }
+    acknowledgeVictory() { if (this.state.phase !== 'victory')
+        return false; this.state.phase = 'machine'; this.prepareNextRun(mixSeed(this.state.meta.convergences * 7919 + 13), false); this.save(); this.emit(); return true; }
     maxSimulationSpeed() { const x = this.upgradeLevel('machine', 'temporal_injector'); return x >= 3 ? 4 : x >= 1 ? 2 : 1; }
     setSimulationSpeed(n) { this.state.simulationSpeed = Math.max(1, Math.min(this.maxSimulationSpeed(), Math.trunc(n))); this.save(); this.emit(); }
     resetMachineLayer() { const inheritedLattice = Math.min(this.upgradeLevel('machine', 'reality_lattice'), this.upgradeLevel('universe', 'wide_lattice')); this.state.machine.currencies = { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 }; this.state.machine.upgradeLevels = inheritedLattice > 0 ? { reality_lattice: inheritedLattice } : {}; this.state.machine.activeMutations = []; this.state.machine.civilizationsThisUniverse = 0; this.state.machine.cultivationCreditsThisUniverse = 0; this.state.machine.lastHarvest = {}; this.state.machine.runBuild = { selectedDirective: '', selectedBreedingMatrix: '', directiveLocked: false, matrixLocked: false, directiveOfferIds: [], nextCivilizationSeed: 0, previewTraitIds: [] }; this.state.civilization = null; this.state.phase = 'machine'; this.state.simulationSpeed = 1; this.decisionFeedback = null; this.worldImpulse = null; this.prepareNextRun(0, false); }

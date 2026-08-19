@@ -1675,3 +1675,87 @@ test('the terminal entropy multiplier feeds the displayed rate', () => {
   assert.ok(Math.abs(entropyRate(14000, 0, true) - plain * 1.6) < 1e-9);
   assert.ok(secondsToCascade(14000, 0, 0, true) < secondsToCascade(14000, 0, 0, false));
 });
+
+function unlockedConvergenceEngine() {
+  const engine = freshEngine();
+  const p = engine.state.meta.progression;
+  for (const milestone of MILESTONE_CATALOG.slice(0, 21)) p.milestones[milestone.id] = true;
+  p.bestGrade = 'ascendant';
+  p.unlockedSystems.push('universe_prestige', 'universe_upgrades', 'multiverse_prestige', 'axioms');
+  engine.state.meta.multiversesConsumed = 2;
+  engine.state.meta.axiomLevels = {
+    axiom_stability: 1, axiom_paradox_food: 1, axiom_recursive_memory: 1,
+    axiom_impossible_birth: 1, axiom_compassionate_accounting: 1, axiom_multiple_choice: 1,
+  };
+  return engine;
+}
+
+test('the convergence run can only start once the gate is open', () => {
+  const blocked = freshEngine();
+  assert.equal(blocked.convergenceUnlocked(), false);
+  assert.equal(blocked.startConvergenceRun(4), false);
+  assert.equal(blocked.state.phase, 'machine');
+
+  const engine = unlockedConvergenceEngine();
+  assert.equal(engine.convergenceUnlocked(), true);
+  assert.equal(engine.startConvergenceRun(4), true);
+  assert.equal(engine.state.phase, 'civilization');
+  const civ = engine.state.civilization;
+  assert.equal(civ.terminal, true);
+  assert.equal(civ.era, 3);
+  assert.equal(civ.years, ERA_YEAR_THRESHOLDS[3]);
+  assert.equal(civ.development, 340);
+});
+
+test('the terminal run pays no credits and no resources', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(5);
+  engine.state.civilization.development = 400;
+  const before = { ...engine.state.machine.currencies };
+  engine.harvest(false);
+  assert.deepEqual(engine.state.machine.currencies, before);
+  assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 0);
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.convergenceUnlocked(), true);
+});
+
+test('a deep controlled harvest in the terminal run wins and pays a stacking bonus', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(6);
+  const civ = engine.state.civilization;
+  civ.development = 1200;
+  civ.eventChoices = 5;
+  civ.pathState.dominantPath = 'machine_faith';
+  civ.pathState.endgameStates = ['endgame_a', 'endgame_b'];
+  const baseHarvestMult = engine.runtimeBonuses().allHarvestMult;
+  engine.harvest(false);
+  assert.equal(engine.state.phase, 'victory');
+  assert.equal(engine.state.meta.convergences, 1);
+  assert.equal(engine.state.meta.victories.length, 1);
+  assert.equal(engine.lastVictory().dominantPath, 'machine_faith');
+  assert.equal(engine.state.meta.progression.milestones.first_convergence, true);
+  assert.ok(engine.runtimeBonuses().allHarvestMult > baseHarvestMult);
+  assert.equal(engine.runtimeBonuses().containmentRating, 2);
+
+  engine.acknowledgeVictory();
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.convergenceTargetDepth(), 18);
+});
+
+test('a cascade in the terminal run fails without losing the unlock', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.startConvergenceRun(7);
+  engine.state.civilization.development = 1200;
+  engine.state.civilization.stats.stability = 0;
+  engine.harvest(true);
+  assert.equal(engine.state.phase, 'machine');
+  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.convergenceUnlocked(), true);
+});
+
+test('reaching the gate completes the convergence_gate milestone', () => {
+  const engine = unlockedConvergenceEngine();
+  engine.refreshConvergenceMilestones();
+  assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
