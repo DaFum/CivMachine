@@ -5,7 +5,7 @@ import { ENTROPY_CRISES } from '../data/entropy-crises.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
-import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
+import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
 import { advancePressure, cascadeDecay } from './pressure.js';
 import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './tactical-actions.js';
@@ -349,8 +349,10 @@ export class GameEngine {
         const pr = CivilizationPaths.applyChoice(civ, event, choice);
         if (pr.newDominantPath) {
             this.applyEffects(civ, CivilizationPaths.dominanceEffects(pr.newDominantPath), false);
-            this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${CivilizationPaths.displayName(pr.newDominantPath)} became the dominant civilization path.`);
-            this.post(`DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(pr.newDominantPath).toUpperCase()}`);
+            const succeeded = CivilizationPaths.ensure(civ).successions > 0;
+            const pathName = CivilizationPaths.displayName(pr.newDominantPath);
+            this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${pathName} ${succeeded ? 'succeeded the previous dominant civilization path' : 'became the dominant civilization path'}.`);
+            this.post(`${succeeded ? 'PATH SUCCESSION' : 'DOMINANT CIVILIZATION PATH'}: ${pathName.toUpperCase()}`);
         }
         if (pr.history)
             this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${pr.history}`);
@@ -421,7 +423,7 @@ export class GameEngine {
             weight *= 2; if (s.awareness > 50 && ['machine_signal', 'civilization_resists', 'final_question'].includes(id))
             weight *= 2; if (s.stability < 45 && ['sun_goes_missing', 'reality_unionizes', 'edge_of_simulation'].includes(id))
             weight *= 2; return weight; };
-        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier, exhausted: (event) => (civ.eventCounts[event.id] ?? 0) >= Number(event.max_count ?? 2) });
+        const pool = buildInterventionPool(eligible, civ, { pathMultiplier: (event) => CivilizationPaths.eventWeightMultiplier(event, civ), stateMultiplier, exhausted: (event) => interventionExhausted(event, civ) });
         const rng = new SeededRng(civ.rngState);
         const selected = chooseWeightedIntervention(pool, rng.next()) ?? this.eventById('routine_compliance_audit');
         civ.rngState = rng.state;

@@ -25,6 +25,19 @@ const PHASE_WEIGHTS: ReadonlyArray<Readonly<Record<string, number>>> = [
   { impulse: 0.3, reinforcement: 0.5, conflict: 0.9, consolidation: 1.3, endgame: 2 },
 ];
 
+// One catalog event declares max_count 999 as an always-available fallback. Left uncapped it keeps
+// the fresh pool non-empty forever, so the saturation stage never activates and that one event
+// dominates a long run -- measured 11 of 94 interventions. Cap the effective allowance instead.
+export const MAX_COUNT_CEILING = 3;
+
+export function interventionExhausted(
+  event: SchedulerEvent & { max_count?: number },
+  civ: Civilization,
+): boolean {
+  const allowance = Math.min(MAX_COUNT_CEILING, Math.max(1, Number(event.max_count ?? 2)));
+  return Math.max(0, Number(civ.eventCounts[event.id] ?? 0)) >= allowance;
+}
+
 export function recentEventIds(civ: Civilization): string[] {
   if (!Array.isArray(civ.recentEventIds)) civ.recentEventIds = [];
   return civ.recentEventIds;

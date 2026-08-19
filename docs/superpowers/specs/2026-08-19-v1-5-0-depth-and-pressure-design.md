@@ -199,7 +199,9 @@ Four measures together raise the usable supply from about 48 interventions to we
 2. Recent-inclusive: exclude exhausted events only.
 3. Saturated: admit exhausted events, still excluding the recent six.
 
-Stage 3 keeps the existing freshness weight of `1 / (1 + timesSeen * 0.55)`, so an event seen three times carries 0.38 against 0.65 for one seen once, and repetition spreads across the pool instead of concentrating. It also self-suppresses `routine_compliance_audit`, whose `max_count` of 999 keeps it permanently eligible: after 36 sightings its weight is 0.048. The hard-coded fallback in `presentNextEvent` and `selectEvent` remains only as a true last resort, reachable only when no event is era-eligible at all.
+Stage 3 keeps the existing freshness weight of `1 / (1 + timesSeen * 0.55)`, so an event seen three times carries 0.38 against 0.65 for one seen once, and repetition spreads across the pool instead of concentrating. The hard-coded fallback in `presentNextEvent` and `selectEvent` remains only as a true last resort, reachable only when no event is era-eligible at all.
+
+The staging alone is not sufficient. `routine_compliance_audit` declares `max_count` 999, so it never counts as exhausted, which keeps stage 1 permanently non-empty and means stages 2 and 3 never run: measured, that single event still took 11 of 94 interventions. The scheduler therefore owns an explicit `interventionExhausted(event, civilization)` with a `MAX_COUNT_CEILING` of **3**, capping every event's effective allowance so the pool genuinely saturates. With the ceiling in place a 900-second run resolves 94 interventions across 59 distinct events, the worst repeat is 3, and the fallback appears 3 times.
 
 ### Path succession
 

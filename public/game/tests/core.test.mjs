@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
-import { CivilizationPaths } from '../dist/game/paths.js';
+import { CivilizationPaths, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
@@ -1188,4 +1188,80 @@ test('reaching Apotheosis awards Machine Insight', () => {
   civ.stats.awareness = 60;
   Progression.recordCivilizationProgress(engine.state, civ);
   assert.equal(engine.state.meta.progression.milestones.era_apotheosis, true);
+});
+
+test('dominance succeeds only from Transcendence and only under its guards', () => {
+  const civ = GameEngine.createCivilizationForTest(330);
+  const paths = CivilizationPaths.ensure(civ);
+  paths.affinity.machine_faith = 6;
+  assert.equal(CivilizationPaths.resolveDominance(civ), 'machine_faith');
+  assert.equal(paths.dominantPath, 'machine_faith');
+  assert.equal(paths.successions, 0);
+
+  paths.affinity.void_communion = 9;
+  civ.era = 1;
+  assert.equal(CivilizationPaths.resolveDominance(civ), '', 'no succession below Transcendence');
+
+  civ.era = 2;
+  civ.eventChoices = 2;
+  assert.equal(CivilizationPaths.resolveDominance(civ), '', 'no succession inside the interval');
+
+  civ.eventChoices = 8;
+  assert.equal(CivilizationPaths.resolveDominance(civ), 'void_communion');
+  assert.equal(paths.dominantPath, 'void_communion');
+  assert.equal(paths.successions, 1);
+});
+
+test('succession stops after three changes', () => {
+  const civ = GameEngine.createCivilizationForTest(331);
+  const paths = CivilizationPaths.ensure(civ);
+  civ.era = 2;
+  const order = ['machine_faith', 'void_communion', 'temporal_dominion', 'reality_engineering', 'collective_mind'];
+  order.forEach((id, index) => {
+    paths.affinity[id] = 6 + index * 4;
+    civ.eventChoices = index * 5;
+    CivilizationPaths.resolveDominance(civ);
+  });
+  assert.equal(paths.successions, SUCCESSION_MAX);
+  assert.equal(paths.dominantPath, order[SUCCESSION_MAX]);
+});
+
+test('every reached end-state is recorded once and deepens the harvest', () => {
+  const civ = GameEngine.createCivilizationForTest(332);
+  const paths = CivilizationPaths.ensure(civ);
+  paths.dominantPath = 'machine_faith';
+  civ.development = 400;
+  const before = cultivationDepth(civ);
+  CivilizationPaths.applyChoice(
+    civ,
+    { id: 'e1', path_id: 'machine_faith', path_phase: 'endgame' },
+    { label: 'finish', effects: {} },
+  );
+  assert.equal(paths.endgameStates.length, 1);
+  assert.equal(cultivationDepth(civ), before + 1.5);
+  CivilizationPaths.applyChoice(
+    civ,
+    { id: 'e1b', path_id: 'machine_faith', path_phase: 'endgame' },
+    { label: 'finish again', effects: {} },
+  );
+  assert.equal(paths.endgameStates.length, 1, 'the same end-state must not count twice');
+});
+
+test('a long run never serves one intervention over and over', () => {
+  const engine = withUpgrades(
+    freshEngine(),
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
+    { stable_constants: 5 },
+  );
+  const result = runCivilization(engine, { seed: 7777 });
+  const counts = new Map();
+  for (const id of result.eventIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const worst = Math.max(...counts.values());
+  assert.ok(result.interventions >= 90, `only ${result.interventions} interventions`);
+  assert.ok(counts.size >= 55, `only ${counts.size} distinct events`);
+  assert.ok(worst <= 5, `one event appeared ${worst} times`);
+  assert.ok((counts.get('routine_compliance_audit') ?? 0) <= 3, 'the fallback must stay exceptional');
+  for (let index = 1; index < result.eventIds.length; index++) {
+    assert.notEqual(result.eventIds[index], result.eventIds[index - 1], 'no intervention may repeat back to back');
+  }
 });
