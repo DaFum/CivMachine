@@ -44,7 +44,7 @@ export const TACTICAL_ACTIONS: Readonly<Record<TacticalActionId, TacticalActionD
     title: 'Temporal Injection',
     label: 'Accelerate historical throughput',
     summary: '+200 years · advance Development',
-    risk: '-4 Stability · +7 Entropy',
+    risk: '-4 Stability · +5 Entropy',
     cost: 2,
     shortcut: '2',
   },

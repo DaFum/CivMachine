@@ -1320,6 +1320,7 @@ test('Vent gives the credit-optimal playstyle a Paradox source', () => {
 
 test('Accelerate keeps its two-Control cost and sheds two Entropy', () => {
   assert.equal(TACTICAL_ACTIONS.accelerate.cost, 2);
+  assert.match(TACTICAL_ACTIONS.accelerate.risk, /\+5 Entropy/, 'the advertised risk must match the applied surcharge');
   assert.equal(TACTICAL_ACTIONS.vent.cost, 1);
   assert.equal(TACTICAL_ACTIONS.vent.shortcut, '4');
   const engine = freshEngine();
