@@ -49,6 +49,7 @@ const APP_ASSETS = [
   '/game/dist/game/tactical-actions.js',
   '/game/dist/game/types.js',
   '/game/dist/game/upgrade-balance.js',
+  '/game/dist/game/world-memory.js',
 ];
 
 self.addEventListener('install', (event) => {
