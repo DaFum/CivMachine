@@ -68,13 +68,20 @@ resetButton.addEventListener('click', () => {
     resetArmTimer = setTimeout(disarmReset, RESET_ARM_MS);
 });
 resetButton.addEventListener('blur', disarmReset);
+// The loop exists to advance a civilization and to persist the seconds it accumulates. Outside the
+// civilization phase there is nothing to advance and every mutating call already saves, so the loop
+// stops instead of waking the device 60x a second to tick nothing and rewrite an unchanged save.
 let previous = performance.now();
 let accumulator = 0;
+let looping = false;
 function frame(now) {
     const delta = Math.min(.25, (now - previous) / 1000);
     previous = now;
-    if (engine.state.phase === 'civilization')
-        engine.tick(delta);
+    if (engine.state.phase !== 'civilization') {
+        looping = false;
+        return;
+    }
+    engine.tick(delta);
     accumulator += delta;
     if (accumulator >= 5) {
         accumulator = 0;
@@ -82,7 +89,16 @@ function frame(now) {
     }
     requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+function ensureLoop() {
+    if (looping || engine.state.phase !== 'civilization')
+        return;
+    looping = true;
+    accumulator = 0;
+    previous = performance.now();
+    requestAnimationFrame(frame);
+}
+engine.onChange(ensureLoop);
+ensureLoop();
 window.addEventListener('beforeunload', () => engine.save());
 window.addEventListener('pagehide', () => engine.save());
 document.addEventListener('visibilitychange', () => {

@@ -6,6 +6,8 @@ export const VENT_ENTROPY_RELIEF = 18;
 export const VENT_MIN_ENTROPY = 6;
 export const VENT_STABILITY_COST = 10;
 export const VENT_ATTENTION_COST = 4;
+export const ACCELERATE_ENTROPY_BASE = 3;
+export const ACCELERATE_ENTROPY_PER_ERA = 3;
 
 export interface TacticalActionDefinition {
   id: TacticalActionId;
@@ -44,7 +46,7 @@ export const TACTICAL_ACTIONS: Readonly<Record<TacticalActionId, TacticalActionD
     title: 'Temporal Injection',
     label: 'Accelerate historical throughput',
     summary: '+200 years · advance Development',
-    risk: '-4 Stability · +5 Entropy',
+    risk: '-4 Stability · +3 Entropy, +3 more per era',
     cost: 2,
     shortcut: '2',
   },
@@ -76,6 +78,24 @@ const ACTION_PATHS: Readonly<Record<TacticalActionId, readonly [string, string]>
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
+/**
+ * Accelerate is meant to be front-loaded: worth taking while a civilization is still cheap to push,
+ * and dominated by simply waiting once it is deep enough to run itself. At a flat +5 Entropy it was
+ * dominated everywhere instead -- headless policy runs over five seeds put accelerating whenever
+ * available at 2.0 Cultivation Credits against 4.8 for touching nothing at containment 8, and even
+ * one use in Emergence lost ground. Charging the Entropy by era restores the asymmetry the design
+ * asks for: Emergence is cheap, Apotheosis is punitive.
+ */
+export function accelerateEntropyCost(era: number): number {
+  return ACCELERATE_ENTROPY_BASE + ACCELERATE_ENTROPY_PER_ERA * clamp(Math.trunc(Number(era) || 0), 0, 3);
+}
+
+/** The risk line as it stands for this civilization, so the rail can name the price actually charged. */
+export function tacticalRisk(civ: Civilization, id: TacticalActionId): string {
+  if (id !== 'accelerate') return TACTICAL_ACTIONS[id].risk;
+  return `-4 Stability · +${accelerateEntropyCost(civ.era)} Entropy`;
+}
 
 export function tacticalAvailability(civ: Civilization, id: TacticalActionId): TacticalAvailability {
   const definition = TACTICAL_ACTIONS[id];
@@ -118,7 +138,7 @@ export function applyTacticalAction(
     civ.development += 6 * Math.max(0.2, civ.developmentMultiplier) * (1 + civ.era * 0.2);
     civ.eventTimer = Math.max(0, civ.eventTimer - bonuses.accelerateTimer);
     civ.stats.stability = clamp(civ.stats.stability - 4, 0, civ.stats.stabilityMax);
-    civ.tactical.entropy = clamp(civ.tactical.entropy + 5, 0, 100);
+    civ.tactical.entropy = clamp(civ.tactical.entropy + accelerateEntropyCost(civ.era), 0, 100);
   } else if (id === 'vent') {
     const removed = Math.min(VENT_ENTROPY_RELIEF, civ.tactical.entropy);
     civ.tactical.entropy = clamp(civ.tactical.entropy - removed, 0, 100);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.7.0';
+const CACHE_NAME = 'rce-app-v1.8.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -22,31 +22,26 @@ const APP_ASSETS = [
   '/game/dist/render/construction.js',
   '/game/dist/data/content.generated.js',
   '/game/dist/data/entropy-crises.js',
-  '/game/dist/data/entropy-crises.js.map',
   '/game/dist/data/intervention-copy.js',
   '/game/dist/data/apotheosis-events.js',
   '/game/dist/game/decision-feedback.js',
   '/game/dist/game/development.js',
   '/game/dist/game/engine.js',
   '/game/dist/game/harvest-quality.js',
-  '/game/dist/game/harvest-quality.js.map',
   '/game/dist/game/intervention-scheduler.js',
   '/game/dist/game/convergence.js',
   '/game/dist/game/lore.js',
   '/game/dist/game/milestones.js',
   '/game/dist/game/paths.js',
   '/game/dist/game/pressure.js',
-  '/game/dist/game/pressure.js.map',
   '/game/dist/game/progression.js',
+  '/game/dist/game/stat-drift.js',
   '/game/dist/game/rules.js',
   '/game/dist/game/run-directives.js',
   '/game/dist/game/run-interventions.js',
-  '/game/dist/game/run-directives.js.map',
   '/game/dist/game/tactical-actions.js',
-  '/game/dist/game/tactical-actions.js.map',
   '/game/dist/game/types.js',
   '/game/dist/game/upgrade-balance.js',
-  '/game/dist/game/upgrade-balance.js.map',
 ];
 
 self.addEventListener('install', (event) => {

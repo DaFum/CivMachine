@@ -89,7 +89,9 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /['"]\/game\/dist\/game\/harvest-quality\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/run-directives\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/upgrade-balance\.js['"]/);
-  assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js\.map['"]/);
+  // Source maps are a debugging aid, not a shipped asset: precaching them downloads dead weight on
+  // every install, and the list only ever named six of the thirty-five maps anyway.
+  assert.doesNotMatch(worker, /\.js\.map/, 'source maps must not be precached');
   assert.match(worker, /['"]\/game\/dist\/render\/world-presentation\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/milestones\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/convergence\.js['"]/);
@@ -99,11 +101,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /caches\.delete/);
 });
 
-test('release metadata identifies browser app v1.7.0', async () => {
+test('release metadata identifies browser app v1.8.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.7.0');
+  assert.equal(rootPackage.version, '1.8.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 

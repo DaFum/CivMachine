@@ -20,9 +20,10 @@ import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarve
 import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
-import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
+import { TACTICAL_ACTIONS, accelerateEntropyCost, tacticalRisk } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
 import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
+import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, stabilityDecayPerSecond, statDrift } from '../dist/game/stat-drift.js';
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
@@ -1468,9 +1469,9 @@ test('Vent gives the credit-optimal playstyle a Paradox source', () => {
   assert.ok(share(vented) > share(plain), 'venting must raise the Paradox share of a harvest');
 });
 
-test('Accelerate keeps its two-Control cost and sheds two Entropy', () => {
+test('Accelerate keeps its two-Control cost and charges Entropy by era', () => {
   assert.equal(TACTICAL_ACTIONS.accelerate.cost, 2);
-  assert.match(TACTICAL_ACTIONS.accelerate.risk, /\+5 Entropy/, 'the advertised risk must match the applied surcharge');
+  assert.match(TACTICAL_ACTIONS.accelerate.risk, /\+3 Entropy/, 'the advertised risk must name the Emergence price');
   assert.equal(TACTICAL_ACTIONS.vent.cost, 1);
   assert.equal(TACTICAL_ACTIONS.vent.shortcut, '4');
   const engine = freshEngine();
@@ -1479,7 +1480,26 @@ test('Accelerate keeps its two-Control cost and sheds two Entropy', () => {
   civ.eventTimer = 100;
   civ.pendingEvent = '';
   assert.equal(engine.useTacticalAction('accelerate'), true);
-  assert.equal(civ.tactical.entropy, 5);
+  assert.equal(civ.tactical.entropy, 3);
+});
+
+test('the Accelerate surcharge is front-loaded: cheap in Emergence, punitive in Apotheosis', () => {
+  // A flat surcharge made the action dominated at every containment level -- measured over five
+  // seeds, accelerating whenever available reached 2.0 Cultivation Credits against 4.8 for touching
+  // nothing. The price now rises with the era, so an early push is affordable and a late one is not.
+  assert.deepEqual([0, 1, 2, 3].map(accelerateEntropyCost), [3, 6, 9, 12]);
+  assert.equal(accelerateEntropyCost(9), accelerateEntropyCost(3), 'the surcharge stops at the last era');
+  assert.equal(accelerateEntropyCost(-1), accelerateEntropyCost(0), 'and never falls below the first');
+
+  const engine = freshEngine();
+  engine.startCivilization(414);
+  const civ = engine.state.civilization;
+  civ.eventTimer = 100; civ.pendingEvent = ''; civ.era = 2;
+  // The rail must name the price actually charged, not the one the catalog was written with.
+  assert.equal(tacticalRisk(civ, 'accelerate'), '-4 Stability · +9 Entropy');
+  assert.equal(tacticalRisk(civ, 'vent'), TACTICAL_ACTIONS.vent.risk);
+  assert.equal(engine.useTacticalAction('accelerate'), true);
+  assert.equal(civ.tactical.entropy, 9);
 });
 
 test('no tactical policy stretches a no-upgrade run past four minutes', () => {
@@ -1959,4 +1979,89 @@ test('installing the last Axiom opens the gate on the spot', () => {
   assert.equal(engine.purchaseUpgrade('axiom', 'axiom_multiple_choice'), true);
   assert.equal(engine.convergenceUnlocked(), true);
   assert.equal(engine.state.meta.progression.milestones.convergence_gate, true);
+});
+
+test('stability decay grows with era, attention and awareness', () => {
+  const calm = GameEngine.createCivilizationForTest(31);
+  const base = stabilityDecayPerSecond(calm);
+  assert.ok(base > 0, 'a civilization always drifts');
+
+  const later = GameEngine.createCivilizationForTest(31);
+  later.era = 2;
+  assert.ok(stabilityDecayPerSecond(later) > base, 'a later era decays faster');
+
+  const watched = GameEngine.createCivilizationForTest(31);
+  watched.stats.attention = 70;
+  watched.stats.awareness = 90;
+  assert.ok(stabilityDecayPerSecond(watched) > base, 'attention and awareness both accelerate the slip');
+});
+
+test('entropy adds its cascade on top of the ordinary decay', () => {
+  const civ = GameEngine.createCivilizationForTest(32);
+  const quiet = stabilityDecayPerSecond(civ);
+  // At the cascade edge, where cascadeDecay actually contributes -- below 100 it is zero, so a
+  // milder Entropy would make this comparison true without proving anything.
+  civ.tactical.entropy = 100;
+  const cascade = cascadeDecay(100, civ.stats.stabilityMax);
+  assert.ok(cascade > 0, 'the cascade must cost something at the edge');
+  assert.equal(
+    Number(stabilityDecayPerSecond(civ).toFixed(10)),
+    Number((quiet + cascade).toFixed(10)),
+    'the cascade is added to the decay, not multiplied into it',
+  );
+});
+
+test('flags and institutions bend the drift the way their copy claims', () => {
+  const drift = civ => statDrift(civ, GameEngine.baseBonuses());
+
+  const taxed = GameEngine.createCivilizationForTest(33);
+  taxed.flags.push('impossible_tax');
+  const resisting = GameEngine.createCivilizationForTest(33);
+  resisting.flags.push('resistance');
+  const plain = GameEngine.createCivilizationForTest(33);
+  assert.ok(drift(taxed).stabilityDecay < drift(plain).stabilityDecay, 'an impossible tax is quieter than none');
+  assert.ok(drift(resisting).stabilityDecay > drift(plain).stabilityDecay, 'open resistance costs stability');
+
+  const cult = GameEngine.createCivilizationForTest(33);
+  cult.era = 2; cult.flags.push('machine_cult');
+  const uncultured = GameEngine.createCivilizationForTest(33);
+  uncultured.era = 2;
+  assert.ok(awarenessGainPerSecond(cult, GameEngine.baseBonuses()) > awarenessGainPerSecond(uncultured, GameEngine.baseBonuses()), 'a machine cult looks up sooner');
+
+  const ministry = GameEngine.createCivilizationForTest(33);
+  ministry.era = 2; ministry.institutions.push('Ministry Of Sanity');
+  assert.ok(sanityLossPerSecond(ministry, GameEngine.baseBonuses()) < sanityLossPerSecond(uncultured, GameEngine.baseBonuses()), 'the Ministry slows the sanity loss');
+});
+
+test('the drift stands still in the first era except for stability', () => {
+  // Awareness, attention and sanity are all scaled by the era, so an Emergence-era civilization only
+  // loses stability. That is what makes the first minutes of a run readable.
+  const civ = GameEngine.createCivilizationForTest(34);
+  const drift = statDrift(civ, GameEngine.baseBonuses());
+  assert.ok(drift.stabilityDecay > 0);
+  assert.equal(drift.awarenessGain, 0);
+  assert.equal(drift.attentionGain, 0);
+  assert.equal(drift.sanityLoss, 0);
+  assert.equal(attentionGainPerSecond(civ, GameEngine.baseBonuses()), 0);
+});
+
+test('the engine integrates exactly the rates stat-drift states', () => {
+  const engine = freshEngine();
+  engine.startCivilization(35);
+  const civ = engine.state.civilization;
+  // Set the era through the years, or the tick's own era check resets it under the test.
+  civ.years = ERA_YEAR_THRESHOLDS[2] + 10; civ.era = 2; civ.pendingEvent = ''; civ.eventTimer = 1e9;
+  const before = structuredClone(civ);
+  // Below the tick's own 0.25 s clamp, so the frame integrates the full delta it was given.
+  const dt = 0.2;
+  engine.tick(dt);
+  // The tick advances Entropy before it integrates the drift, and the cascade rides on Entropy, so
+  // the rates the engine used are the ones the pre-tick stats produce at the post-tick Entropy.
+  const seen = structuredClone(before);
+  seen.tactical.entropy = civ.tactical.entropy;
+  const rates = statDrift(seen, engine.runtimeBonuses());
+  assert.ok(Math.abs((before.stats.stability - civ.stats.stability) - rates.stabilityDecay * dt) < 1e-9, 'stability');
+  assert.ok(Math.abs((civ.stats.awareness - before.stats.awareness) - rates.awarenessGain * dt) < 1e-9, 'awareness');
+  assert.ok(Math.abs((civ.stats.attention - before.stats.attention) - rates.attentionGain * dt) < 1e-9, 'attention');
+  assert.ok(Math.abs((before.stats.sanity - civ.stats.sanity) - rates.sanityLoss * dt) < 1e-9, 'sanity');
 });
