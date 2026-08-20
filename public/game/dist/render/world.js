@@ -9,6 +9,7 @@ import { casteFor, drawCreature, speciesProfile } from './species.js';
 import { agentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
 import { factionRoster, UNALIGNED_COLOR } from './factions.js';
+import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 const DYNAMIC_FRAME_MS = 33;
 const devicePixelRatio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -170,6 +171,9 @@ function drawSettlementContent(surface, scene, height, view) {
         surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - 5 - hash01(civ.seed + i * 7) * 12, x + 96, bankTop + 2);
     }
     surface.lineStyle(1, presentation.accent, .12).line(view.from, bankTop, view.to, bankTop);
+    // Saved marks and scars are persistent world geometry, so they belong on this cached layer rather
+    // than being repainted every frame. Each is culled by the same band as everything else here.
+    drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, presentation.accent, view);
 }
 function drawPathMotif(surface, civ, worldWidth, height, ground, time, accent, view) {
     const path = CivilizationPaths.ensure(civ).dominantPath;
@@ -477,6 +481,8 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // Fractures, beacons, sanity distortion.
     drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
     drawPathMotif(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view);
+    // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
+    drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
 }
 function impulseColor(feedback, kind) {
     if (kind === 'containment')

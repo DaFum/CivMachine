@@ -14,6 +14,7 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
+import { worldMemorySignature } from '../dist/render/world-memory.js';
 import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
 import { freshEngine } from './balance-harness.mjs';
 
@@ -1080,4 +1081,16 @@ test('identity entrenchment rebuilds the structural key while live values inside
   assert.equal(structuralWorldKey(civ, 800), shifted, 'a live stat inside one band must not rebuild the world');
   assert.equal(identitySignature(civ).startsWith('machine_faith:3:'), true);
   assert.ok(tierThree.length > 0);
+});
+
+test('world memory signatures change only for saved structural memory', () => {
+  const civ = lateCiv(15001);
+  const before = structuralWorldKey(civ, 800);
+  civ.visualMemory = { version:1, sequence:1, marks:[{domain:'social',motif:'unrest',strength:2,sourceEventId:'x',createdAtSequence:1,anchor01:.3,repairable:true}], scars:[] };
+  const after = structuralWorldKey(civ, 800);
+  assert.notEqual(after, before);
+  const signature = worldMemorySignature(civ.visualMemory);
+  civ.visualMemory.sequence = 99;
+  assert.equal(worldMemorySignature(civ.visualMemory), signature, 'sequence alone is not structural');
+  assert.equal(structuralWorldKey(civ, 800), after, 'a bumped sequence alone must not rebuild the world');
 });

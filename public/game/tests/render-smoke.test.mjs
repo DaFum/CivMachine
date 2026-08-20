@@ -371,3 +371,43 @@ test('live stats control dynamic rendering without rebuilding the static scene',
     controller.destroy();
   });
 });
+
+// Renders one frame for a civilization and returns the three positioned primitive buckets.
+async function bucketsForCivilization(civ, tag) {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    controller.destroy();
+  });
+  return { staticCalls, sceneryCalls, dynamicCalls };
+}
+
+test('persistent marks and scars paint on the cached scenery layer, never on the static layer', async () => {
+  const bare = await bucketsForCivilization(developedCivilization(616), 'memory-bare');
+  const remembered = developedCivilization(616);
+  remembered.visualMemory = {
+    version: 1, sequence: 4,
+    marks: [{ domain:'social', motif:'unrest', strength:3, sourceEventId:'damage', createdAtSequence:1, anchor01:.08, repairable:true }],
+    scars: [{ domain:'reality', motif:'breach', strength:3, sourceEventId:'crisis', createdAtSequence:2, anchor01:.05, evolution:2 }],
+  };
+  const withMemory = await bucketsForCivilization(remembered, 'memory-drawn');
+
+  assert.ok(withMemory.sceneryCalls.length > bare.sceneryCalls.length, 'saved memory must add persistent scenery geometry');
+  assert.equal(withMemory.staticCalls.length, bare.staticCalls.length, 'memory must never touch the sky/terrain layer');
+  for (const [label, calls] of [['scenery', withMemory.sceneryCalls], ['accents', withMemory.dynamicCalls]]) {
+    for (const call of calls) assert.ok(Number.isFinite(call.from) && Number.isFinite(call.to), `memory ${label}: ${call.name} produced a non-finite extent`);
+  }
+});

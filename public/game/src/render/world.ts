@@ -11,6 +11,7 @@ import { casteFor, drawCreature, speciesProfile, type SpeciesProfile } from './s
 import { agentPlan, type AgentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
 import { factionRoster, UNALIGNED_COLOR, type Faction } from './factions.js';
+import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 
 export interface RenderStats { sceneRebuilds: number; staticRedraws: number; sceneryFullRedraws: number; sceneryStripRedraws: number; }
 export interface WorldController { nudge(direction: number): void; destroy(): void; stats(): RenderStats; }
@@ -188,6 +189,10 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
     surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - 5 - hash01(civ.seed + i * 7) * 12, x + 96, bankTop + 2);
   }
   surface.lineStyle(1, presentation.accent, .12).line(view.from, bankTop, view.to, bankTop);
+
+  // Saved marks and scars are persistent world geometry, so they belong on this cached layer rather
+  // than being repainted every frame. Each is culled by the same band as everything else here.
+  drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, presentation.accent, view);
 }
 
 function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: WorldBand): void {
@@ -476,6 +481,9 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
 
   drawPathMotif(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view);
+
+  // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
+  drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
 }
 
 

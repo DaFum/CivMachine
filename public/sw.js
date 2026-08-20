@@ -11,6 +11,7 @@ const APP_ASSETS = [
   '/game/dist/ui/view-model.js',
   '/game/dist/render/world.js',
   '/game/dist/render/world-model.js',
+  '/game/dist/render/world-memory.js',
   '/game/dist/render/world-presentation.js',
   '/game/dist/render/primitives.js',
   '/game/dist/render/draw-surface.js',
