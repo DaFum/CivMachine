@@ -1,7 +1,7 @@
 import type { GameEngine } from '../game/engine.js';
 import type { Civilization, DecisionFeedback } from '../game/types.js';
 import { CivilizationPaths } from '../game/paths.js';
-import { worldSnapshot } from './world-model.js';
+import { liveWorldSample, worldSnapshot } from './world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface, type DrawSurface } from './draw-surface.js';
@@ -457,7 +457,9 @@ class WorldRenderer {
     const surface = this.surface(context);
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
-    const dynamicSnapshot = worldSnapshot(civ, this.width);
+    // Only the stat-driven counts are resampled per frame; the structural geometry is whatever the
+    // cached scene already resolved, so a frame no longer rebuilds settlement and agent budgets.
+    const dynamicSnapshot = { ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) };
     const dynamicPresentation = worldPresentation(civ);
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
     drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker);

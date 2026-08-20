@@ -86,8 +86,11 @@ main{padding:1rem}
 .tactical-rail.entropy-strained{--entropy-color:var(--amber)}
 .tactical-rail.entropy-fractured{--entropy-color:#f39b5a}
 .tactical-rail.entropy-critical,.tactical-rail.entropy-cascade{--entropy-color:var(--danger)}
-.tactical-status{display:grid;grid-template-columns:minmax(220px,.72fr) minmax(280px,1.28fr);gap:1rem;align-items:end;margin-bottom:.75rem}
+.tactical-status{display:grid;grid-template-columns:minmax(190px,.6fr) minmax(260px,1.1fr) minmax(230px,.95fr);gap:1rem;align-items:end;margin-bottom:.75rem}
 .tactical-status strong{display:block;margin:.25rem 0;color:#dcebf1;font-size:.78rem;letter-spacing:.06em}
+.rail-head{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+.rail-keys{color:var(--muted);font-size:.62rem;letter-spacing:.1em}
+.rail-keys b{color:var(--cyan)}
 .control-pips{display:flex;align-items:center;gap:.35rem}
 .control-pips i{display:block;width:32px;height:9px;border:1px solid #35505d;background:#101920;transform:skewX(-14deg)}
 .control-pips i.active{background:var(--cyan);border-color:#9bedff;box-shadow:0 0 14px #6bdcf64d}
@@ -100,6 +103,15 @@ main{padding:1rem}
 .entropy-meter i{display:block;height:100%;background:linear-gradient(90deg,var(--mint),var(--entropy-color));box-shadow:0 0 16px var(--entropy-color);transition:width .25s linear}
 .entropy-readout small{grid-column:1/-1;color:var(--muted)}
 .entropy-readout small b{color:var(--text)}
+.harvest-readout{display:grid;grid-template-columns:1fr auto;gap:.28rem .8rem;padding-left:.9rem;border-left:1px solid #24404e}
+.harvest-readout>span{color:#9fb3bc;font-size:.7rem;letter-spacing:.06em}
+.harvest-readout>span b,.harvest-readout>strong{color:var(--amber)}
+.harvest-readout>strong{font-size:1.05rem}
+.harvest-readout small{grid-column:1/-1;color:var(--muted);line-height:1.35}
+.harvest-readout small b{color:var(--text)}
+.harvest-readout .next-band{color:#8fa6b1}
+.harvest-meter{grid-column:1/-1;height:9px;border:1px solid #43413a;background:#17150f;overflow:hidden}
+.harvest-meter i{display:block;height:100%;background:linear-gradient(90deg,#8a7a45,var(--amber));box-shadow:0 0 16px #e8c66a55;transition:width .25s linear}
 .tactical-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}
 .tactical-action-wrap{display:grid;grid-template-rows:1fr auto;min-width:0}
 .tactical-action-wrap button{display:grid;gap:.35rem;min-height:112px;padding:.8rem;text-align:left;border-color:#315160;background:linear-gradient(180deg,#132631,#0e1921)}
@@ -168,10 +180,6 @@ details .panel{margin:0;border:0;border-top:1px solid #1b2a34;box-shadow:none}
 .tendency-list li{display:flex;justify-content:space-between;border-bottom:1px solid #1a2830;padding:.45rem 0}
 .tendency-list span{color:var(--muted)}
 .harvest-grid{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:.7rem}
-.harvest-grade{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:.7rem;padding:.65rem;border:1px solid #3a5360;background:#0b171e}
-.harvest-grade span{color:var(--muted);font-size:.68rem;letter-spacing:.08em}
-.harvest-grade b{color:var(--amber)}
-.harvest-grade small{margin-left:auto;color:#a9bdc6}
 .harvest-grid>div{display:grid;gap:.3rem;padding:.7rem;border:1px solid #233944;background:#0b151b}
 .harvest-grid span,.harvest-grid small{color:#9cafb9}
 .history{max-height:300px;overflow:auto;padding-left:1.6rem;color:#8fa3af}
@@ -198,6 +206,8 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 .upgrade button{min-width:88px}
 .choice-list{grid-template-columns:1fr}
 .tactical-status{grid-template-columns:1fr}
+.rail-keys{display:none}
+.harvest-readout{padding-left:0;border-left:0;border-top:1px solid #24404e;padding-top:.6rem}
 .tactical-actions{grid-template-columns:1fr}
 .tactical-action-wrap button{min-height:88px}
 .start-run{width:100%;min-width:0}
@@ -206,6 +216,7 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}
 .world-shell.decision-impact::after{animation:none;opacity:.42}
 .entropy-meter i{box-shadow:none}
+.harvest-meter i{box-shadow:none}
 .icon-button.is-armed{animation:none}
 }
 

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
-import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
+import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
@@ -38,6 +38,42 @@ test('world expands from sparse camps to an arcology world', () => {
   assert.ok(snap.buildingCount >= 34);
   assert.ok(snap.particleCount > 0);
   assert.ok(snap.hazeBands >= 2);
+});
+
+test('the snapshot carries no field the renderer never draws', () => {
+  const civ = GameEngine.createCivilizationForTest(11);
+  civ.development = 600;
+  civ.era = 2;
+  const snapshot = worldSnapshot(civ, 800);
+  // These four were computed on every frame and drawn nowhere. `agentBudget` is the living source
+  // for inhabitants, traffic, aircraft and orbitals; nothing may reintroduce a parallel count.
+  for (const dead of ['populationDots', 'trafficCount', 'aircraftCount', 'satelliteCount']) {
+    assert.equal(dead in snapshot, false, `${dead} is dead weight in the per-frame path`);
+  }
+  assert.ok(snapshot.agentBudget.pedestrians > 0);
+});
+
+test('the live sample holds exactly the stat-driven counts and is reused by the snapshot', () => {
+  const civ = GameEngine.createCivilizationForTest(11);
+  civ.development = 600;
+  civ.era = 2;
+  const live = liveWorldSample(civ, developmentStage(civ));
+  assert.deepEqual(
+    Object.keys(live).sort(),
+    ['beaconCount', 'entropyBand', 'fractureCount', 'hazeBands', 'particleCount'],
+  );
+  const snapshot = worldSnapshot(civ, 800);
+  for (const key of Object.keys(live)) assert.equal(snapshot[key], live[key], `${key} must have one definition`);
+
+  // Ticking stats move the live sample without touching structural geometry.
+  const before = liveWorldSample(civ, developmentStage(civ));
+  civ.stats.attention = 90;
+  civ.stats.stability = 30;
+  civ.tactical.entropy = 80;
+  const after = liveWorldSample(civ, developmentStage(civ));
+  assert.ok(after.particleCount > before.particleCount);
+  assert.ok(after.fractureCount > before.fractureCount);
+  assert.equal(worldSnapshot(civ, 800).buildingCount, snapshot.buildingCount);
 });
 
 test('presentation palette reacts to every strategic world state', () => {

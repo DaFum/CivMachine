@@ -44,6 +44,17 @@ function entropyBand(value:number):{index:number;id:string;label:string}{
   return {index:0,id:'contained',label:'CONTAINED'};
 }
 
+// How far the run has travelled inside its current depth band, as a percentage. The tactical rail
+// draws it as a meter next to the Entropy meter, so the two competing clocks -- how much time is
+// left and how much yield is still coming -- are read side by side.
+function depthBandProgress(depth: number): number {
+  const current = [...DEPTH_BANDS].reverse().find(band => depth >= band.minDepth) ?? DEPTH_BANDS[0]!;
+  const upcoming = DEPTH_BANDS.find(band => band.minDepth > depth);
+  if (!upcoming) return 100;
+  const span = upcoming.minDepth - current.minDepth;
+  return span <= 0 ? 100 : Math.max(0, Math.min(100, (depth - current.minDepth) / span * 100));
+}
+
 // The stay-or-harvest decision is a blind guess without a forecast, so the view model carries the
 // next band the run can reach and what it is worth.
 function nextDepthBand(depth: number) {
@@ -161,6 +172,7 @@ export function buildViewModel(engine: GameEngine) {
       chaotic: chaoticHarvest,
       depth: cultivationDepth(civ),
       depthBand: depthBand(cultivationDepth(civ)),
+      bandProgress: depthBandProgress(cultivationDepth(civ)),
       nextBand: nextDepthBand(cultivationDepth(civ)),
       convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
     } : null,
