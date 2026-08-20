@@ -39,6 +39,15 @@ export interface DecisionAffinityDelta {
   delta: number;
 }
 
+export type DramaPhaseId = 0 | 1 | 2 | 3 | 4;
+export type DramaPhaseName = 'emergence' | 'expansion' | 'division' | 'transformation' | 'crisis';
+
+export interface DramaPhase {
+  id: DramaPhaseId;
+  name: DramaPhaseName;
+  label: string;
+}
+
 export interface DecisionAddition {
   kind: 'trait' | 'institution' | 'flag' | 'path_flag';
   label: string;

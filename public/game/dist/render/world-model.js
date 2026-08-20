@@ -1,14 +1,6 @@
+import { civilizationDramaPhase } from '../game/drama.js';
 export function developmentStage(civ) {
-    const score = civ.development + civ.era * 120 + civ.institutions.length * 30 + civ.eventChoices * 6;
-    if (score < 70)
-        return 0;
-    if (score < 180)
-        return 1;
-    if (score < 340)
-        return 2;
-    if (score < 560)
-        return 3;
-    return 4;
+    return civilizationDramaPhase(civ).id;
 }
 export function worldWidthMultiplier(civ) {
     return [1.5, 1.9, 2.5, 3.2, 4.0][developmentStage(civ)] ?? 1.5;

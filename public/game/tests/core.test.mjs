@@ -32,6 +32,8 @@ import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, st
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
+import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
+import { developmentStage } from '../dist/render/world-model.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -2292,4 +2294,32 @@ test('the engine integrates exactly the rates stat-drift states', () => {
   assert.ok(Math.abs((civ.stats.awareness - before.stats.awareness) - rates.awarenessGain * dt) < 1e-9, 'awareness');
   assert.ok(Math.abs((civ.stats.attention - before.stats.attention) - rates.attentionGain * dt) < 1e-9, 'attention');
   assert.ok(Math.abs((before.stats.sanity - civ.stats.sanity) - rates.sanityLoss * dt) < 1e-9, 'sanity');
+});
+
+test('Civilization Drama score preserves the v1.9.1 stage expression', () => {
+  const civ = GameEngine.createCivilizationForTest(11001);
+  civ.development = 123;
+  civ.era = 2;
+  civ.institutions.push('Consensus Office', 'Ministry Of Sanity');
+  civ.eventChoices = 7;
+  assert.equal(civilizationDramaScore(civ), 123 + 2 * 120 + 2 * 30 + 7 * 6);
+});
+
+test('Civilization Drama phase uses the exact legacy stage boundaries', () => {
+  const civ = GameEngine.createCivilizationForTest(11002);
+  const cases = [
+    [69, 0, 'emergence'], [70, 1, 'expansion'],
+    [179, 1, 'expansion'], [180, 2, 'division'],
+    [339, 2, 'division'], [340, 3, 'transformation'],
+    [559, 3, 'transformation'], [560, 4, 'crisis'],
+  ];
+  for (const [score, id, name] of cases) {
+    civ.development = score;
+    civ.era = 0;
+    civ.institutions.length = 0;
+    civ.eventChoices = 0;
+    assert.equal(civilizationDramaPhase(civ).id, id);
+    assert.equal(civilizationDramaPhase(civ).name, name);
+    assert.equal(developmentStage(civ), id, `render stage drifted at score ${score}`);
+  }
 });
