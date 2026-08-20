@@ -91,10 +91,14 @@ jobs:
         run: npx tsc -p public/game/tsconfig.json
       - name: Fail if the committed output differs
         run: |
-          if ! git diff --quiet -- public/game/dist; then
-            echo "::error title=Stale public/game/dist::Recompiling public/game/src produced different output than the committed bundle. Run 'npm test' (or 'npx tsc -p public/game/tsconfig.json') and commit public/game/dist."
+          # `git status --porcelain`, not `git diff`: a brand-new module compiles to an *untracked*
+          # file, which git diff reports as clean -- and a new module whose output was never
+          # committed is the exact mistake this job exists to catch.
+          CHANGED=$(git status --porcelain -- public/game/dist)
+          if [ -n "${CHANGED}" ]; then
+            echo "::error title=Stale public/game/dist::Recompiling public/game/src produced output that differs from the committed bundle. Run 'npm test' (or 'npx tsc -p public/game/tsconfig.json') and commit public/game/dist."
+            echo "${CHANGED}"
             git diff --stat -- public/game/dist
-            git diff -- public/game/dist | head -200
             exit 1
           fi
           echo "public/game/dist matches public/game/src."

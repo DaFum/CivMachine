@@ -66,6 +66,11 @@ bytes are copied verbatim to `SAVE_BACKUP_KEY` before the migrated state is writ
 erase must erase. The migrated shape is written back immediately, so the next load is an ordinary
 current-version load rather than a repeat of the migration.
 
+A save from a newer build also **keeps its own version marker**. Stamping it down to `SAVE_VERSION`
+would label already-migrated data as older than it is, and the newer build would then re-run its own
+steps over fields it had written in their new form — the one remaining way this loader could lose
+data. `save()` therefore never lowers the marker, only raises it.
+
 **Statuses and what the player is told.** `current` (loaded verbatim, no message, no backup, no
 write), `repaired`, `migrated`, `ahead`, `unreadable`, `empty`. Every status but `current` and `empty`
 posts one line to the Machine record, so a migration is visible rather than silent. A save from a

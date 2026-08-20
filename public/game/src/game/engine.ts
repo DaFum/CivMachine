@@ -219,7 +219,9 @@ export class GameEngine {
   }
   save() {
     if (!this.autosave) return;
-    this.state.saveVersion = SAVE_VERSION;
+    // Never *lower* the marker: a save loaded from a newer build keeps its version so that build
+    // does not later re-migrate data it had already written in the newer shape.
+    this.state.saveVersion = Math.max(SAVE_VERSION, Number(this.state.saveVersion) || 0);
     // A rejected write (quota, private-mode storage) must not take the running game down with it,
     // and must be said out loud once rather than every five seconds for the rest of the session.
     try {
@@ -247,6 +249,8 @@ export class GameEngine {
     return state;
   }
   private writeBackup(raw: string) {
+    // `autosave: false` means this engine does not write to storage -- the backup is a write too.
+    if (!this.autosave) return;
     try {
       this.storage.setItem(SAVE_BACKUP_KEY, raw);
     } catch {

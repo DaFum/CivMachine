@@ -195,6 +195,33 @@ test('a save from a newer build loads in compatibility mode rather than being wi
   assert.match(report.notice, /newer build/);
 });
 
+test('a save from a newer build keeps its own version marker through a save cycle', () => {
+  const stored = JSON.stringify({ ...progressedState(), saveVersion: SAVE_VERSION + 3, futureField: { paradox_engine: 3 } });
+  const storage = storageWith({ [SAVE_KEY]: stored });
+  const engine = engineOn(storage);
+  assert.equal(engine.saveMigration.status, 'ahead');
+  // Stamping the marker down to SAVE_VERSION would make the newer build re-run its own migration
+  // steps over data it had already written in the newer shape.
+  assert.equal(engine.state.saveVersion, SAVE_VERSION + 3);
+  engine.save();
+  const written = JSON.parse(storage.map.get(SAVE_KEY));
+  assert.equal(written.saveVersion, SAVE_VERSION + 3);
+  assert.deepEqual(written.futureField, { paradox_engine: 3 });
+  assert.equal(storage.map.get(SAVE_BACKUP_KEY), stored);
+  // A save at or below the current version is still stamped to it.
+  const current = engineOn(storageWith({ [SAVE_KEY]: JSON.stringify({ ...progressedState(), saveVersion: 2 }) }));
+  assert.equal(current.state.saveVersion, SAVE_VERSION);
+});
+
+test('autosave: false writes nothing at all, backup included', () => {
+  const storage = storageWith({ [SAVE_KEY]: JSON.stringify({ ...progressedState(), saveVersion: 3 }) });
+  const engine = new GameEngine({ storage, autosave: false });
+  assert.equal(engine.saveMigration.status, 'migrated');
+  assert.equal(engine.state.machine.currencies.causal_mass, 4200);
+  assert.equal(storage.map.has(SAVE_BACKUP_KEY), false);
+  assert.equal(JSON.parse(storage.map.get(SAVE_KEY)).saveVersion, 3);
+});
+
 test('an unreadable payload is refused without pretending to be a state', () => {
   assert.equal(parseSaveText('{not json').report.status, 'unreadable');
   assert.equal(parseSaveText('{not json').state, null);

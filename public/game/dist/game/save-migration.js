@@ -214,6 +214,12 @@ export function migrateSaveState(input) {
     }
     const log = new RepairLog();
     const { state, runDropped } = normalizeState(raw, log);
+    // A save from a newer build keeps its own version marker. Stamping it down to SAVE_VERSION would
+    // label already-migrated data as older than it is, and the newer build would then re-run its own
+    // steps over fields it had written in their new form -- the one way this loader could still lose
+    // data. The unknown fields ride along, so the marker stays truthful about what the payload holds.
+    if (ahead)
+        state.saveVersion = fromVersion;
     const status = ahead
         ? 'ahead'
         : fromVersion !== SAVE_VERSION || declared < 1
