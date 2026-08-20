@@ -6,6 +6,7 @@ import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from
 import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
 import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalRisk } from '../game/tactical-actions.js';
 import type { GameEngine } from '../game/engine.js';
+import type { Civilization, RuntimeBonuses } from '../game/types.js';
 
 const RESOURCE_NAMES: Record<string,string> = {
   causal_mass:'Causal Mass', cognition:'Cognition', paradox:'Paradox', existence:'Existence', universal_residue:'Universal Residue', axioms:'Axioms'
@@ -95,7 +96,7 @@ function buildConvergenceViewModel(engine: GameEngine) {
   };
 }
 
-function buildEventViewModel(engine: GameEngine, civ: any, event: any, probed: boolean, predictionsUnlocked: boolean) {
+function buildEventViewModel(engine: GameEngine, civ: Civilization | null, event: { id: string; title: string; body: string; choices?: { label: string; prediction: string }[] } | null, probed: boolean, predictionsUnlocked: boolean) {
   if (!event) return null;
   return {
     id: event.id,
@@ -116,7 +117,7 @@ function buildEventViewModel(engine: GameEngine, civ: any, event: any, probed: b
   };
 }
 
-function buildTacticalViewModel(engine: GameEngine, civ: any, bonuses: any) {
+function buildTacticalViewModel(engine: GameEngine, civ: Civilization | null, bonuses: RuntimeBonuses) {
   if (!civ) return null;
   return {
     entropy: civ.tactical.entropy,
@@ -135,7 +136,7 @@ function buildTacticalViewModel(engine: GameEngine, civ: any, bonuses: any) {
   };
 }
 
-function buildHarvestViewModel(engine: GameEngine, civ: any, controlledHarvest: any, chaoticHarvest: any, bonuses: any, convergenceTargetDepth: number) {
+function buildHarvestViewModel(engine: GameEngine, civ: Civilization | null, controlledHarvest: ReturnType<GameEngine["previewHarvestDetails"]> | null, chaoticHarvest: ReturnType<GameEngine["previewHarvestDetails"]> | null, bonuses: RuntimeBonuses, convergenceTargetDepth: number) {
   if (!civ) return null;
   return {
     controlled: controlledHarvest,
@@ -161,7 +162,7 @@ function buildHarvestViewModel(engine: GameEngine, civ: any, controlledHarvest: 
   };
 }
 
-function buildCivilizationViewModel(engine: GameEngine, civ: any) {
+function buildCivilizationViewModel(engine: GameEngine, civ: Civilization | null) {
   if (!civ) return null;
   return {
     seed: civ.seed,
@@ -275,7 +276,7 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     cosmicCondition,
     vm.simulationSpeed,
     vm.maxSimulationSpeed,
-    civilization.traits.map((trait: any) => trait.id).join(','),
+    civilization.traits.map((trait) => trait.id).join(','),
     civilization.institutions.join(','),
     vm.feedback?.sequence ?? 0,
     vm.tactical?.entropyBand.index ?? 0,
