@@ -137,10 +137,13 @@ function upsertScar(memory, seed, eventId, descriptor) {
     current.createdAtSequence = memory.sequence;
     current.evolution += 1;
 }
+// Repairs damage the civilization already carried, never the mark this same action just wrote:
+// Stabilize costs +8 Entropy, so it authors a `reality` mark of its own, and repairing that instead
+// would half-heal its own fracture and leave the standing unrest the player meant to fix untouched.
 function repairOne(memory) {
     const domainOrder = ['reality', 'social', 'built_environment'];
     for (const domain of domainOrder) {
-        const candidates = memory.marks.filter(mark => mark.domain === domain && mark.repairable).sort((a, b) => b.strength - a.strength || a.createdAtSequence - b.createdAtSequence);
+        const candidates = memory.marks.filter(mark => mark.domain === domain && mark.repairable && mark.createdAtSequence < memory.sequence).sort((a, b) => b.strength - a.strength || a.createdAtSequence - b.createdAtSequence);
         const mark = candidates[0];
         if (!mark)
             continue;

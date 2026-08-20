@@ -2460,3 +2460,45 @@ test('visual memory cannot change harvest, depth, or progression calculations', 
   assert.deepEqual(calculateHarvest(civ, false, GameEngine.baseBonuses()), beforeHarvest);
   assert.equal(cultivationDepth(civ), beforeDepth);
 });
+
+test('completed decisions advance visual-memory sequence while pressure-only feedback does not', () => {
+  const engine = freshEngine();
+  engine.startCivilization(13001);
+  const civ = engine.state.civilization;
+  assert.equal(civ.visualMemory, undefined);
+  engine.forceEvent('synthetic_saint');
+  engine.chooseEvent(0);
+  assert.equal(civ.visualMemory.sequence, 1);
+  const sequenceAfterChoice = civ.visualMemory.sequence;
+  civ.tactical.entropy = 24.9;
+  engine.tick(1);
+  assert.equal(civ.visualMemory.sequence, sequenceAfterChoice, 'pressure threshold feedback is not a completed player decision');
+});
+
+test('reserve and tactical actions use the same visual-memory reducer, and Stabilize repairs one mark', () => {
+  const engine = freshEngine();
+  engine.startCivilization(13002);
+  const civ = engine.state.civilization;
+  civ.visualMemory = {
+    version:1, sequence:4,
+    marks:[{domain:'social',motif:'unrest',strength:2,sourceEventId:'damage',createdAtSequence:3,anchor01:.4,repairable:true}],
+    scars:[{domain:'reality',motif:'breach',strength:2,sourceEventId:'crisis',createdAtSequence:2,anchor01:.6,evolution:1}],
+  };
+  civ.stats.stability = 60; civ.stats.attention = 30; civ.tactical.entropy = 30; civ.tactical.controlCapacity = 3;
+  const scars = structuredClone(civ.visualMemory.scars);
+  assert.equal(engine.useTacticalAction('stabilize'), true);
+  assert.equal(civ.visualMemory.sequence, 5);
+  assert.equal(civ.visualMemory.marks[0].strength, 1);
+  assert.deepEqual(civ.visualMemory.scars, scars);
+});
+
+test('an old v4 save without visualMemory remains loadable and gains memory only after the next decision', () => {
+  const seedEngine = freshEngine(); seedEngine.startCivilization(13003);
+  const oldState = structuredClone(seedEngine.state); delete oldState.civilization.visualMemory;
+  const storage = { value: JSON.stringify(oldState), getItem(){ return this.value; }, setItem(_k,v){ this.value=v; }, removeItem(){ this.value=''; } };
+  const engine = new GameEngine({ storage, autosave: true });
+  assert.equal(engine.state.civilization.visualMemory, undefined);
+  engine.forceEvent('synthetic_saint'); engine.chooseEvent(0);
+  assert.equal(engine.state.civilization.visualMemory.version, 1);
+  assert.equal(engine.state.saveVersion, oldState.saveVersion);
+});

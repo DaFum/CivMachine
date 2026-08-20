@@ -13,6 +13,7 @@ import {
   EXPANDED_PATH_INTERVENTIONS,
 } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
+import { applyWorldMemory } from "./world-memory.js";
 import {
   Progression,
   nextSystemPreviews,
@@ -188,6 +189,20 @@ export class GameEngine {
   private post(msg: string) {
     this.messages.unshift(msg);
     this.messages = this.messages.slice(0, 80);
+  }
+  // The one place a completed player decision becomes presentation memory. Pressure notifications go
+  // straight to `worldImpulse` instead: they are queued warnings, not decisions, and the Entropy
+  // crisis event they lead to owns the persistent scar.
+  private publishCompletedDecision(
+    civ: Civilization,
+    feedback: DecisionFeedback,
+    repair = false,
+  ): void {
+    this.decisionFeedback = feedback;
+    this.worldImpulse = feedback;
+    civ.visualMemory = applyWorldMemory(civ.seed, civ.visualMemory, feedback, {
+      repair,
+    });
   }
   save() {
     if (!this.autosave) return;
@@ -865,14 +880,14 @@ export class GameEngine {
     if (newEra !== civ.era) this.enterEra(civ, newEra);
     clampStats(civ);
     this.lastActionFailure = "";
-    this.decisionFeedback = buildDecisionFeedback(
+    const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
       { id: `reserve:${id}`, title: definition.title },
       { label },
       before,
       captureDecisionSnapshot(civ),
     );
-    this.worldImpulse = this.decisionFeedback;
+    this.publishCompletedDecision(civ, feedback);
     this.appendHistory(
       civ,
       `YEAR ${Math.trunc(civ.years)}: Machine reserve -> ${label}`,
@@ -914,14 +929,14 @@ export class GameEngine {
       );
     }
     this.lastActionFailure = "";
-    this.decisionFeedback = buildDecisionFeedback(
+    const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
       { id: `tactical:${id}`, title: outcome.title },
       { label: outcome.label },
       before,
       captureDecisionSnapshot(civ),
     );
-    this.worldImpulse = this.decisionFeedback;
+    this.publishCompletedDecision(civ, feedback, id === "stabilize");
     this.appendHistory(
       civ,
       `YEAR ${Math.trunc(civ.years)}: Tactical action -> ${outcome.label}`,
@@ -990,14 +1005,14 @@ export class GameEngine {
     );
     civ.eventTimer = this.rollEventDelay(civ);
     clampStats(civ);
-    this.decisionFeedback = buildDecisionFeedback(
+    const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
       event,
       choice,
       before,
       captureDecisionSnapshot(civ),
     );
-    this.worldImpulse = this.decisionFeedback;
+    this.publishCompletedDecision(civ, feedback);
     if (civ.stats.stability <= 0) {
       this.harvest(true);
       return true;

@@ -7,6 +7,7 @@ import { EVENT_CHAINS } from "../data/event-chains.js";
 import { EXPANDED_INTERVENTIONS } from "../data/expanded-interventions.js";
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS, } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
+import { applyWorldMemory } from "./world-memory.js";
 import { Progression, nextSystemPreviews, visibleUpgradeEntries, } from "./progression.js";
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention, } from "./intervention-scheduler.js";
@@ -98,6 +99,16 @@ export class GameEngine {
     post(msg) {
         this.messages.unshift(msg);
         this.messages = this.messages.slice(0, 80);
+    }
+    // The one place a completed player decision becomes presentation memory. Pressure notifications go
+    // straight to `worldImpulse` instead: they are queued warnings, not decisions, and the Entropy
+    // crisis event they lead to owns the persistent scar.
+    publishCompletedDecision(civ, feedback, repair = false) {
+        this.decisionFeedback = feedback;
+        this.worldImpulse = feedback;
+        civ.visualMemory = applyWorldMemory(civ.seed, civ.visualMemory, feedback, {
+            repair,
+        });
     }
     save() {
         if (!this.autosave)
@@ -728,8 +739,8 @@ export class GameEngine {
             this.enterEra(civ, newEra);
         clampStats(civ);
         this.lastActionFailure = "";
-        this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, { id: `reserve:${id}`, title: definition.title }, { label }, before, captureDecisionSnapshot(civ));
-        this.worldImpulse = this.decisionFeedback;
+        const feedback = buildDecisionFeedback(++this.feedbackSequence, { id: `reserve:${id}`, title: definition.title }, { label }, before, captureDecisionSnapshot(civ));
+        this.publishCompletedDecision(civ, feedback);
         this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Machine reserve -> ${label}`);
         this.post(`MACHINE RESERVE COMMITTED: ${definition.title} for ${view.cost} ${definition.currency.replaceAll("_", " ")}.`);
         this.save();
@@ -765,8 +776,8 @@ export class GameEngine {
             this.post(`DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(dominant).toUpperCase()}`);
         }
         this.lastActionFailure = "";
-        this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, { id: `tactical:${id}`, title: outcome.title }, { label: outcome.label }, before, captureDecisionSnapshot(civ));
-        this.worldImpulse = this.decisionFeedback;
+        const feedback = buildDecisionFeedback(++this.feedbackSequence, { id: `tactical:${id}`, title: outcome.title }, { label: outcome.label }, before, captureDecisionSnapshot(civ));
+        this.publishCompletedDecision(civ, feedback, id === "stabilize");
         this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Tactical action -> ${outcome.label}`);
         if (civ.stats.stability <= 0) {
             this.harvest(true);
@@ -810,8 +821,8 @@ export class GameEngine {
             Math.max(1, Math.trunc(this.runtimeBonuses().controlRecharge)));
         civ.eventTimer = this.rollEventDelay(civ);
         clampStats(civ);
-        this.decisionFeedback = buildDecisionFeedback(++this.feedbackSequence, event, choice, before, captureDecisionSnapshot(civ));
-        this.worldImpulse = this.decisionFeedback;
+        const feedback = buildDecisionFeedback(++this.feedbackSequence, event, choice, before, captureDecisionSnapshot(civ));
+        this.publishCompletedDecision(civ, feedback);
         if (civ.stats.stability <= 0) {
             this.harvest(true);
             return true;
