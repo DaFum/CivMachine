@@ -22,7 +22,15 @@ export function worldMemorySignature(value: unknown): string {
 function anchorX(anchor01: number, worldWidth: number, settlements: ReadonlyArray<Settlement>): number {
   const target = Math.max(0, Math.min(worldWidth, anchor01 * worldWidth));
   if (!settlements.length) return target;
-  return [...settlements].sort((a,b) => Math.abs(a.centerX - target) - Math.abs(b.centerX - target))[0]!.centerX;
+  // One scan rather than a copy and a sort: this runs per mark and per scar, and the scar halos run
+  // on the dynamic layer. A strict `<` keeps the first settlement in layout order when two tie,
+  // which is what the stable sort it replaces did.
+  let best = settlements[0]!, bestDistance = Math.abs(best.centerX - target);
+  for (let i = 1; i < settlements.length; i++) {
+    const settlement = settlements[i]!, distance = Math.abs(settlement.centerX - target);
+    if (distance < bestDistance) { best = settlement; bestDistance = distance; }
+  }
+  return best.centerX;
 }
 
 function visible(x: number, view: MemoryViewBand, slack = 90): boolean { return x >= view.from - slack && x <= view.to + slack; }

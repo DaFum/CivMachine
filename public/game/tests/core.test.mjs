@@ -2472,6 +2472,11 @@ test('completed decisions advance visual-memory sequence while pressure-only fee
   const sequenceAfterChoice = civ.visualMemory.sequence;
   civ.tactical.entropy = 24.9;
   engine.tick(1);
+  // Prove the threshold actually fired before reading anything into the sequence standing still: a
+  // tick that queued no crisis would leave the sequence untouched for the wrong reason and the
+  // assertion below would pass while testing nothing.
+  assert.equal(engine.worldImpulse?.eventId, 'entropy_crisis_25', 'the tick did not publish pressure feedback');
+  assert.ok(civ.scheduledEvents.includes('entropy_crisis_25'), 'the threshold did not queue its crisis');
   assert.equal(civ.visualMemory.sequence, sequenceAfterChoice, 'pressure threshold feedback is not a completed player decision');
 });
 

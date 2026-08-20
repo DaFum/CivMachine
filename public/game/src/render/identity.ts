@@ -89,6 +89,16 @@ export function drawIdentityLandmarks(surface: DrawSurface, civ: Civilization, s
   }
 }
 
+// The leading affinity, read without normalizing the state. The `tier` the caller passes already
+// encodes the affinity threshold, so the fallback only has to name the leading path -- never decide
+// whether it is strong enough to count.
+function leadingAffinityPath(state: Civilization['pathState'] | undefined): string {
+  const affinity = state?.affinity; if (!affinity) return '';
+  let best = '', top = 0;
+  for (const id of PATH_IDS) { const value = Number(affinity[id] ?? 0); if (value > top) { top = value; best = id; } }
+  return best;
+}
+
 /**
  * Ambient path marks scattered across the world, drawn on the dynamic layer. `tier` is the identity
  * tier: a merely leading affinity (tier 1) shows about half the marks at a lower alpha, a dominant
@@ -97,7 +107,10 @@ export function drawIdentityLandmarks(surface: DrawSurface, civ: Civilization, s
  * they simply stop moving -- a slow device loses the animation, never the identity.
  */
 export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: {from:number;to:number}, tier: IdentityTier, ambientLoopFraction = 1): void {
-  const path = CivilizationPaths.ensure(civ).dominantPath || pathIdentity(civ).pathId;
+  // Read the saved path state directly. This runs on every dynamic frame, and `CivilizationPaths.ensure`
+  // normalizes -- that is, writes to -- the civilization it is handed, which the renderer must never do.
+  const state = civ.pathState;
+  const path = state?.dominantPath || leadingAffinityPath(state);
   if (!path || tier < 1) return;
   // Every motif scatters a handful of marks across the whole world. Each is small, so one slack
   // covers them all, and the guard keeps the dominant path from being the one thing still painted

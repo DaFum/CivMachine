@@ -36,7 +36,8 @@ backward-compatible optional field. There is no migration path and no offline pr
 revalidation. So a new `dist/` module has to be added there, and `CACHE_NAME` has to be bumped or
 returning players keep the old files forever. Source maps are deliberately not precached.
 
-A release is two edits — the version in `package.json` and the single explicit assertion in
+A release is three edits — the version in `package.json`, the version in `public/game/package.json`
+(`npm version` writes each package and its lockfile separately), and the single explicit assertion in
 `tests/game-release.test.mjs` — after which that test insists on every other surface itself.
 
 ## Conventions

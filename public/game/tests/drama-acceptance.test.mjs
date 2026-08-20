@@ -7,6 +7,7 @@ import { applyWorldMemory } from '../dist/game/world-memory.js';
 import { pathIdentity } from '../dist/render/identity.js';
 import { worldPresentation } from '../dist/render/world-presentation.js';
 import { RenderQualityController, qualityFactors } from '../dist/render/quality.js';
+import { applyQualityToLiveSample } from '../dist/render/world-model.js';
 
 function civ(seed=18000){ return GameEngine.createCivilizationForTest(seed); }
 
@@ -46,10 +47,18 @@ test('acceptance D: Awareness and Attention remain visually independent', () => 
   assert.ok(attention.observerPressure>aware.observerPressure);
 });
 
-test('acceptance E: Tier 3 sheds cosmetics without changing game state', () => {
-  const controller=new RenderQualityController(); const state={simulationSpeed:4,entropy:75};
+test('acceptance E: Tier 3 sheds cosmetics but keeps every pressure signal', () => {
+  const controller=new RenderQualityController();
   let now=6000; for(let tier=0;tier<3;tier++){ for(let i=0;i<30;i++)controller.update(30,now+=200); now+=5001; }
   assert.equal(controller.tier,3);
   assert.equal(qualityFactors(controller.tier).agentFraction,.5);
-  assert.deepEqual(state,{simulationSpeed:4,entropy:75});
+  // What "without changing game state" means in practice: the tier is applied to the sampled draw
+  // budget, so cosmetics fall while the counts that carry Entropy and Awareness survive untouched.
+  const sample={particleCount:150,hazeBands:9,fractureCount:12,beaconCount:10,entropyBand:4};
+  const shed=applyQualityToLiveSample(sample,controller.tier);
+  assert.ok(shed.particleCount<sample.particleCount);
+  assert.ok(shed.hazeBands<sample.hazeBands);
+  assert.equal(shed.fractureCount,12);
+  assert.equal(shed.beaconCount,10);
+  assert.deepEqual(sample,{particleCount:150,hazeBands:9,fractureCount:12,beaconCount:10,entropyBand:4});
 });

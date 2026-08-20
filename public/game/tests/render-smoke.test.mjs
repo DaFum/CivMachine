@@ -5,7 +5,7 @@ import { GameEngine } from '../dist/game/engine.js';
 // Drives the renderer end to end against recording stubs, so a change that stops the world from
 // actually drawing creatures, banners or structures fails here rather than in a browser.
 
-const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame'];
+const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio'];
 
 function developedCivilization(seed = 404) {
   const civ = GameEngine.createCivilizationForTest(seed);
@@ -280,13 +280,14 @@ test('dragging repaints only the strip the scroll exposed', async () => {
 
 // Replays a drag script against a fresh renderer and returns the settlement-layer primitives of the
 // last frame, positioned in screen coordinates.
-async function sceneryAfterDrags(seed, drags, tag) {
+async function sceneryAfterDrags(seed, drags, tag, { makeCiv = developedCivilization, viewport = { width: 900, height: 520 } } = {}) {
   const calls = [];
   const listeners = new Map();
   let frame = null;
   await withStubbedDom(() => {
     const contexts = [trackingContext([]), trackingContext(calls), trackingContext([])];
     let created = 0;
+    if (viewport.dpr !== undefined) globalThis.devicePixelRatio = viewport.dpr;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
@@ -296,8 +297,8 @@ async function sceneryAfterDrags(seed, drags, tag) {
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
   }, async () => {
-    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
-    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: viewport.width, height: viewport.height }) };
+    const engine = { state: { phase: 'civilization', civilization: makeCiv(seed) }, worldImpulse: null, onChange: () => () => {} };
     const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
     const controller = startWorldRenderer(engine, host);
     frame(100);
@@ -635,6 +636,35 @@ test('a Drama Phase reached by surviving draws a bounded cue and writes no gamep
   });
 });
 
+// The reference desktop case: a 1440x760 viewport at DPR 2 carrying the full memory budget -- six
+// marks, three scars, an entrenched capital and all three institution landmarks. Both the pinned
+// ceiling and the strip/full equivalence render this same fixture, so the equivalence actually
+// covers the memory and identity geometry rather than a bare civilization.
+const REFERENCE_VIEWPORT = { width: 1440, height: 760, dpr: 2 };
+
+function referenceCivilization(seed) {
+  const civ = developedCivilization(seed);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
+  civ.visualMemory = {
+    version: 1, sequence: 12,
+    marks: [
+      { domain:'built_environment', motif:'advanced_district', strength:2, sourceEventId:'a', createdAtSequence:1, anchor01:.10, repairable:false },
+      { domain:'identity', motif:'engine_shrine', strength:3, sourceEventId:'b', createdAtSequence:2, anchor01:.21, repairable:false },
+      { domain:'control', motif:'surveillance', strength:2, sourceEventId:'c', createdAtSequence:3, anchor01:.38, repairable:true },
+      { domain:'social', motif:'unrest', strength:3, sourceEventId:'d', createdAtSequence:4, anchor01:.51, repairable:true },
+      { domain:'ecology', motif:'blight', strength:2, sourceEventId:'e', createdAtSequence:5, anchor01:.71, repairable:true },
+      { domain:'reality', motif:'fracture', strength:3, sourceEventId:'f', createdAtSequence:6, anchor01:.88, repairable:true },
+    ],
+    scars: [
+      { domain:'reality', motif:'breach', strength:3, sourceEventId:'g', createdAtSequence:7, anchor01:.10, evolution:3 },
+      { domain:'civilization', motif:'futures_ruins', strength:3, sourceEventId:'h', createdAtSequence:8, anchor01:.51, evolution:1 },
+      { domain:'identity', motif:'replacement_monument', strength:3, sourceEventId:'i', createdAtSequence:9, anchor01:.81, evolution:2 },
+    ],
+  };
+  return civ;
+}
+
 // A 1440x760 viewport at DPR 2 -- the reference desktop case -- carrying the full memory budget: six
 // marks, three scars, an entrenched capital and all three institution landmarks. This is the ceiling
 // the whole cache design rests on, so it is pinned as a number rather than only as an equivalence.
@@ -646,7 +676,7 @@ async function referenceStripRedraw(nudgePx) {
   await withStubbedDom(() => {
     const contexts = [trackingContext([]), trackingContext(calls), trackingContext([])];
     let created = 0;
-    globalThis.devicePixelRatio = 2;
+    globalThis.devicePixelRatio = REFERENCE_VIEWPORT.dpr;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
@@ -656,26 +686,8 @@ async function referenceStripRedraw(nudgePx) {
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
   }, async () => {
-    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 1440, height: 760 }) };
-    const civ = developedCivilization(1212);
-    civ.pathState.completedEvents.push('synod_of_the_second_engine');
-    civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
-    civ.visualMemory = {
-      version: 1, sequence: 12,
-      marks: [
-        { domain:'built_environment', motif:'advanced_district', strength:2, sourceEventId:'a', createdAtSequence:1, anchor01:.05, repairable:false },
-        { domain:'identity', motif:'engine_shrine', strength:3, sourceEventId:'b', createdAtSequence:2, anchor01:.12, repairable:false },
-        { domain:'control', motif:'surveillance', strength:2, sourceEventId:'c', createdAtSequence:3, anchor01:.2, repairable:true },
-        { domain:'social', motif:'unrest', strength:3, sourceEventId:'d', createdAtSequence:4, anchor01:.28, repairable:true },
-        { domain:'ecology', motif:'blight', strength:2, sourceEventId:'e', createdAtSequence:5, anchor01:.36, repairable:true },
-        { domain:'reality', motif:'fracture', strength:3, sourceEventId:'f', createdAtSequence:6, anchor01:.44, repairable:true },
-      ],
-      scars: [
-        { domain:'reality', motif:'breach', strength:3, sourceEventId:'g', createdAtSequence:7, anchor01:.08, evolution:3 },
-        { domain:'civilization', motif:'futures_ruins', strength:3, sourceEventId:'h', createdAtSequence:8, anchor01:.16, evolution:1 },
-        { domain:'identity', motif:'replacement_monument', strength:3, sourceEventId:'i', createdAtSequence:9, anchor01:.24, evolution:2 },
-      ],
-    };
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: REFERENCE_VIEWPORT.width, height: REFERENCE_VIEWPORT.height }) };
+    const civ = referenceCivilization(1212);
     const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
     const { startWorldRenderer } = await import(`../dist/render/world.js?ceiling=${nudgePx}-${Date.now()}`);
     const controller = startWorldRenderer(engine, host);
@@ -687,7 +699,6 @@ async function referenceStripRedraw(nudgePx) {
     listeners.get('pointerup')({});
     frame(200);
     controller.destroy();
-    delete globalThis.devicePixelRatio;
   });
   return { strip: calls, full };
 }
@@ -701,11 +712,33 @@ test('memory and identity scenery keep the reference strip redraw under its ceil
   // The equivalence that makes the narrow strip legitimate in the first place, re-checked with the
   // full memory budget in place: reaching the same scroll by a drag too wide to reuse anything gives
   // the reference painting of the same slice.
-  const viaStrip = await sceneryAfterDrags(1212, [1440, 12], 'ceiling-strip');
-  const viaFull = await sceneryAfterDrags(1212, [1452], 'ceiling-reference');
+  // Same fixture and same viewport, but deliberately at DPR 1: `trackingContext` records the
+  // transform's horizontal component, which the renderer sets in device pixels, so `from`/`to` only
+  // share units with a primitive's CSS-pixel x at DPR 1. The pinned ceiling above covers DPR 2,
+  // where it counts primitives instead of comparing their positions.
+  // Same fixture and viewport as the ceiling, but deliberately at DPR 1: `trackingContext` records
+  // the transform's horizontal component, which the renderer sets in device pixels, so `from`/`to`
+  // only share units with a primitive's CSS-pixel x at DPR 1. The ceiling above covers DPR 2, where
+  // it counts primitives rather than comparing their positions.
+  const viewport = { width: REFERENCE_VIEWPORT.width, height: REFERENCE_VIEWPORT.height };
+  const fixture = { makeCiv: referenceCivilization, viewport };
+  // A 120 px nudge landing on the settlement that carries the mid-world mark and scar, rather than a
+  // 12 px sliver in the gap between two settlements -- memory snaps to settlement centres, so a
+  // window in a gap would compare an empty strip and pass while covering none of this geometry.
+  const NUDGE = 120, SCROLL = 1572;
+  const viaStrip = await sceneryAfterDrags(1212, [SCROLL - NUDGE, NUDGE], 'ceiling-strip', fixture);
+  const viaFull = await sceneryAfterDrags(1212, [SCROLL], 'ceiling-reference', fixture);
+  const edge = viewport.width, lip = edge - NUDGE;
   const exposed = calls => calls
-    .filter(call => call.to >= 888 && call.from <= 900)
-    .map(call => ({ name: call.name, from: Math.max(888, call.from), to: Math.min(900, call.to) }));
+    .filter(call => call.to >= lip && call.from <= edge)
+    .map(call => ({ name: call.name, from: Math.max(lip, call.from), to: Math.min(edge, call.to) }));
+
+  // The comparison is only worth making if the fixture's memory and identity geometry actually falls
+  // inside the window. Pin that against a bare civilization, so a future layout change cannot quietly
+  // move the marks out and leave this test comparing plain settlements.
+  const bare = await sceneryAfterDrags(1212, [SCROLL], 'ceiling-bare', { viewport });
+  assert.ok(exposed(viaFull).length > exposed(bare).length,
+    `the window must contain memory/identity primitives: ${exposed(viaFull).length} with memory vs ${exposed(bare).length} without`);
   assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the strip');
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
 });
