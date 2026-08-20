@@ -14,6 +14,7 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
+import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
 import { freshEngine } from './balance-harness.mjs';
 
 const NEWLINE = String.fromCharCode(10);
@@ -1032,4 +1033,51 @@ test('the victory screen names the dominant path instead of its identifier', asy
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
   assert.ok(app.includes('CivilizationPaths.displayName(record.dominantPath)'));
   assert.notEqual(CivilizationPaths.displayName('machine_faith'), 'machine_faith');
+});
+
+test('all ten paths expose distinct dominant silhouette identities', () => {
+  const descriptors = new Set();
+  for (const pathId of PATH_IDS) {
+    const civ = GameEngine.createCivilizationForTest(14000 + descriptors.size);
+    civ.pathState.affinity[pathId] = 8;
+    civ.pathState.dominantPath = pathId;
+    const identity = pathIdentity(civ);
+    assert.equal(identity.pathId, pathId);
+    assert.equal(identity.tier, 2);
+    descriptors.add(`${identity.landmark}|${identity.motif}|${identity.crown}`);
+  }
+  assert.equal(descriptors.size, 10);
+});
+
+test('signature consolidation or endgame upgrades dominant identity to tier 3', () => {
+  const civ = GameEngine.createCivilizationForTest(14011);
+  civ.pathState.dominantPath = 'machine_faith'; civ.pathState.affinity.machine_faith = 8;
+  assert.equal(pathIdentity(civ).tier, 2);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  assert.equal(pathIdentity(civ).tier, 3);
+});
+
+test('the three current institutions expose distinct landmark descriptors', () => {
+  const civ = GameEngine.createCivilizationForTest(14012);
+  civ.institutions.push('Lunar Ministry','Ministry Of Sanity','Consensus Office');
+  const landmarks = institutionLandmarks(civ);
+  assert.equal(landmarks.length, 3);
+  assert.equal(new Set(landmarks.map(item => item.kind)).size, 3);
+});
+
+test('identity entrenchment rebuilds the structural key while live values inside a band do not', () => {
+  const civ = lateCiv(14013);
+  civ.pathState.dominantPath = 'machine_faith'; civ.pathState.affinity.machine_faith = 8;
+  const tierTwo = structuralWorldKey(civ, 800);
+  assert.equal(pathIdentity(civ).tier, 2);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  assert.equal(pathIdentity(civ).tier, 3);
+  assert.notEqual(structuralWorldKey(civ, 800), tierTwo, 'entrenched identity must rebuild the cached world');
+  const tierThree = structuralWorldKey(civ, 800);
+  civ.stats.stability = Math.trunc(civ.stats.stability / 25) * 25 + 3;
+  const shifted = structuralWorldKey(civ, 800);
+  civ.stats.stability += 4;
+  assert.equal(structuralWorldKey(civ, 800), shifted, 'a live stat inside one band must not rebuild the world');
+  assert.equal(identitySignature(civ).startsWith('machine_faith:3:'), true);
+  assert.ok(tierThree.length > 0);
 });

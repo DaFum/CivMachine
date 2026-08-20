@@ -3,6 +3,7 @@ import { mixColor as mix, pathAccentFor } from './primitives.js';
 import { speciesProfile } from './species.js';
 import { factionSignature } from './factions.js';
 import { settlementClassSignature } from './settlements.js';
+import { identitySignature } from './identity.js';
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const band = (value) => value < 25 ? 0 : value < 50 ? 1 : value < 75 ? 2 : 3;
 export function decisionImpulseKind(eventId) {
@@ -69,8 +70,7 @@ export function structuralWorldKey(civ, viewportWidth) {
         snapshot.stage,
         snapshot.buildingCount,
         Math.trunc(civ.development / 25),
-        civ.institutions.length,
-        civ.pathState.dominantPath || 'unaligned',
+        identitySignature(civ),
         presentation.bands.stability,
         presentation.bands.sanity,
         presentation.bands.awareness,

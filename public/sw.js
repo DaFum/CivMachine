@@ -16,6 +16,7 @@ const APP_ASSETS = [
   '/game/dist/render/draw-surface.js',
   '/game/dist/render/species.js',
   '/game/dist/render/factions.js',
+  '/game/dist/render/identity.js',
   '/game/dist/render/settlements.js',
   '/game/dist/render/structures.js',
   '/game/dist/render/agents.js',
