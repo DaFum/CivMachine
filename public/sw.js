@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.8.0';
+const CACHE_NAME = 'rce-app-v1.9.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -24,6 +24,9 @@ const APP_ASSETS = [
   '/game/dist/data/entropy-crises.js',
   '/game/dist/data/intervention-copy.js',
   '/game/dist/data/apotheosis-events.js',
+  '/game/dist/data/event-chains.js',
+  '/game/dist/data/expanded-interventions.js',
+  '/game/dist/data/expanded-path-interventions.js',
   '/game/dist/game/decision-feedback.js',
   '/game/dist/game/development.js',
   '/game/dist/game/engine.js',

@@ -1,18 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
-import { CivilizationPaths, SUCCESSION_MAX } from '../dist/game/paths.js';
+import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
 import { APOTHEOSIS_EVENTS } from '../dist/data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../dist/data/entropy-crises.js';
+import { EXPANDED_INTERVENTIONS } from '../dist/data/expanded-interventions.js';
+import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../dist/data/expanded-path-interventions.js';
+import { EVENT_CHAINS } from '../dist/data/event-chains.js';
 import {
   buildInterventionPool,
   chooseWeightedIntervention,
   eventDelayWindow,
+  interventionExhausted,
   recordRecentIntervention,
+  INTERVENTION_ALLOWANCE_PER_RUN,
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
@@ -111,6 +116,135 @@ test('ported content keeps the complete Godot catalog', () => {
   assert.equal(Object.keys(CONTENT.path_definitions).length, 10);
 });
 
+test('each branching chain schedules the follow-up its branch earned', () => {
+  assert.equal(EVENT_CHAINS.length, 9);
+  const engine = freshEngine();
+  engine.startCivilization(4242);
+  const roots = EVENT_CHAINS.filter(event => event.choices.some(choice => choice.follow_up));
+  assert.equal(roots.length, 3, 'three roots, one per chain');
+
+  const targets = new Set();
+  for (const root of roots) {
+    // Every branch of a root must lead somewhere, or the branch is a dead end the player cannot see.
+    assert.equal(root.choices.length, 2, `${root.id} must branch`);
+    for (const [index, choice] of root.choices.entries()) {
+      const followUp = engine.eventById(String(choice.follow_up));
+      assert.ok(followUp, `${root.id} choice ${index} points at a missing follow-up`);
+      // Scheduled-only, so a consequence can never be drawn before the decision that causes it.
+      assert.equal(followUp.requirements.scheduled_only, true, `${followUp.id} must be scheduled only`);
+      assert.equal(followUp.choices.length, 1, `${followUp.id} is a consequence, not a decision`);
+      targets.add(followUp.id);
+
+      engine.forceEvent(root.id);
+      engine.chooseEvent(index);
+      const civ = engine.state.civilization;
+      civ.eventTimer = 0;
+      engine.tick(0.25);
+      assert.equal(engine.currentEvent()?.id, followUp.id, `${root.id} branch ${index} must serve its follow-up next`);
+      engine.chooseEvent(0);
+    }
+  }
+  assert.equal(targets.size, 6, 'the six follow-ups must be distinct');
+  // And the scheduled-only events are exactly those six: nothing in a chain is reachable at random.
+  assert.deepEqual(
+    EVENT_CHAINS.filter(event => event.requirements.scheduled_only).map(event => event.id).sort(),
+    [...targets].sort(),
+  );
+});
+
+test('the expanded catalog is what makes a run repetition-free', () => {
+  // A naturally ending run draws up to about a hundred interventions. The frozen catalog offers
+  // roughly sixty eligible ones per run, which is why a third of every run used to be a repeat.
+  assert.equal(EXPANDED_INTERVENTIONS.length, 36);
+  assert.equal(EXPANDED_PATH_INTERVENTIONS.length, 40);
+  assert.equal(EXPANDED_DOMINANT_INTERVENTIONS.length, 10);
+
+  // The pathless thirty-six carry the guarantee: they are eligible in every run whatever path it
+  // takes, so none of them may declare a path or a dominance requirement.
+  for (const event of EXPANDED_INTERVENTIONS) {
+    assert.equal(event.path_id, undefined, `${event.id} must stay pathless`);
+    assert.equal(event.requirements.min_path_affinity, undefined, `${event.id} must not gate on affinity`);
+  }
+
+  // The parallel chains gate on affinity alone, one phase per step, so a path a run merely leans
+  // into still has four interventions of its own to serve.
+  const PHASE_AFFINITY = { impulse: 1, reinforcement: 2, conflict: 3, consolidation: 4 };
+  const byPath = new Map();
+  for (const event of EXPANDED_PATH_INTERVENTIONS) {
+    assert.equal(event.kind, 'path');
+    assert.equal(event.requirements.requires_dominant_path, undefined, `${event.id} must not need dominance`);
+    assert.equal(
+      event.requirements.min_path_affinity,
+      PHASE_AFFINITY[event.path_phase],
+      `${event.id} affinity gate must match its phase`,
+    );
+    byPath.set(event.path_id, [...(byPath.get(event.path_id) ?? []), event.path_phase]);
+  }
+  assert.equal(byPath.size, PATH_IDS.length);
+  for (const [pathId, phases] of byPath) {
+    assert.deepEqual([...phases].sort(), Object.keys(PHASE_AFFINITY).sort(), `${pathId} chain is incomplete`);
+  }
+
+  // One dominant-path consolidation each, and never an endgame: end-states belong to the frozen
+  // catalog, whose endgames are the ones gated behind 460 Development.
+  assert.deepEqual(
+    EXPANDED_DOMINANT_INTERVENTIONS.map(event => event.path_id).sort(),
+    [...PATH_IDS].sort(),
+  );
+  for (const event of EXPANDED_DOMINANT_INTERVENTIONS) {
+    assert.equal(event.kind, 'dominant_path');
+    assert.equal(event.path_phase, 'consolidation', `${event.id} must not award an end-state`);
+    assert.equal(event.requirements.requires_dominant_path, event.path_id);
+  }
+});
+
+test('every expanded intervention is drawable, single-use and era-explicit', () => {
+  const expanded = [...EXPANDED_INTERVENTIONS, ...EXPANDED_PATH_INTERVENTIONS, ...EXPANDED_DOMINANT_INTERVENTIONS];
+  const engine = freshEngine();
+
+  for (const event of expanded) {
+    assert.equal(engine.eventById(event.id)?.title, event.title, `${event.id} is not in the pool`);
+    // applyEraCeiling() only raises the frozen catalog, so a layered event that should survive into
+    // APOTHEOSIS has to say max_era 3 itself or it silently stops being eligible in the last era.
+    assert.equal(event.max_era, 3, `${event.id} must declare its own APOTHEOSIS ceiling`);
+    assert.ok(event.min_era >= 0 && event.min_era <= 2, `${event.id} era floor`);
+    // One draw per run is enforced in the scheduler; the data must not claim otherwise.
+    assert.equal(event.max_count, 1, `${event.id} must be single-use`);
+    assert.ok(event.weight > 0, `${event.id} weight`);
+    assert.ok(event.body.length > 40, `${event.id} needs a body`);
+    assert.ok(event.choices.length >= 2, `${event.id} needs a decision`);
+    for (const choice of event.choices) {
+      assert.ok(Object.keys(choice.effects).length > 0, `${event.id} choice ${choice.label} does nothing`);
+      assert.ok(choice.prediction.length > 40, `${event.id} choice ${choice.label} needs a prediction`);
+      for (const pathId of Object.keys(choice.path_affinity ?? {})) {
+        assert.ok(PATH_IDS.includes(pathId), `${event.id} names unknown path ${pathId}`);
+      }
+    }
+  }
+});
+
+test('the whole intervention catalog states every action and consequence exactly once', () => {
+  const events = [
+    ...applyInterventionCopy(CONTENT.events),
+    ...ENTROPY_CRISES,
+    ...APOTHEOSIS_EVENTS,
+    ...EXPANDED_INTERVENTIONS,
+    ...EXPANDED_PATH_INTERVENTIONS,
+    ...EXPANDED_DOMINANT_INTERVENTIONS,
+    ...EVENT_CHAINS,
+  ];
+  const choices = events.flatMap(event => event.choices);
+  const normalized = values => values.map(value => value.trim().toLowerCase());
+
+  assert.equal(events.length, 185);
+  assert.equal(choices.length, 389);
+  assert.equal(new Set(normalized(events.map(event => event.id))).size, 185);
+  assert.equal(new Set(normalized(events.map(event => event.title))).size, 185);
+  assert.equal(new Set(normalized(events.map(event => event.body))).size, 185);
+  assert.equal(new Set(normalized(choices.map(choice => choice.label))).size, 389);
+  assert.equal(new Set(normalized(choices.map(choice => choice.prediction))).size, 389);
+});
+
 test('all 163 production choices use unique action and consequence copy', () => {
   const events = [...applyInterventionCopy(CONTENT.events), ...ENTROPY_CRISES];
   const choices = events.flatMap(event => event.choices);
@@ -149,6 +283,43 @@ test('scheduler excludes the six most recent interventions', () => {
   });
 
   assert.deepEqual(pool.map(item => item.event.id), ['event_g']);
+});
+
+test('the scheduler allows each intervention exactly one draw per run', () => {
+  const civ = GameEngine.createCivilizationForTest(78);
+  // The frozen catalog still declares max_count 2 and one event declares 999. Both are ignored: the
+  // allowance is one draw per run, which is what keeps a run repetition-free.
+  assert.equal(INTERVENTION_ALLOWANCE_PER_RUN, 1);
+  const fallback = { id: 'routine_compliance_audit', weight: 1, max_count: 999 };
+  const ordinary = { id: 'dreams_of_gears', weight: 1, max_count: 2 };
+  assert.equal(interventionExhausted(fallback, civ), false);
+  civ.eventCounts = { routine_compliance_audit: 1, dreams_of_gears: 1 };
+  assert.equal(interventionExhausted(fallback, civ), true);
+  assert.equal(interventionExhausted(ordinary, civ), true);
+
+  const options = {
+    pathMultiplier: () => 1,
+    stateMultiplier: () => 1,
+    exhausted: event => interventionExhausted(event, civ),
+  };
+  // Anything already served is out of the pool while something unseen is left.
+  const fresh = buildInterventionPool([fallback, { ...ordinary, id: 'unseen_event' }], civ, options);
+  assert.deepEqual(fresh.map(entry => entry.event.id), ['unseen_event']);
+
+  // Exhausted is not unreachable: with nothing fresh left the saturation stage returns the spent
+  // events anyway, so a run stretched past the catalog still gets an intervention. They are not
+  // ordered -- buildPool weights each one down by how often it has already been served.
+  const saturated = buildInterventionPool([fallback, ordinary], civ, options);
+  assert.deepEqual(saturated.map(entry => entry.event.id).sort(), ['dreams_of_gears', 'routine_compliance_audit']);
+  civ.eventCounts.dreams_of_gears = 4;
+  const weights = new Map(buildInterventionPool([fallback, ordinary], civ, options).map(entry => [entry.event.id, entry.weight]));
+  assert.ok(weights.get('routine_compliance_audit') > weights.get('dreams_of_gears') * 2);
+
+  // The recency window still applies in that third stage: the last thing served stays excluded even
+  // when every candidate is spent, which is what keeps a saturated run from repeating back to back.
+  recordRecentIntervention(civ, 'routine_compliance_audit');
+  const afterRecent = buildInterventionPool([fallback, ordinary], civ, options);
+  assert.deepEqual(afterRecent.map(entry => entry.event.id), ['dreams_of_gears']);
 });
 
 test('scheduler makes a deterministic weighted selection for an identical roll', () => {
@@ -190,10 +361,19 @@ test('engine scheduler excludes a recent event when a fresh eligible event exist
   });
   engine.startCivilization(7);
   const civ = engine.state.civilization;
-  for (const event of CONTENT.events) {
-    if (!['routine_compliance_audit', 'dreams_of_gears'].includes(event.id)) {
-      civ.eventCounts[event.id] = Number(event.max_count ?? 2);
-    }
+  // The whole pool, not just the frozen catalog: with the layered catalogs left fresh the scheduler
+  // would have plenty to choose from and the recency rule would never be exercised.
+  const pool = [
+    ...CONTENT.events,
+    ...ENTROPY_CRISES,
+    ...APOTHEOSIS_EVENTS,
+    ...EXPANDED_INTERVENTIONS,
+    ...EXPANDED_PATH_INTERVENTIONS,
+    ...EXPANDED_DOMINANT_INTERVENTIONS,
+    ...EVENT_CHAINS,
+  ];
+  for (const event of pool) {
+    if (!['routine_compliance_audit', 'dreams_of_gears'].includes(event.id)) civ.eventCounts[event.id] = 1;
   }
   civ.recentEventIds = ['routine_compliance_audit'];
   civ.eventTimer = 0;
@@ -1399,7 +1579,7 @@ test('every reached end-state is recorded once and deepens the harvest', () => {
   assert.equal(paths.endgameStates.length, 1, 'the same end-state must not count twice');
 });
 
-test('a long run never serves one intervention over and over', () => {
+test('a long run never serves the same intervention twice', () => {
   const engine = withUpgrades(
     freshEngine(),
     { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5 },
@@ -1409,10 +1589,58 @@ test('a long run never serves one intervention over and over', () => {
   const counts = new Map();
   for (const id of result.eventIds) counts.set(id, (counts.get(id) ?? 0) + 1);
   const worst = Math.max(...counts.values());
-  assert.ok(result.interventions >= 90, `only ${result.interventions} interventions`);
-  assert.ok(counts.size >= 55, `only ${counts.size} distinct events`);
-  assert.ok(worst <= 5, `one event appeared ${worst} times`);
-  assert.ok((counts.get('routine_compliance_audit') ?? 0) <= 3, 'the fallback must stay exceptional');
+  // Well past the sixty-odd interventions the frozen catalog can offer a single run, which is the
+  // point: the run stays repetition-free because the catalog outlasts it, not because it is short.
+  assert.ok(result.interventions >= 80, `only ${result.interventions} interventions`);
+  assert.equal(counts.size, result.interventions, 'every intervention in a run must be a different one');
+  assert.equal(worst, 1, `one event appeared ${worst} times`);
+  assert.ok((counts.get('routine_compliance_audit') ?? 0) <= 1, 'the fallback must stay exceptional');
+});
+
+// Not one seed: a run's eligible pool depends on which paths it leans into, and a run that spreads
+// its affinity thin reaches fewer path chains. Twelve seeds cover the spread, and the assertion is
+// on the whole set so a single unlucky pool shows up as a failure rather than as flakiness.
+test('no seed serves a repeated intervention in a naturally ending run', () => {
+  const repeats = [];
+  let shortest = Infinity;
+  for (let index = 1; index <= 12; index++) {
+    const seed = index * 977;
+    const engine = withUpgrades(
+      freshEngine(),
+      { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5, contingency_vat: 4 },
+      { stable_constants: 5 },
+    );
+    const result = runCivilization(engine, { seed });
+    const seen = new Set();
+    for (const id of result.eventIds) {
+      if (seen.has(id)) repeats.push(`${seed}:${id}`);
+      seen.add(id);
+    }
+    shortest = Math.min(shortest, result.interventions);
+  }
+  assert.deepEqual(repeats, []);
+  assert.ok(shortest >= 40, `a run served only ${shortest} interventions`);
+});
+
+// The guarantee above is a content guarantee, and content is finite: Vent can keep a Civilization
+// alive for roughly three times its natural length, and past the run-eligible pool the scheduler has
+// nothing unseen left. What it must not do there is fall back onto one event, which is what the
+// unbounded max_count of routine_compliance_audit used to cause.
+test('a run stretched past the catalog spreads its repeats instead of concentrating them', () => {
+  const engine = withUpgrades(
+    freshEngine(),
+    { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5, contingency_vat: 4 },
+    { stable_constants: 5 },
+  );
+  const result = runCivilization(engine, { seed: 11, policy: ['safe', 'vent'], maxSeconds: 9000 });
+  const counts = new Map();
+  for (const id of result.eventIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  assert.ok(result.interventions >= 200, `only ${result.interventions} interventions`);
+  assert.ok(counts.size >= 125, `only ${counts.size} distinct events`);
+  // No single intervention may take more than a twentieth of the run: the whole catalog is served
+  // once before anything repeats, so a second pass is spread, not concentrated.
+  const worst = Math.max(...counts.values());
+  assert.ok(worst <= result.interventions * 0.05, `one event took ${worst} of ${result.interventions} interventions`);
   for (let index = 1; index < result.eventIds.length; index++) {
     assert.notEqual(result.eventIds[index], result.eventIds[index - 1], 'no intervention may repeat back to back');
   }
