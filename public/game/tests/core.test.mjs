@@ -1999,10 +1999,14 @@ test('stability decay grows with era, attention and awareness', () => {
 test('entropy adds its cascade on top of the ordinary decay', () => {
   const civ = GameEngine.createCivilizationForTest(32);
   const quiet = stabilityDecayPerSecond(civ);
-  civ.tactical.entropy = 60;
+  // At the cascade edge, where cascadeDecay actually contributes -- below 100 it is zero, so a
+  // milder Entropy would make this comparison true without proving anything.
+  civ.tactical.entropy = 100;
+  const cascade = cascadeDecay(100, civ.stats.stabilityMax);
+  assert.ok(cascade > 0, 'the cascade must cost something at the edge');
   assert.equal(
     Number(stabilityDecayPerSecond(civ).toFixed(10)),
-    Number((quiet + cascadeDecay(60, civ.stats.stabilityMax)).toFixed(10)),
+    Number((quiet + cascade).toFixed(10)),
     'the cascade is added to the decay, not multiplied into it',
   );
 });

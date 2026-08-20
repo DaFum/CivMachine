@@ -16,7 +16,7 @@ That separation is deliberate — the game survives shell/platform rewrites unto
 ```bash
 npm run dev          # Next dev server
 npm run build        # next build (also runs tsc over app/)
-npm test             # compiles public/game/src, then runs both test suites (243 tests)
+npm test             # compiles public/game/src, then runs both test suites (244 tests)
 npm run lint         # eslint (public/game/** is intentionally excluded)
 npm run typecheck    # tsc --noEmit over the shell
 ```
