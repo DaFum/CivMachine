@@ -68,13 +68,122 @@ function nextDepthBand(depth: number) {
   };
 }
 
-export function buildViewModel(engine: GameEngine) {
+
+function buildResourcesViewModel(engine: GameEngine) {
   const state = engine.state;
-  const resources = engine.visibleResources().map(id => ({
+  return engine.visibleResources().map(id => ({
     id,
     name: RESOURCE_NAMES[id] ?? id,
     amount: id === 'universal_residue' ? state.meta.universalResidue : id === 'axioms' ? state.meta.axioms : (state.machine.currencies as any)[id] ?? 0,
   }));
+}
+
+function buildConvergenceViewModel(engine: GameEngine) {
+  const state = engine.state;
+  const convergenceIsUnlocked = engine.convergenceUnlocked();
+  const convergenceEntries = engine.convergenceRequirements();
+  const convergenceTargetDepth = engine.convergenceTargetDepth();
+  const openRequirement = convergenceEntries.find(entry => !entry.met);
+
+  return {
+    visible: state.meta.multiversesConsumed >= 1,
+    unlocked: convergenceIsUnlocked,
+    requirements: convergenceEntries,
+    targetDepth: convergenceTargetDepth,
+    convergences: state.meta.convergences,
+    reason: openRequirement ? `${openRequirement.label}: ${openRequirement.current}/${openRequirement.target}` : 'All requirements met.',
+  };
+}
+
+function buildEventViewModel(engine: GameEngine, civ: any, event: any, probed: boolean, predictionsUnlocked: boolean) {
+  if (!event) return null;
+  return {
+    id: event.id,
+    title: event.title,
+    body: event.body,
+    predictionLocked: !predictionsUnlocked && !probed,
+    probed,
+    choices: (event.choices ?? []).map((choice:any, index:number) => {
+      const vector=probed?riskVector(engine.previewEventChoiceEffects(choice),civ?.predictionLevel??0):'';
+      return {
+        index,
+        label: choice.label,
+        prediction: predictionsUnlocked
+          ? `${choice.prediction}${probed?` Probe vector: ${vector}.`:''}`
+          : probed?`Probe vector: ${vector}.`:'',
+      };
+    }),
+  };
+}
+
+function buildTacticalViewModel(engine: GameEngine, civ: any, bonuses: any) {
+  if (!civ) return null;
+  return {
+    entropy: civ.tactical.entropy,
+    entropyBand: entropyBand(civ.tactical.entropy),
+    entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+    pressureMultiplier: pressureMultiplier(pressureYears(civ)),
+    secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+    controlCapacity: civ.tactical.controlCapacity,
+    controlMax: 3,
+    containmentRating: bonuses.containmentRating,
+    actions: (Object.keys(TACTICAL_ACTIONS) as Array<keyof typeof TACTICAL_ACTIONS>).map(id=>({
+      ...TACTICAL_ACTIONS[id],
+      risk: tacticalRisk(civ, id),
+      ...engine.tacticalAvailability(id),
+    })),
+  };
+}
+
+function buildHarvestViewModel(engine: GameEngine, civ: any, controlledHarvest: any, chaoticHarvest: any, bonuses: any, convergenceTargetDepth: number) {
+  if (!civ) return null;
+  return {
+    controlled: controlledHarvest,
+    chaotic: chaoticHarvest,
+    depth: cultivationDepth(civ),
+    depthBand: depthBand(cultivationDepth(civ)),
+    bandProgress: depthBandProgress(cultivationDepth(civ)),
+    nextBand: nextDepthBand(cultivationDepth(civ)),
+    urgency: harvestUrgency({
+      depth: cultivationDepth(civ),
+      credits: controlledHarvest?.credits ?? 0,
+      developmentRate: engine.developmentRate(),
+      secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+      entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+      stability: civ.stats.stability,
+      controlCapacity: civ.tactical.controlCapacity,
+      ventEntropyRelief: VENT_ENTROPY_RELIEF,
+      ventStabilityCost: VENT_STABILITY_COST,
+      entropy: civ.tactical.entropy,
+      premature: controlledHarvest?.grade === 'premature',
+    }),
+    convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
+  };
+}
+
+function buildCivilizationViewModel(engine: GameEngine, civ: any) {
+  if (!civ) return null;
+  return {
+    seed: civ.seed,
+    terminal: civ.terminal,
+    years: civ.years,
+    era: civ.era,
+    development: civ.development,
+    traits: civ.traits.map((id: string) => ({ id, name: engine.traitById(id)?.name ?? id })),
+    institutions: [...civ.institutions],
+    flags: [...civ.flags],
+    stats: { ...civ.stats },
+    path: CivilizationPaths.summary(civ),
+    species: speciesProfile(civ),
+    faction: factionProfile(civ),
+    history: civ.history.slice(0, 30),
+    eventTimer: civ.eventTimer,
+    directiveId: civ.directiveId,
+  };
+}
+
+export function buildViewModel(engine: GameEngine) {
+  const state = engine.state;
   const civ = state.civilization;
   const event = engine.currentEvent();
   const predictionsUnlocked = Boolean(civ && civ.predictionLevel > 0);
@@ -85,14 +194,13 @@ export function buildViewModel(engine: GameEngine) {
   const activeObjective = civ ? objectiveForDirective(civ.directiveId) : null;
   const directiveRequired = engine.systemUnlocked('directives') && state.machine.runBuild.directiveOfferIds.length > 0;
   const convergenceIsUnlocked = engine.convergenceUnlocked();
-  const convergenceEntries = engine.convergenceRequirements();
   const convergenceTargetDepth = engine.convergenceTargetDepth();
   const milestoneEntries = milestoneProgress(state, convergenceIsUnlocked);
-  const openRequirement = convergenceEntries.find(entry => !entry.met);
+
   return {
     phase: state.phase,
     machineInsight: engine.machineInsight(),
-    resources,
+    resources: buildResourcesViewModel(engine),
     simulationSpeed: state.simulationSpeed,
     maxSimulationSpeed: engine.maxSimulationSpeed(),
     civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
@@ -106,19 +214,12 @@ export function buildViewModel(engine: GameEngine) {
       completed: milestoneEntries.filter(entry => entry.completed).length,
       total: milestoneEntries.length,
     },
-    convergence: {
-      visible: state.meta.multiversesConsumed >= 1,
-      unlocked: convergenceIsUnlocked,
-      requirements: convergenceEntries,
-      targetDepth: convergenceTargetDepth,
-      convergences: state.meta.convergences,
-      reason: openRequirement ? `${openRequirement.label}: ${openRequirement.current}/${openRequirement.target}` : 'All requirements met.',
-    },
+    convergence: buildConvergenceViewModel(engine),
     victory: state.phase === 'victory' ? { record: engine.lastVictory(), convergences: state.meta.convergences } : null,
     runBuild: { ...state.machine.runBuild },
     directives: engine.availableDirectives().map((directive:any)=>({ ...directive, objective: objectiveForDirective(directive.id) })),
     matrices: engine.availableMatrices(),
-    previewTraits: state.machine.runBuild.previewTraitIds.map(id=>({id,name:engine.traitById(id)?.name??id})),
+    previewTraits: state.machine.runBuild.previewTraitIds.map((id:string)=>({id,name:engine.traitById(id)?.name??id})),
     canStartCivilization: !directiveRequired || Boolean(state.machine.runBuild.selectedDirective),
     startReason: directiveRequired&&!state.machine.runBuild.selectedDirective?'Select one offered Directive for this Civilization.':'',
     machineUpgrades: engine.visibleUpgradeEntries('machine'),
@@ -134,63 +235,11 @@ export function buildViewModel(engine: GameEngine) {
       multiversePrestige: engine.systemUnlocked('multiverse_prestige'),
       axioms: engine.systemUnlocked('axioms'),
     },
-    event: event ? {
-      id: event.id,
-      title: event.title,
-      body: event.body,
-      predictionLocked: !predictionsUnlocked && !probed,
-      probed,
-      choices: (event.choices ?? []).map((choice:any, index:number) => {
-        const vector=probed?riskVector(engine.previewEventChoiceEffects(choice),civ?.predictionLevel??0):'';
-        return {
-          index,
-          label: choice.label,
-          prediction: predictionsUnlocked
-            ? `${choice.prediction}${probed?` Probe vector: ${vector}.`:''}`
-            : probed?`Probe vector: ${vector}.`:'',
-        };
-      }),
-    } : null,
+    event: buildEventViewModel(engine, civ, event, probed, predictionsUnlocked),
     feedback: engine.decisionFeedback ? structuredClone(engine.decisionFeedback) : null,
     lastActionFailure: engine.lastActionFailure,
-    tactical: civ ? {
-      entropy: civ.tactical.entropy,
-      entropyBand: entropyBand(civ.tactical.entropy),
-      entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
-      pressureMultiplier: pressureMultiplier(pressureYears(civ)),
-      secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
-      controlCapacity: civ.tactical.controlCapacity,
-      controlMax: 3,
-      containmentRating: bonuses.containmentRating,
-      actions: (Object.keys(TACTICAL_ACTIONS) as Array<keyof typeof TACTICAL_ACTIONS>).map(id=>({
-        ...TACTICAL_ACTIONS[id],
-        // Accelerate's Entropy price rises with the era, so the rail names the price charged now.
-        risk: tacticalRisk(civ, id),
-        ...engine.tacticalAvailability(id),
-      })),
-    } : null,
-    harvest: civ ? {
-      controlled: controlledHarvest,
-      chaotic: chaoticHarvest,
-      depth: cultivationDepth(civ),
-      depthBand: depthBand(cultivationDepth(civ)),
-      bandProgress: depthBandProgress(cultivationDepth(civ)),
-      nextBand: nextDepthBand(cultivationDepth(civ)),
-      urgency: harvestUrgency({
-        depth: cultivationDepth(civ),
-        credits: controlledHarvest?.credits ?? 0,
-        developmentRate: engine.developmentRate(),
-        secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
-        entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
-        stability: civ.stats.stability,
-        controlCapacity: civ.tactical.controlCapacity,
-        ventEntropyRelief: VENT_ENTROPY_RELIEF,
-        ventStabilityCost: VENT_STABILITY_COST,
-        entropy: civ.tactical.entropy,
-        premature: controlledHarvest?.grade === 'premature',
-      }),
-      convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
-    } : null,
+    tactical: buildTacticalViewModel(engine, civ, bonuses),
+    harvest: buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth),
     machineReserve: civ ? engine.runInterventions() : [],
     directiveObjective: activeObjective ? {
       id: activeObjective.id,
@@ -199,27 +248,10 @@ export function buildViewModel(engine: GameEngine) {
       completed: Boolean(controlledHarvest?.objectiveCompleted),
     } : null,
     lastHarvest: { ...state.machine.lastHarvest },
-    civilization: civ ? {
-      seed: civ.seed,
-      terminal: civ.terminal,
-      years: civ.years,
-      era: civ.era,
-      development: civ.development,
-      traits: civ.traits.map(id => ({ id, name: engine.traitById(id)?.name ?? id })),
-      institutions: [...civ.institutions],
-      flags: [...civ.flags],
-      stats: { ...civ.stats },
-      path: CivilizationPaths.summary(civ),
-      species: speciesProfile(civ),
-      faction: factionProfile(civ),
-      history: civ.history.slice(0, 30),
-      eventTimer: civ.eventTimer,
-      directiveId: civ.directiveId,
-    } : null,
+    civilization: buildCivilizationViewModel(engine, civ),
     messages: engine.messages.slice(0, 30),
   };
 }
-
 export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): string {
   const civilization = vm.civilization;
   if (vm.phase !== 'civilization' || !civilization) return vm.phase;
@@ -243,7 +275,7 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     cosmicCondition,
     vm.simulationSpeed,
     vm.maxSimulationSpeed,
-    civilization.traits.map(trait => trait.id).join(','),
+    civilization.traits.map((trait: any) => trait.id).join(','),
     civilization.institutions.join(','),
     vm.feedback?.sequence ?? 0,
     vm.tactical?.entropyBand.index ?? 0,
