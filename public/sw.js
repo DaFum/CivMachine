@@ -22,6 +22,7 @@ const APP_ASSETS = [
   '/game/dist/render/structures.js',
   '/game/dist/render/agents.js',
   '/game/dist/render/construction.js',
+  '/game/dist/render/consequence-presentation.js',
   '/game/dist/data/content.generated.js',
   '/game/dist/data/entropy-crises.js',
   '/game/dist/data/intervention-copy.js',

@@ -411,3 +411,40 @@ test('persistent marks and scars paint on the cached scenery layer, never on the
     for (const call of calls) assert.ok(Number.isFinite(call.from) && Number.isFinite(call.to), `memory ${label}: ${call.name} produced a non-finite extent`);
   }
 });
+
+test('a world impulse paints only on the dynamic layer and never forces a scenery redraw', async () => {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(717) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?impulse=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    const quiet = { scenery: controller.stats().sceneryFullRedraws + controller.stats().sceneryStripRedraws, rebuilds: controller.stats().sceneRebuilds };
+    sceneryCalls.length = 0; staticCalls.length = 0; dynamicCalls.length = 0;
+
+    engine.worldImpulse = {
+      sequence: 7, eventId: 'entropy_crisis_50', eventTitle: 'Desynchronization', choiceLabel: 'Contain', tone: 'negative',
+      metrics: [], affinities: [], additions: [],
+      consequence: { significance: 'turning_point', tags: ['reality_damage'], transitions: {}, signatureProfile: 'crisis:entropy_50' },
+    };
+    frame(400);
+
+    assert.ok(dynamicCalls.length > 0, 'the impact must paint on the dynamic layer');
+    assert.equal(sceneryCalls.length, 0, 'a transient impact must not repaint cached scenery');
+    assert.equal(staticCalls.length, 0, 'a transient impact must not repaint the static layers');
+    assert.equal(controller.stats().sceneryFullRedraws + controller.stats().sceneryStripRedraws, quiet.scenery);
+    assert.equal(controller.stats().sceneRebuilds, quiet.rebuilds, 'an impulse alone is not a structural change');
+
+    controller.destroy();
+  });
+});

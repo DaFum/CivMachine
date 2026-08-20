@@ -1,6 +1,7 @@
 import { CivilizationPaths } from '../game/paths.js';
 import { liveWorldSample, worldSnapshot } from './world-model.js';
-import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from './world-presentation.js';
+import { structuralWorldKey, worldPresentation } from './world-presentation.js';
+import { drawConsequenceImpact } from './consequence-presentation.js';
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface } from './draw-surface.js';
 import { settlementLayout } from './settlements.js';
@@ -484,81 +485,6 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
     drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
 }
-function impulseColor(feedback, kind) {
-    if (kind === 'containment')
-        return 0x73e6bd;
-    if (kind === 'time-streak')
-        return 0xf2bd63;
-    if (kind === 'scan')
-        return 0x6bdcf6;
-    if (kind === 'fracture')
-        return entropyThresholdColor(feedback.eventId);
-    return feedback.tone === 'positive' ? 0x73e6bd : feedback.tone === 'negative' ? 0xee6973 : 0xb68cff;
-}
-/** Drawn identically on both backends; the caller owns clearing its layer. */
-function drawDecisionImpulse(surface, feedback, startTime, time, width, height) {
-    if (!feedback || startTime <= 0)
-        return;
-    const kind = decisionImpulseKind(feedback.eventId);
-    const color = impulseColor(feedback, kind);
-    if (reducedMotion) {
-        if (time - startTime >= 1400)
-            return;
-        const radius = Math.min(width, height) * .2;
-        if (kind === 'time-streak')
-            for (let i = 0; i < 4; i++)
-                surface.lineStyle(2, color, .42).line(width * .18, height * (.38 + i * .1), width * .82, height * (.38 + i * .1));
-        else if (kind === 'scan') {
-            surface.lineStyle(2, color, .48).line(width * .16, height * .5, width * .84, height * .5);
-            surface.lineStyle(1, color, .4).strokeCircle(width * .5, height * .5, radius);
-        }
-        else if (kind === 'fracture')
-            for (let i = 0; i < 6; i++)
-                surface.lineStyle(2, color, .44).line(width * (.3 + i * .07), height * .3, width * (.34 + i * .06), height * .72);
-        else {
-            surface.lineStyle(kind === 'containment' ? 4 : 2, color, .48).strokeCircle(width * .5, height * .54, radius);
-            surface.fillStyle(color, .06).fillCircle(width * .5, height * .54, radius * .72);
-        }
-        return;
-    }
-    const progress = Math.min(1, Math.max(0, (time - startTime) / 1800));
-    if (progress >= 1)
-        return;
-    const alpha = (1 - progress) * .62;
-    const radius = 34 + progress * Math.min(width, height) * .56;
-    if (kind === 'containment') {
-        for (let ring = 0; ring < 3; ring++)
-            surface.lineStyle(4 - ring, color, alpha * (1 - ring * .18)).strokeCircle(width * .5, height * .54, radius * (.58 + ring * .2));
-        surface.fillStyle(color, alpha * .08).fillCircle(width * .5, height * .54, radius * .5);
-    }
-    else if (kind === 'time-streak') {
-        for (let i = 0; i < 9; i++) {
-            const y = height * (.2 + i * .075);
-            const inset = ((i % 3) * 36 + progress * width * .18) % Math.max(1, width * .28);
-            surface.lineStyle(1.2 + (i % 2), color, alpha * (.45 + (i % 3) * .15)).line(-width * .08 + inset, y, width * (.7 + progress * .35) + inset, y);
-        }
-    }
-    else if (kind === 'scan') {
-        const y = height * (.16 + progress * .68);
-        surface.lineStyle(2, color, alpha).line(width * .12, y, width * .88, y);
-        surface.lineStyle(1, color, alpha * .75).strokeCircle(width * .5, height * .52, radius * .48);
-        surface.line(width * .5 - radius * .62, height * .52, width * .5 + radius * .62, height * .52);
-        surface.line(width * .5, height * .52 - radius * .62, width * .5, height * .52 + radius * .62);
-    }
-    else if (kind === 'fracture') {
-        for (let i = 0; i < 10; i++) {
-            const x = width * (.16 + i * .075);
-            const bend = (hash01(i * 31 + feedback.sequence) - .5) * width * .08;
-            surface.lineStyle(1.2 + (i % 3), color, alpha).line(x, height * .18, x + bend, height * (.42 + progress * .2));
-            surface.line(x + bend, height * (.42 + progress * .2), x - bend * .35, height * .84);
-        }
-    }
-    else {
-        surface.lineStyle(3 - progress * 2, color, alpha).strokeCircle(width * .5, height * .54, radius);
-        surface.lineStyle(1, 0xffffff, alpha * .5).strokeCircle(width * .5, height * .54, radius * .72);
-        surface.fillStyle(color, alpha * .07).fillCircle(width * .5, height * .54, radius * .45);
-    }
-}
 class WorldInput {
     constructor(target, getWidth) {
         this.target = target;
@@ -743,7 +669,7 @@ class WorldRenderer {
             this.feedbackStartTime = time;
         }
         if (feedback && this.feedbackStartTime > 0) {
-            drawDecisionImpulse(surface, feedback, this.feedbackStartTime, time, this.width, this.height);
+            drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
         }
         context.setTransform(1, 0, 0, 1, 0, 0);
     }

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
-import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
+import { structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
+import { consequenceImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
@@ -231,13 +232,18 @@ test('Entropy changes presentation in stable structural bands', () => {
 });
 
 test('tactical decisions and crises select distinct world impulse kinds', () => {
-  assert.equal(decisionImpulseKind('tactical:stabilize'), 'containment');
-  assert.equal(decisionImpulseKind('tactical:accelerate'), 'time-streak');
-  assert.equal(decisionImpulseKind('tactical:probe'), 'scan');
-  assert.equal(decisionImpulseKind('entropy_crisis_50'), 'fracture');
-  assert.equal(decisionImpulseKind('synthetic_saint'), 'decision');
-  assert.notEqual(entropyThresholdColor('entropy_crisis_25'), entropyThresholdColor('entropy_crisis_50'));
-  assert.notEqual(entropyThresholdColor('entropy_crisis_50'), entropyThresholdColor('entropy_crisis_75'));
+  const impulse = (eventId, consequence = { significance:'routine', tags:[], transitions:{}, signatureProfile:'' }) =>
+    consequenceImpact({ sequence:1, eventId, eventTitle:'', choiceLabel:'', tone:'mixed', metrics:[], affinities:[], additions:[], consequence }, false);
+  assert.equal(impulse('tactical:stabilize').kind, 'containment');
+  assert.equal(impulse('tactical:accelerate').kind, 'time_streak');
+  assert.equal(impulse('tactical:probe').kind, 'scan');
+  assert.equal(impulse('tactical:vent').kind, 'vent');
+  assert.equal(impulse('entropy_crisis_50').kind, 'fracture');
+  assert.equal(impulse('synthetic_saint').kind, 'generic');
+  // The three crisis thresholds stay distinguishable, now by signature variant rather than by colour.
+  const variants = ['crisis:entropy_25','crisis:entropy_50','crisis:entropy_75'].map(signatureProfile =>
+    impulse('entropy_crisis', { significance:'turning_point', tags:['reality_damage'], transitions:{}, signatureProfile }).variant);
+  assert.equal(new Set(variants).size, 3);
 });
 
 test('render primitives are deterministic and cover every path', () => {
@@ -1093,4 +1099,42 @@ test('world memory signatures change only for saved structural memory', () => {
   civ.visualMemory.sequence = 99;
   assert.equal(worldMemorySignature(civ.visualMemory), signature, 'sequence alone is not structural');
   assert.equal(structuralWorldKey(civ, 800), after, 'a bumped sequence alone must not rebuild the world');
+});
+
+test('semantic consequence presentation distinguishes tactical actions and significance', () => {
+  const base = {
+    sequence:1, eventTitle:'', choiceLabel:'', tone:'mixed', metrics:[], affinities:[], additions:[],
+    consequence:{ significance:'routine', tags:[], transitions:{}, signatureProfile:'' },
+  };
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:stabilize' }, false).kind, 'containment');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:accelerate' }, false).kind, 'time_streak');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:probe' }, false).kind, 'scan');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:vent' }, false).kind, 'vent');
+  const major = consequenceImpact({ ...base, eventId:'x', consequence:{ significance:'major', tags:['civil_unrest'], transitions:{}, signatureProfile:'' } }, false);
+  const turning = consequenceImpact({ ...base, eventId:'x', consequence:{ significance:'turning_point', tags:['civil_unrest'], transitions:{}, signatureProfile:'' } }, false);
+  assert.equal(major.kind, 'unrest');
+  assert.ok(turning.intensity > major.intensity);
+});
+
+test('reduced motion shortens impacts without deleting semantic information', () => {
+  const feedback = {
+    sequence:2, eventId:'entropy_crisis_50', eventTitle:'', choiceLabel:'', tone:'negative', metrics:[], affinities:[], additions:[],
+    consequence:{ significance:'turning_point', tags:['reality_damage'], transitions:{}, signatureProfile:'crisis:entropy_50' },
+  };
+  const full = consequenceImpact(feedback, false);
+  const reduced = consequenceImpact(feedback, true);
+  assert.equal(reduced.kind, full.kind);
+  assert.equal(reduced.variant, full.variant);
+  assert.ok(reduced.durationMs >= 250 && reduced.durationMs <= 400);
+  assert.ok(full.durationMs >= 900 && full.durationMs <= 1800);
+  assert.equal(reduced.staticOnly, true);
+});
+
+test('the obsolete impulse helpers are gone from the presentation module', async () => {
+  const source = await readFile(new URL('../src/render/world-presentation.ts', import.meta.url), 'utf8');
+  assert.ok(!source.includes('decisionImpulseKind'), 'impulse kinds now come from consequence-presentation.ts');
+  assert.ok(!source.includes('entropyThresholdColor'), 'crisis colours now come from consequence-presentation.ts');
+  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.ok(!world.includes('function drawDecisionImpulse'), 'world.ts must orchestrate, not own impact drawing');
+  assert.ok(!world.includes('function impulseColor'), 'impact colour belongs to the impact module');
 });

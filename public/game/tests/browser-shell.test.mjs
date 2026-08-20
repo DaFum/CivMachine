@@ -51,7 +51,7 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   assert.match(world, /drawSettlementContent/);
   // Atmosphere and impulses are redrawn every throttled frame instead.
   assert.match(world, /drawDynamicContent/);
-  assert.match(world, /drawDecisionImpulse/);
+  assert.match(world, /drawConsequenceImpact/);
   assert.match(world, /DYNAMIC_FRAME_MS\s*=\s*33/);
   assert.match(world, /prefers-reduced-motion/);
   assert.match(world, /worldImpulse/);
@@ -71,7 +71,12 @@ test('reduced-motion mode freezes ambient movement and uses a static decision si
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /const animationTime\s*=\s*reducedMotion\s*\?\s*0\s*:\s*time/);
   assert.match(world, /drawPathMotif\([^;]+animationTime/);
-  assert.match(world, /function drawDecisionImpulse[\s\S]{0,700}if \(reducedMotion\)/);
+  // The decision impact moved into its own module, so reduced motion is now a parameter world.ts
+  // forwards rather than a branch it owns.
+  assert.match(world, /drawConsequenceImpact\([^;]+reducedMotion\)/);
+  const impact = await readFile(new URL('../src/render/consequence-presentation.ts', import.meta.url), 'utf8');
+  assert.match(impact, /staticOnly: reducedMotion/);
+  assert.match(impact, /impact\.staticOnly \? 0 :/);
 });
 
 test('renderer re-measures its host every frame so a hidden host recovers when shown', async () => {

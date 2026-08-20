@@ -10,22 +10,6 @@ import { worldMemorySignature } from './world-memory.js';
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const band = (value: number): number => value < 25 ? 0 : value < 50 ? 1 : value < 75 ? 2 : 3;
 
-export type DecisionImpulseKind = 'containment' | 'time-streak' | 'scan' | 'fracture' | 'decision';
-
-export function decisionImpulseKind(eventId:string):DecisionImpulseKind {
-  if(eventId==='tactical:stabilize')return 'containment';
-  if(eventId==='tactical:accelerate')return 'time-streak';
-  if(eventId==='tactical:probe')return 'scan';
-  if(eventId.startsWith('entropy_crisis_'))return 'fracture';
-  return 'decision';
-}
-
-export function entropyThresholdColor(eventId:string):number {
-  if(eventId.endsWith('_25'))return 0xf2d06b;
-  if(eventId.endsWith('_50'))return 0xf29a52;
-  return 0xee6973;
-}
-
 export function worldPresentation(civ: Civilization) {
   const stability = clamp01(civ.stats.stability / Math.max(1, civ.stats.stabilityMax));
   const danger = clamp01((55 - civ.stats.stability) / 55);
