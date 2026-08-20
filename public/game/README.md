@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.9.0
+# Reality Consumption Engine — App Edition v1.9.1
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,12 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.9.1 baseline synchronization
+
+v1.9.1 is the current balance/content baseline used by the Civilization Drama Arc work. This
+maintenance release keeps the v1.9.0 185-intervention catalog and measured survival curve intact;
+the release surfaces are synchronized to the package/cache version before v1.10.0 feature work.
 
 ## v1.9.0 a catalog that outlasts the run
 

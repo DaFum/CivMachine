@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.9.0
+# Reality Consumption Engine — App Edition v1.9.1
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -21,6 +21,12 @@ ending run runs out of unseen ones.
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
+
+## v1.9.1 baseline synchronization
+
+v1.9.1 is the current balance/content baseline used by the Civilization Drama Arc work. This
+maintenance release keeps the v1.9.0 185-intervention catalog and measured survival curve intact;
+the release surfaces are synchronized to the package/cache version before v1.10.0 feature work.
 
 ## v1.9.0 a catalog that outlasts the run
 
