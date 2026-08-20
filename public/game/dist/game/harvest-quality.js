@@ -78,7 +78,7 @@ export function reachableRunSeconds(input) {
         return Number.POSITIVE_INFINITY;
     if (cost <= 0 || relief <= 0)
         return floor;
-    const ventsAffordable = Math.max(0, Math.floor(Math.max(0, input.stability) / cost));
+    const ventsAffordable = Math.min(input.controlCapacity, Math.max(0, Math.floor(Math.max(0, input.stability) / cost)));
     return floor + ventsAffordable * relief / rate;
 }
 /**
@@ -96,11 +96,13 @@ export function harvestUrgency(input) {
     const depthNeeded = nextCredit / DEPTH_CREDIT_RATE;
     const developmentNeeded = Math.max(0, (depthNeeded - input.depth) * DEPTH_DEVELOPMENT_SCALE);
     const rate = Math.max(0, input.developmentRate);
-    const secondsToNextCredit = capped || rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;
+    const secondsToNextCredit = rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;
     const secondsOfRunLeft = reachableRunSeconds(input);
     const view = { secondsToNextCredit, secondsOfRunLeft, nextCredit };
     if (input.entropy >= 100)
         return { state: 'cascading', ...view };
+    if (capped)
+        return { state: 'capped', ...view };
     // A premature run has nothing banked yet, so "harvest now" is never the answer -- it must first
     // clear the anti-cheese floor, whatever the clock says.
     if (input.premature)

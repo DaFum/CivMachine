@@ -53,11 +53,11 @@ The world's mood also glides now instead of stepping in four jumps, new structur
 arrive rather than appearing between blinks, and on phones the tactical actions sit in a 2x2
 grid with the cascade clock and harvest call moved onto the world itself.
 
-**Saves from v1.6.0 are carried over.** `SAVE_VERSION` stays 4; the one field added to a
-running Civilization is optional and defaults so an in-progress run behaves exactly as it did
-when it was written.
+**Saves from v1.6.0 are carried over.** `SAVE_VERSION` stays 4; the fields added to a
+running Civilization in v1.7.0 are optional and default cleanly, so an in-progress run
+behaves exactly as it did when it was written.
 
-## v1.6.0 victory and milestones
+## v1.6.0 victory and milestones (Historical)
 
 v1.6.0 gives the game an explicit win condition. Meta progress unlocks the **Great
 Convergence**: a terminal cultivation that starts in APOTHEOSIS, runs at 1.6x Entropy, pays
@@ -87,7 +87,7 @@ A shallow build cannot clear Depth 14, a deep build clears it with little margin
 build clears the scaled targets of several further convergences. The target is a single constant,
 `CONVERGENCE_BASE_DEPTH` in `public/game/src/game/convergence.ts`.
 
-## v1.5.0 balance curve
+## v1.5.0 balance curve (Historical)
 
 v1.5.0 replaces binary survival with a continuous containment curve, replaces the capped harvest
 grade with a continuous Cultivation Depth, and adds an Entropy Vent plus three mid-run machine

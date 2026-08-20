@@ -736,10 +736,11 @@ test('the reachable horizon counts the vents Stability can still pay for', () =>
   // secondsToCascade is documented as a floor that assumes the player stops playing. Over the minutes
   // a credit step takes, that assumption is what made the call misfire in the browser: HARVEST NOW at
   // 100 s on a run that reached 276 s and banked the credit anyway.
-  const base = { secondsToCascade: 60, entropyRate: 0.5, stability: 100, ventEntropyRelief: 18, ventStabilityCost: 10 };
-  // 100 Stability buys 10 vents, each worth 18 Entropy at 0.5/s, so 36 s apiece.
+  const base = { secondsToCascade: 60, entropyRate: 0.5, stability: 100, controlCapacity: 15, ventEntropyRelief: 18, ventStabilityCost: 10 };
+  // 100 Stability buys 10 vents, each worth 18 Entropy at 0.5/s, so 36 s apiece. Capacity is 15.
   assert.equal(reachableRunSeconds(base), 60 + 10 * 36);
   assert.equal(reachableRunSeconds({ ...base, stability: 25 }), 60 + 2 * 36, 'partial vents do not count');
+  assert.equal(reachableRunSeconds({ ...base, controlCapacity: 2 }), 60 + 2 * 36, 'vents capped by control capacity');
   assert.equal(reachableRunSeconds({ ...base, stability: 0 }), 60, 'no Stability, no extension');
   assert.equal(reachableRunSeconds({ ...base, entropyRate: 0 }), Number.POSITIVE_INFINITY);
   // A higher rate shortens what each vent buys, so the horizon shrinks as pressure rises.
@@ -749,7 +750,7 @@ test('the reachable horizon counts the vents Stability can still pay for', () =>
 test('the harvest call fires when the next credit stops fitting in the reachable run', () => {
   // No Stability to vent with, so the horizon is the cascade floor and the arithmetic is legible.
   const base = { depth: 5, credits: 3, developmentRate: 1, entropy: 40, premature: false,
-    entropyRate: 0.5, stability: 0, ventEntropyRelief: 18, ventStabilityCost: 10 };
+    entropyRate: 0.5, stability: 0, controlCapacity: 3, ventEntropyRelief: 18, ventStabilityCost: 10 };
   // Credit 4 lands at depth 6.667, so 133.3 Development, so 133.3 s at rate 1.
   assert.equal(harvestUrgency({ ...base, secondsToCascade: 400 }).state, 'building');
   assert.equal(harvestUrgency({ ...base, secondsToCascade: 180 }).state, 'closing');
@@ -767,8 +768,8 @@ test('the harvest call fires when the next credit stops fitting in the reachable
   // A premature run has nothing banked, so "harvest now" is never the answer whatever the clock says.
   assert.equal(harvestUrgency({ ...base, secondsToCascade: 1, premature: true }).state, 'building');
 
-  // At the credit cap there is no next step to wait for, so the call is to harvest.
-  assert.equal(harvestUrgency({ ...base, credits: 20, secondsToCascade: 4000 }).state, 'harvest');
+  // At the credit cap there is no next step to wait for, so the call is to harvest. (Now capped)
+  assert.equal(harvestUrgency({ ...base, credits: 20, secondsToCascade: 4000 }).state, 'capped');
 });
 
 test('a chaotic harvest keeps sixty percent of its credits, rounded at every scale', () => {

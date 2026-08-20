@@ -179,6 +179,7 @@ export function buildViewModel(engine) {
                 secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
                 entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
                 stability: civ.stats.stability,
+                controlCapacity: civ.tactical.controlCapacity,
                 ventEntropyRelief: VENT_ENTROPY_RELIEF,
                 ventStabilityCost: VENT_STABILITY_COST,
                 entropy: civ.tactical.entropy,

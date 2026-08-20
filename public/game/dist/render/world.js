@@ -67,15 +67,6 @@ function drawSkyContent(surface, scene, height, view) {
     for (let band = 0; band < 5; band++) {
         surface.fillStyle(presentation.colors.haze, .025 + presentation.attention * .018).fillRect(view.from, height * (.24 + band * .085), span, height * .08);
     }
-    // The hash decides where a particle lands, so the loop still visits every index; only the draw is
-    // skipped. Iterating is free next to filling a circle.
-    for (let i = 0; i < snapshot.particleCount; i++) {
-        const x = hash01(civ.seed + i * 17) * worldWidth;
-        if (x < view.from || x > view.to)
-            continue;
-        surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
-            .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
-    }
     if (civ.stats.attention >= 60) {
         const observerX = worldWidth * (.72 + hash01(civ.seed) * .12);
         if (observerX >= view.from && observerX <= view.to) {
@@ -315,6 +306,15 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     const animationTime = reducedMotion ? 0 : time;
     const worldWidth = snapshot.worldWidth;
     const ground = height * GROUND_RATIO;
+    // The hash decides where a particle lands, so the loop still visits every index; only the draw is
+    // skipped. Iterating is free next to filling a circle.
+    for (let i = 0; i < snapshot.particleCount; i++) {
+        const x = hash01(civ.seed + i * 17) * worldWidth;
+        if (x < view.from || x > view.to)
+            continue;
+        surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
+            .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
+    }
     // The cached layers below hold the palette frozen at the last structural key change, and that key
     // reads Stability, Sanity, Awareness, Attention and Entropy as 25-point bands. So the world's base
     // mood changed in four hard steps while the overlays glided. This pass closes the gap: one tinted
