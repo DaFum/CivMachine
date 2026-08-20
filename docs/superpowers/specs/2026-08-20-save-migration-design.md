@@ -48,6 +48,16 @@ the expected type of each field, so:
 | typed-array item of the wrong type | dropped, not defaulted — an invented id reads as owned content |
 | field not in the template (removed, or from a newer build) | carried along if JSON-safe |
 | `__proto__`, `constructor`, `prototype` | dropped |
+| a value beyond `Number.MAX_SAFE_INTEGER` | clamped, logged as a repair |
+
+A record the template declares empty (`upgradeLevels`, `axiomLevels`, `eventCounts`,
+`runInterventionUses`, `milestones`, `recentDeltas`) carries no element type for the pass to check
+against, so each is validated by hand: levels and counts become whole non-negative numbers, flags
+stay booleans, deltas keep their sign, and an unusable value drops its key rather than inventing a
+level the player never bought. `upgradeLevel` feeds these straight into `upgradeCost`, where a string
+would have become `NaN` and `1e308` an infinite price. An optional field that cannot be read
+(`injectedYears`) is dropped *and* counted, because a discarded field is a repair — a save must never
+lose a field while the loader still calls itself clean.
 
 Pass 2 is what makes a bump cheap: a purely additive `GameState` change needs **no step at all**,
 because a missing field is already back-filled. This is the same guarantee the optional-field

@@ -194,25 +194,35 @@ export class GameEngine {
         if (this.state.phase === "machine" && this.state.machine.runBuild.nextCivilizationSeed === 0)
             this.prepareNextRun(0, false);
         this.post("Backup save restored.");
+        // The backup gets the same account of what the loader had to do as the live slot does: it can
+        // itself be an older or damaged payload, and `messages` was just cleared.
+        if (report.notice)
+            this.post(report.notice);
         this.save();
         this.emit();
         return true;
     }
     deleteSave() {
-        this.storage.removeItem(SAVE_KEY);
         // An explicit erase erases: leaving the backup behind would keep the progress the player just
-        // asked to be rid of one restore away.
+        // asked to be rid of one restore away. Both removals sit inside the guard, because a storage that
+        // refuses to erase must not take the running game down with it -- or abort before the reset.
+        let eraseFailed = false;
         try {
+            this.storage.removeItem(SAVE_KEY);
             this.storage.removeItem(SAVE_BACKUP_KEY);
         }
         catch {
-            // Nothing to do -- the live slot is already gone.
+            eraseFailed = true;
         }
         this.state = createNewState();
         this.messages = [];
         this.decisionFeedback = null;
         this.worldImpulse = null;
         this.prepareNextRun(0, false);
+        // After the reset, not inside the catch: the reset clears `messages`, so a notice posted earlier
+        // would be erased along with the log it was meant to appear in.
+        if (eraseFailed)
+            this.post("Erase failed: browser storage rejected the removal. The old save may return on reload.");
         this.save();
         this.emit();
     }

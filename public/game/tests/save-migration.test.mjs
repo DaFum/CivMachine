@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GameEngine, SAVE_BACKUP_KEY } from '../dist/game/engine.js';
-import { SAVE_VERSION, createNewState } from '../dist/game/rules.js';
+import { SAVE_VERSION, createNewState, upgradeCost } from '../dist/game/rules.js';
 import {
   OLDEST_MIGRATABLE_SAVE_VERSION, SAVE_MIGRATIONS, migrateSaveState, parseSaveText,
 } from '../dist/game/save-migration.js';
@@ -121,7 +121,7 @@ test('fields added since the save was written are back-filled from the current d
   assert.equal(state.meta.progression.machineInsight, 23);
 });
 
-test('fields the current version no longer knows are dropped without touching the rest', () => {
+test('fields the current version no longer knows ride along without touching the rest', () => {
   const stored = structuredClone(progressedState());
   stored.saveVersion = 2;
   stored.meta.progression.retired_counter = 5;
@@ -129,6 +129,8 @@ test('fields the current version no longer knows are dropped without touching th
   const { state } = parseSaveText(JSON.stringify(stored));
   // Unknown fields ride along rather than being deleted, so a build that still reads them keeps
   // working -- but nothing in the current shape is disturbed by their presence.
+  assert.equal(state.meta.progression.retired_counter, 5);
+  assert.deepEqual(state.machine.retiredBank, { causal_mass: 12 });
   assert.equal(state.meta.progression.machineInsight, 23);
   assert.equal(state.machine.currencies.causal_mass, 4200);
   assert.equal(state.saveVersion, SAVE_VERSION);
@@ -136,7 +138,6 @@ test('fields the current version no longer knows are dropped without touching th
 
 test('non-finite and wrongly typed values are repaired to defaults, not left to poison the run', () => {
   const stored = structuredClone(progressedState());
-  stored.machine.currencies.cognition = Number.NaN;
   stored.meta.universalResidue = 'lots';
   stored.simulationSpeed = 0;
   stored.phase = 'somewhere_else';
@@ -222,6 +223,63 @@ test('autosave: false writes nothing at all, backup included', () => {
   assert.equal(JSON.parse(storage.map.get(SAVE_KEY)).saveVersion, 3);
 });
 
+// JSON cannot carry NaN or Infinity -- `JSON.stringify` writes null -- so the non-finite path is only
+// reachable through the parsed-object entry point, which is also what a storage shim could hand over.
+test('a non-finite number in a parsed payload is repaired and reported', () => {
+  const stored = structuredClone(progressedState());
+  stored.machine.currencies.cognition = Number.NaN;
+  stored.civilization.stats.awareness = Number.POSITIVE_INFINITY;
+  const { state, report } = migrateSaveState(stored);
+  assert.equal(state.machine.currencies.cognition, 0);
+  assert.equal(state.civilization.stats.awareness, 0);
+  assert.ok(report.repairs.includes('state.machine.currencies.cognition'));
+  assert.equal(report.status, 'repaired');
+});
+
+// Records the template declares empty: the structural pass has no element type to check them against,
+// so each is validated by hand. `upgradeLevel` reads them straight into the cost formula.
+test('per-key record values are typed, whole and non-negative before they reach a cost formula', () => {
+  const stored = structuredClone(progressedState());
+  stored.machine.upgradeLevels = { harvest_yield: 6, reality_lattice: 'six', prediction_core: 2.7, contingency_vat: -4 };
+  stored.meta.universeUpgradeLevels = { wide_lattice: 1e308 };
+  stored.meta.axiomLevels = { axiom_stability: null };
+  stored.meta.progression.milestones = { first_universe: true, era_expansion: 'yes' };
+  stored.civilization.eventCounts = { synthetic_saint: 2, ghost_grid: 'many' };
+  stored.civilization.runInterventionUses = { audit: -1 };
+  stored.civilization.pathState.recentDeltas = { machine_faith: -3.5, void_communion: 'up' };
+  const { state, report } = migrateSaveState(stored);
+  assert.equal(state.machine.upgradeLevels.harvest_yield, 6);
+  assert.equal('reality_lattice' in state.machine.upgradeLevels, false, 'a string level must not survive');
+  assert.equal(state.machine.upgradeLevels.prediction_core, 2);
+  assert.equal(state.machine.upgradeLevels.contingency_vat, 0);
+  assert.equal(state.meta.universeUpgradeLevels.wide_lattice, Number.MAX_SAFE_INTEGER);
+  assert.equal('axiom_stability' in state.meta.axiomLevels, false);
+  assert.deepEqual(state.meta.progression.milestones, { first_universe: true });
+  assert.equal(state.civilization.eventCounts.synthetic_saint, 2);
+  assert.equal('ghost_grid' in state.civilization.eventCounts, false);
+  assert.equal(state.civilization.runInterventionUses.audit, 0);
+  // A delta is legitimately signed and fractional, so only its type is enforced.
+  assert.equal(state.civilization.pathState.recentDeltas.machine_faith, -3.5);
+  assert.equal('void_communion' in state.civilization.pathState.recentDeltas, false);
+  assert.ok(report.repairCount >= 8);
+  // And the cost formula gets a usable number out of every one of them.
+  for (const level of Object.values(state.machine.upgradeLevels)) assert.ok(Number.isFinite(upgradeCost(120, 1.6, level)), `level ${level} priced as non-finite`);
+});
+
+// An optional field that cannot be read is a discarded field, and the status has to say so.
+test('a mistyped optional field is dropped and counted as a repair', () => {
+  const stored = structuredClone(progressedState());
+  stored.civilization.injectedYears = 'many';
+  const { state, report } = migrateSaveState(stored);
+  assert.equal('injectedYears' in state.civilization, false);
+  assert.ok(report.repairs.includes('civilization.injectedYears'));
+  assert.equal(report.status, 'repaired');
+  // An absent one is not a repair: the field is optional by design.
+  const absent = structuredClone(progressedState());
+  delete absent.civilization.injectedYears;
+  assert.equal(migrateSaveState(absent).report.status, 'current');
+});
+
 test('an unreadable payload is refused without pretending to be a state', () => {
   assert.equal(parseSaveText('{not json').report.status, 'unreadable');
   assert.equal(parseSaveText('{not json').state, null);
@@ -291,7 +349,20 @@ test('restoreBackup puts the preserved save back and reports when there is nothi
   assert.equal(engine.state.machine.currencies.causal_mass, 4200);
   assert.equal(engine.state.saveVersion, SAVE_VERSION);
   assert.equal(JSON.parse(storage.map.get(SAVE_KEY)).machine.currencies.causal_mass, 4200);
+  // The restored payload is itself a v3 save, so the player is told what the loader did to it.
+  assert.ok(engine.messages.some(message => /migrated from v3/.test(message)));
   assert.equal(engineOn(storageWith({})).restoreBackup(), false);
+});
+
+test('an erase a storage refuses to perform is reported instead of thrown', () => {
+  const engine = new GameEngine({ storage: {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => { throw new Error('SecurityError'); },
+  }});
+  assert.doesNotThrow(() => engine.deleteSave());
+  assert.ok(engine.messages.some(message => /Erase failed/.test(message)));
+  assert.equal(engine.state.meta.progression.machineInsight, 0);
 });
 
 test('an explicit erase removes the backup too', () => {

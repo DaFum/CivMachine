@@ -35,7 +35,7 @@ non-finite or wrongly typed value is repaired instead of poisoning the run.
 - a save written by a *newer* build loads in compatibility mode, with its unknown fields preserved
 - a save that cannot be read at all no longer disappears: the original bytes are copied to a backup
   slot before anything overwrites them, and `RCE.restoreBackup()` puts them back
-- a run that cannot be simulated any more (a missing seed) is dropped on its own, so the Machine
+- a run that can no longer be simulated (a missing seed) is dropped on its own, so the Machine
   behind it survives
 - a rejected `localStorage` write reports itself once instead of taking the running game down
 - the loader reports what it did in the Machine record, so a migration is visible rather than silent
@@ -280,6 +280,10 @@ static content under `public/game/`, so it is served straight from the CDN.
 
 ## Save policy
 
-Version 1.5.0 introduces the v3 browser save. Existing v2 saves are discarded by the
-version gate; there is no migration path, and earlier v1 saves remain ignored. Saves use `localStorage`; no offline progress is
-simulated while the app is closed.
+Version 1.11.0 migrates a stored save forward instead of discarding it. A v1, v2 or v3 payload is
+brought up to the current v4 shape with its progress intact, a save written by a newer build loads in
+compatibility mode, and anything the loader had to change is preserved verbatim in a backup entry
+first. Saves use `localStorage`; no offline progress is simulated while the app is closed.
+
+Historically — up to v1.10.0 — a version gate discarded every payload whose `saveVersion` did not
+match, so the v1.5.0 move to the v3 format erased existing v2 progress. That gate is gone.

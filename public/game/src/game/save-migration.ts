@@ -66,11 +66,18 @@ export const OLDEST_MIGRATABLE_SAVE_VERSION = SAVE_MIGRATIONS.length ? SAVE_MIGR
 // prototype chain. Nothing in GameState is named this, so dropping them costs nothing.
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const MAX_UNKNOWN_DEPTH = 8;
+// Beyond this a number stops behaving like one: `1e308` levels turn `upgradeCost` into Infinity, and
+// two Infinities meeting in a harvest sum produce NaN, which then persists into the next save.
+const MAX_MAGNITUDE = Number.MAX_SAFE_INTEGER;
 const MAX_REPORTED_REPAIRS = 24;
 const PHASES: Phase[] = ['machine', 'civilization', 'victory'];
 
 function isPlainObject(value: unknown): value is RawSave {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function clampMagnitude(value: number): number {
+  return Math.max(-MAX_MAGNITUDE, Math.min(MAX_MAGNITUDE, value));
 }
 
 export class RepairLog {
@@ -91,7 +98,7 @@ function sanitizeUnknown(value: unknown, depth = 0): unknown {
   if (value === null) return null;
   const kind = typeof value;
   if (kind === 'string' || kind === 'boolean') return value;
-  if (kind === 'number') return Number.isFinite(value as number) ? value : undefined;
+  if (kind === 'number') return Number.isFinite(value as number) ? clampMagnitude(value as number) : undefined;
   if (depth >= MAX_UNKNOWN_DEPTH) return undefined;
   if (Array.isArray(value)) {
     const out: unknown[] = [];
@@ -115,7 +122,11 @@ function sanitizeUnknown(value: unknown, depth = 0): unknown {
 // number stays a finite number, a typed array keeps only items of its element type, and an object
 // keeps its declared keys plus any unknown ones the payload carries.
 function coerce(template: unknown, value: unknown, path: string, log: RepairLog): unknown {
-  if (typeof template === 'number') return typeof value === 'number' && Number.isFinite(value) ? value : log.repair(path, template);
+  if (typeof template === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return log.repair(path, template);
+    const clamped = clampMagnitude(value);
+    return clamped === value ? value : log.repair(path, clamped);
+  }
   if (typeof template === 'string') return typeof value === 'string' ? value : log.repair(path, template);
   if (typeof template === 'boolean') return typeof value === 'boolean' ? value : log.repair(path, template);
   if (Array.isArray(template)) {
@@ -145,6 +156,48 @@ function coerce(template: unknown, value: unknown, path: string, log: RepairLog)
   return sanitizeUnknown(value) ?? null;
 }
 
+// A record the template declares empty carries no element type, so the structural pass cannot check
+// its values -- it sends them through `sanitizeUnknown`, which keeps any JSON-safe one. That is not
+// good enough for the records the engine reads as arithmetic: `upgradeLevel` feeds them straight into
+// `upgradeCost`, where a string becomes NaN and a fractional level prices an upgrade nobody can buy.
+// Each such record is therefore checked by hand, and an unusable value drops its key rather than
+// inventing a level the player never bought.
+function normalizeCounterRecord(record: Record<string, unknown>, path: string, log: RepairLog): void {
+  for (const key of Object.keys(record)) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const counted = Math.min(MAX_MAGNITUDE, Math.max(0, Math.floor(value)));
+      if (counted !== value) record[key] = log.repair(`${path}.${key}`, counted);
+      continue;
+    }
+    delete record[key];
+    log.repair(`${path}.${key}`, null);
+  }
+}
+
+// Signed and fractional values are legitimate here (an affinity delta runs both ways), so only the
+// type is enforced.
+function normalizeNumberRecord(record: Record<string, unknown>, path: string, log: RepairLog): void {
+  for (const key of Object.keys(record)) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const clamped = clampMagnitude(value);
+      if (clamped !== value) record[key] = log.repair(`${path}.${key}`, clamped);
+      continue;
+    }
+    delete record[key];
+    log.repair(`${path}.${key}`, null);
+  }
+}
+
+function normalizeFlagRecord(record: Record<string, unknown>, path: string, log: RepairLog): void {
+  for (const key of Object.keys(record)) {
+    if (typeof record[key] === 'boolean') continue;
+    delete record[key];
+    log.repair(`${path}.${key}`, null);
+  }
+}
+
 function validVisualMemory(value: unknown): value is WorldMemoryState {
   return isPlainObject(value) && value.version === 1 && typeof value.sequence === 'number' && Number.isFinite(value.sequence)
     && Array.isArray(value.marks) && Array.isArray(value.scars);
@@ -161,8 +214,15 @@ export function normalizeCivilization(raw: unknown, log: RepairLog): Civilizatio
   civ.seed = seed;
   civ.rngState = Number.isFinite(civ.rngState) && civ.rngState !== 0 ? civ.rngState : seed;
   civ.years = Math.max(0, civ.years);
-  civ.injectedYears = typeof raw.injectedYears === 'number' && Number.isFinite(raw.injectedYears) ? Math.max(0, raw.injectedYears) : undefined;
-  if (civ.injectedYears === undefined) delete civ.injectedYears;
+  // Optional: absent stays absent, but a value that cannot be read is a discarded field and has to be
+  // reported as one -- otherwise a save loses `injectedYears` while the loader still calls itself clean.
+  if (typeof raw.injectedYears === 'number' && Number.isFinite(raw.injectedYears)) civ.injectedYears = clampMagnitude(Math.max(0, raw.injectedYears));
+  else { delete civ.injectedYears; if ('injectedYears' in raw) log.repair('civilization.injectedYears', null); }
+  normalizeCounterRecord(civ.eventCounts, 'civilization.eventCounts', log);
+  normalizeCounterRecord(civ.runInterventionUses, 'civilization.runInterventionUses', log);
+  normalizeCounterRecord(civ.tactical.actionUsage as unknown as Record<string, unknown>, 'civilization.tactical.actionUsage', log);
+  normalizeNumberRecord(civ.pathState.affinity, 'civilization.pathState.affinity', log);
+  normalizeNumberRecord(civ.pathState.recentDeltas, 'civilization.pathState.recentDeltas', log);
   civ.elapsedSeconds = Math.max(0, civ.elapsedSeconds);
   civ.development = Math.max(1, civ.development);
   civ.developmentMultiplier = Math.max(0, civ.developmentMultiplier);
@@ -187,6 +247,10 @@ export function normalizeState(raw: RawSave, log: RepairLog): { state: GameState
   const template = createNewState();
   const rawCiv = raw.civilization;
   const state = coerce({ ...template, civilization: undefined }, { ...raw, civilization: undefined }, 'state', log) as GameState;
+  normalizeCounterRecord(state.machine.upgradeLevels, 'state.machine.upgradeLevels', log);
+  normalizeCounterRecord(state.meta.universeUpgradeLevels, 'state.meta.universeUpgradeLevels', log);
+  normalizeCounterRecord(state.meta.axiomLevels, 'state.meta.axiomLevels', log);
+  normalizeFlagRecord(state.meta.progression.milestones, 'state.meta.progression.milestones', log);
   const civ = rawCiv === null || rawCiv === undefined ? null : normalizeCivilization(rawCiv, log);
   const runDropped = civ === null && isPlainObject(rawCiv);
   state.civilization = civ;
