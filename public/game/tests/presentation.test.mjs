@@ -795,7 +795,10 @@ test('the service worker precaches every compiled game module', async () => {
     }
   }
   assert.ok(source.includes("'/game/dist/main.js'"), 'sw.js must precache the entrypoint');
-  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.6.0'"), 'CACHE_NAME must be bumped');
+  // Pinned to the shipped version rather than merely "present": a stale cache name is how a release
+  // ships to nobody, because the old cache is served first and never revalidated.
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.ok(source.includes(`const CACHE_NAME = 'rce-app-v${version}'`), `CACHE_NAME must be bumped to ${version}`);
 });
 
 test('a structure that appears animates, and the first sighting of the world does not', () => {

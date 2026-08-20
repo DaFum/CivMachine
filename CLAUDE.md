@@ -75,7 +75,9 @@ The engine composes these over the generated catalogs in its field initializers.
 
 ## Version coupling
 
-`1.4.0` appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and both READMEs. `tests/game-release.test.mjs` asserts the two `package.json` versions match, so bump all of them together.
+The current version (`1.7.0`) appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and the title plus a release-notes heading in both READMEs.
+
+`tests/game-release.test.mjs` reads the version from the root `package.json`, asserts it once explicitly, and derives every other check from it — so a release is two edits (that assertion and `package.json`) and the test then insists on the rest. It fails on a stale `CACHE_NAME`, a stale README title, a missing `## vX.Y.Z` release-notes heading, or a drifted game package version. `CACHE_NAME` is the one that actually delivers a release: the service worker serves cache-first with no revalidation, so without a bump returning players keep the old files forever.
 
 ## Conventions
 

@@ -1,7 +1,7 @@
 # Continuous Entropy Cost and the Harvest Signal Design
 
 **Status:** Approved for implementation on 2026-08-20
-**Release target:** Reality Consumption Engine Browser, next minor after v1.6.0
+**Release target:** Reality Consumption Engine Browser v1.7.0 (shipped)
 **Scope:** `game/pressure.ts`, `game/development.ts` (new), `game/harvest-quality.ts`, `game/tactical-actions.ts`, `ui/**`
 **Save policy:** No `SAVE_VERSION` bump. One optional field is added to `Civilization`, defaulted so a
 v4 save loads with unchanged behaviour.

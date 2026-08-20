@@ -93,22 +93,39 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /['"]\/game\/dist\/render\/world-presentation\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/milestones\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/convergence\.js['"]/);
-  assert.match(worker, /rce-app-v1\.6\.0['"]/);
+  // Derived, not literal: the shipped version is asserted once, in the release-metadata test below.
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.match(worker, new RegExp(`rce-app-v${version.replaceAll('.', '\\.')}['"]`));
   assert.match(worker, /caches\.delete/);
 });
 
-test('release metadata identifies browser app v1.6.0', async () => {
+test('release metadata identifies browser app v1.7.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
+  // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
+  assert.equal(rootPackage.version, '1.7.0');
+  const version = rootPackage.version;
+  const escaped = version.replaceAll('.', '\\.');
+
   const gamePackage = JSON.parse(await readFile(new URL('../public/game/package.json', import.meta.url), 'utf8'));
   const html = await readFile(new URL('../public/game/index.html', import.meta.url), 'utf8');
   const rootReadme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
   const gameReadme = await readFile(new URL('../public/game/README.md', import.meta.url), 'utf8');
-  assert.equal(rootPackage.version, '1.6.0');
-  assert.equal(gamePackage.version, '1.6.0');
-  assert.match(html, /Browser v1\.6\.0/);
+  const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+
+  assert.equal(gamePackage.version, version, 'the game package must ship the shell version');
+  assert.match(html, new RegExp(`Browser v${escaped}`));
   assert.match(html, /v4 save/);
-  assert.match(rootReadme, /v1\.6\.0/);
-  assert.match(gameReadme, /v1\.6\.0/);
+  // Both README titles, not merely a mention anywhere in the file: the release notes for older
+  // versions stay in place, so a loose match would pass on a stale title.
+  assert.match(rootReadme, new RegExp(`^# .*v${escaped}$`, 'm'));
+  assert.match(gameReadme, new RegExp(`^# .*v${escaped}$`, 'm'));
+  // The cache name is what actually delivers a release: without a bump, returning players keep the
+  // old files forever, whatever the version numbers say.
+  assert.match(worker, new RegExp(`const CACHE_NAME = 'rce-app-v${escaped}'`));
+  // And each release should say what changed, under its own heading in both READMEs.
+  assert.match(rootReadme, new RegExp(`^## v${escaped} `, 'm'));
+  assert.match(gameReadme, new RegExp(`^## v${escaped} `, 'm'));
 });
 
 test('game surface protects mobile safe areas and dynamic viewport height', async () => {
