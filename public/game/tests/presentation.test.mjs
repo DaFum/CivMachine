@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
@@ -781,12 +781,20 @@ test('the render key tracks the depth band, never the depth itself', () => {
   assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before, 'crossing a band must change the key');
 });
 
-test('the service worker precaches every new game module', async () => {
+test('the service worker precaches every compiled game module', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler', 'milestones', 'convergence']) {
-    assert.ok(source.includes(`'/game/dist/game/${name}.js'`), `sw.js must precache game/${name}.js`);
+  // Derived from disk rather than from a hand-kept list: the precache list is hand-maintained and a
+  // module missing from it silently fails to load for every returning player. A literal list here
+  // only guards the modules someone remembered to add to it, which is the same bug one level up.
+  for (const directory of ['game', 'ui', 'render', 'data']) {
+    const compiled = (await readdir(new URL(`../dist/${directory}`, import.meta.url)))
+      .filter(name => name.endsWith('.js'));
+    assert.ok(compiled.length > 0, `dist/${directory} must be compiled before this runs`);
+    for (const name of compiled) {
+      assert.ok(source.includes(`'/game/dist/${directory}/${name}'`), `sw.js must precache ${directory}/${name}`);
+    }
   }
-  assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
+  assert.ok(source.includes("'/game/dist/main.js'"), 'sw.js must precache the entrypoint');
   assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.6.0'"), 'CACHE_NAME must be bumped');
 });
 

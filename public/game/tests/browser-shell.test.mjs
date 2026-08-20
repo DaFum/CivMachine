@@ -143,7 +143,7 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   const viewModel = await readFile(new URL('../src/ui/view-model.ts', import.meta.url), 'utf8');
   // Stay-or-harvest and CASCADE IN Xs answer the same question, so grade, depth, the band meter and
   // the yield must live in the rail -- not behind a summary the player has to open mid-run.
-  assert.match(app, /class="harvest-readout"/);
+  assert.match(app, /class="harvest-readout /);
   const rail = app.slice(app.indexOf('const tacticalRail='), app.indexOf('function renderCivilization'));
   assert.match(rail, /harvestReadout\(vm\)/, 'the rail must render the harvest readout');
   const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const tacticalRail='));
@@ -155,6 +155,14 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(viewModel, /bandProgress/);
   const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
   assert.match(refresh, /\[data-live="harvest-meter"\][\s\S]{0,120}vm\.harvest\.bandProgress/);
+
+  // The stay-or-harvest call is computed from the development rate against seconds to cascade, and
+  // it is written through the live refresh -- never through the structural key, because both sides
+  // of its threshold move continuously.
+  assert.match(app, /data-live="harvest-call"/);
+  assert.match(refresh, /\[data-live="harvest-call"\]/);
+  assert.match(refresh, /urgency-\$\{state\}/);
+  assert.doesNotMatch(viewModel.slice(viewModel.indexOf('export function civilizationRenderKey')), /urgency/);
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {

@@ -15,8 +15,9 @@ import {
   recordRecentIntervention,
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
-import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, secondsToCascade } from '../dist/game/pressure.js';
-import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
+import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
+import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
+import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
 import { buildDirectiveOffers } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS } from '../dist/game/tactical-actions.js';
@@ -648,7 +649,129 @@ test('a premature harvest stays premature at any depth', () => {
   assert.equal(evaluateHarvestQuality(civ, false).grade, 'premature');
 });
 
-test('a chaotic harvest keeps sixty percent of its credits', () => {
+test('Entropy costs yield continuously below the cascade threshold', () => {
+  // Until this change Entropy did nothing at all below 100: cascadeDecay only fires there, and the
+  // three threshold crises move Entropy by -2 to +4. The interface named four alarm bands over a
+  // number that was free, which measured as a 69-second and 2-credit penalty for obeying it.
+  assert.equal(entropyDrag(0), 1);
+  assert.equal(Number(entropyDrag(25).toFixed(4)), 0.9688);
+  assert.equal(Number(entropyDrag(50).toFixed(4)), 0.875);
+  assert.equal(Number(entropyDrag(75).toFixed(4)), 0.7188);
+  assert.equal(entropyDrag(100), 1 - ENTROPY_DRAG_MAX);
+
+  // Monotone, and clamped outside the band so a stray value cannot invert growth.
+  for (let entropy = 0; entropy < 100; entropy += 5) assert.ok(entropyDrag(entropy) > entropyDrag(entropy + 5));
+  assert.equal(entropyDrag(-40), 1);
+  assert.equal(entropyDrag(400), 1 - ENTROPY_DRAG_MAX);
+  assert.equal(entropyDrag(Number.NaN), 1);
+});
+
+test('the tick and the interface forecast share one development formula', () => {
+  const engine = freshEngine();
+  engine.startCivilization(9101);
+  const civ = engine.state.civilization;
+  civ.years = 3000;
+  civ.era = 1;
+  civ.development = 200;
+
+  // The forecast the rail draws must be the rate the tick actually applies, or the "credit in Ns"
+  // call quietly lies. tick() clamps its delta to 0.25 s, and advancePressure runs before the
+  // development line inside the same tick, so the applied growth uses an Entropy a fraction of a
+  // point higher than the sampled rate -- hence a relative tolerance rather than an exact equality.
+  // A drifted formula would miss by percent, not by 1e-5.
+  const rate = engine.developmentRate();
+  const before = civ.development;
+  engine.tick(0.25);
+  const applied = engine.state.civilization.development - before;
+  assert.ok(Math.abs(applied - rate * 0.25) / (rate * 0.25) < 1e-5, `applied ${applied} against ${rate * 0.25}`);
+
+  // And the rate has to answer to Entropy.
+  civ.tactical.entropy = 0;
+  const clean = engine.developmentRate();
+  civ.tactical.entropy = 100;
+  assert.ok(Math.abs(engine.developmentRate() - clean * (1 - ENTROPY_DRAG_MAX)) < 1e-9);
+  assert.equal(developmentGrowthPerSecond(civ, 0), engine.developmentRate());
+});
+
+test('Accelerate pays a one-off price instead of a permanent pressure surcharge', () => {
+  const engine = freshEngine();
+  engine.startCivilization(9102);
+  const civ = engine.state.civilization;
+  const rateBefore = entropyRate(pressureYears(civ), 0);
+
+  assert.equal(engine.useTacticalAction('accelerate'), true);
+  assert.equal(civ.years, 200, 'Era and Development still see the injected years');
+  assert.equal(civ.injectedYears, 200);
+  // The years Accelerate injected are excluded from the pressure curve: measured across five seeds
+  // and three containment levels, charging them made Accelerate strictly dominated at every level,
+  // because +200 years inflates the rate for the whole remaining run to buy +6 Development.
+  assert.equal(pressureYears(civ), 0);
+  assert.equal(entropyRate(pressureYears(civ), 0), rateBefore, 'the rate must not move on an injection');
+
+  // Lived years still count, in full. Accelerate also pulls the intervention timer to zero, so the
+  // next tick opens an event and every later tick returns early until it is resolved.
+  engine.tick(0.25);
+  const opened = engine.currentEvent();
+  if (opened) engine.chooseEvent(safestChoiceIndex(opened));
+  // tick() clamps its delta to 0.25 s, so four ticks are one simulation second.
+  for (let i = 0; i < 4; i++) engine.tick(0.25);
+  const lived = engine.state.civilization;
+  assert.equal(Number(pressureYears(lived).toFixed(2)), 31.25);
+  assert.equal(Number(lived.years.toFixed(2)), 231.25);
+  assert.equal(lived.injectedYears, 200, 'the injection is recorded once and never grows on its own');
+  assert.ok(entropyRate(pressureYears(engine.state.civilization), 0) > rateBefore);
+});
+
+test('pressure years default to the full year count for a save written before the split', () => {
+  // The field is an optional addition rather than a SAVE_VERSION bump, so an in-progress run from an
+  // older save must keep counting its already-injected years as pressure -- exactly what it did when
+  // it was saved. Failing safe here means no behaviour change at all for that run.
+  assert.equal(pressureYears({ years: 4000 }), 4000);
+  assert.equal(pressureYears({ years: 4000, injectedYears: undefined }), 4000);
+  assert.equal(pressureYears({ years: 4000, injectedYears: 600 }), 3400);
+  assert.equal(pressureYears({ years: 400, injectedYears: 9000 }), 0, 'never negative');
+});
+
+test('the reachable horizon counts the vents Stability can still pay for', () => {
+  // secondsToCascade is documented as a floor that assumes the player stops playing. Over the minutes
+  // a credit step takes, that assumption is what made the call misfire in the browser: HARVEST NOW at
+  // 100 s on a run that reached 276 s and banked the credit anyway.
+  const base = { secondsToCascade: 60, entropyRate: 0.5, stability: 100, ventEntropyRelief: 18, ventStabilityCost: 10 };
+  // 100 Stability buys 10 vents, each worth 18 Entropy at 0.5/s, so 36 s apiece.
+  assert.equal(reachableRunSeconds(base), 60 + 10 * 36);
+  assert.equal(reachableRunSeconds({ ...base, stability: 25 }), 60 + 2 * 36, 'partial vents do not count');
+  assert.equal(reachableRunSeconds({ ...base, stability: 0 }), 60, 'no Stability, no extension');
+  assert.equal(reachableRunSeconds({ ...base, entropyRate: 0 }), Number.POSITIVE_INFINITY);
+  // A higher rate shortens what each vent buys, so the horizon shrinks as pressure rises.
+  assert.ok(reachableRunSeconds({ ...base, entropyRate: 1 }) < reachableRunSeconds(base));
+});
+
+test('the harvest call fires when the next credit stops fitting in the reachable run', () => {
+  // No Stability to vent with, so the horizon is the cascade floor and the arithmetic is legible.
+  const base = { depth: 5, credits: 3, developmentRate: 1, entropy: 40, premature: false,
+    entropyRate: 0.5, stability: 0, ventEntropyRelief: 18, ventStabilityCost: 10 };
+  // Credit 4 lands at depth 6.667, so 133.3 Development, so 133.3 s at rate 1.
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 400 }).state, 'building');
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 180 }).state, 'closing');
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 100 }).state, 'harvest');
+  assert.equal(Math.round(harvestUrgency({ ...base, secondsToCascade: 400 }).secondsToNextCredit), 133);
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 400 }).nextCredit, 4);
+
+  // The same instant with Stability in hand is not urgent: the vents it pays for reach the credit.
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 100, stability: 100 }).state, 'building');
+
+  // A cascade already under way overrides everything, and a stalled rate means the credit never lands.
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 400, entropy: 100 }).state, 'cascading');
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 400, developmentRate: 0 }).state, 'harvest');
+
+  // A premature run has nothing banked, so "harvest now" is never the answer whatever the clock says.
+  assert.equal(harvestUrgency({ ...base, secondsToCascade: 1, premature: true }).state, 'building');
+
+  // At the credit cap there is no next step to wait for, so the call is to harvest.
+  assert.equal(harvestUrgency({ ...base, credits: 20, secondsToCascade: 4000 }).state, 'harvest');
+});
+
+test('a chaotic harvest keeps sixty percent of its credits, rounded at every scale', () => {
   const quality = { grade: 'singular', multiplier: 5.53, credits: 14, depth: 24 };
   assert.equal(calculateCultivationCredits(quality, false, false), 14);
   assert.equal(calculateCultivationCredits(quality, true, false), 8);
@@ -656,8 +779,30 @@ test('a chaotic harvest keeps sixty percent of its credits', () => {
   assert.equal(calculateCultivationCredits(quality, true, true), 9);
   const premature = { grade: 'premature', multiplier: 0.2, credits: 0, depth: 0.4 };
   assert.equal(calculateCultivationCredits(premature, false, true), 0);
+
+  // Rounded, not floored. Flooring bit hardest where the stakes were smallest -- a 3-credit
+  // run lost 67% of its credits to a cascade while a 14-credit run lost 43% -- which inverts the
+  // "loss proportional to what was at stake" the v1.5.0 design asked for.
   const shallow = { grade: 'established', multiplier: 0.63, credits: 1, depth: 1.7 };
-  assert.equal(calculateCultivationCredits(shallow, true, false), 0);
+  assert.equal(calculateCultivationCredits(shallow, true, false), 1);
+  const three = { grade: 'transcendent', multiplier: 1.49, credits: 3, depth: 5.65 };
+  assert.equal(calculateCultivationCredits(three, true, false), 2);
+
+  // Never more than 60% survives, and always within half a credit of exactly 60%.
+  for (const credits of [1, 2, 3, 5, 8, 14, 20]) {
+    const kept = calculateCultivationCredits({ grade: 'singular', multiplier: 1, credits, depth: 20 }, true, false);
+    assert.ok(kept <= credits, `a cascade must never pay more than a controlled harvest (${credits} -> ${kept})`);
+    assert.ok(kept <= credits * 0.6 + 0.5, `${credits} credits kept ${kept}`);
+  }
+  // From two credits up the cascade always costs at least one.
+  for (const credits of [2, 3, 5, 8, 14, 20]) {
+    const kept = calculateCultivationCredits({ grade: 'singular', multiplier: 1, credits, depth: 20 }, true, false);
+    assert.ok(kept < credits, `a cascade must cost credits (${credits} -> ${kept})`);
+  }
+  // The one-credit run is the deliberate exception: 60% of 1 rounds back to 1, so a cascade costs it
+  // no credit. Flooring would cost it 100%, which is the opposite of proportional. The resource side
+  // still bites -- chaoticRetention keeps 40% of everything else -- so the failure is never free.
+  assert.equal(calculateCultivationCredits({ grade: 'established', multiplier: 1, credits: 1, depth: 1.7 }, true, false), 1);
 });
 
 test('chaotic resource yield uses forty percent retention and a 1.50 Paradox multiplier', () => {

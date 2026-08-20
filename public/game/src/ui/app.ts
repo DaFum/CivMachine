@@ -95,9 +95,21 @@ export function createGameUI(engine:GameEngine,world:WorldController){
   const rewardText=(key:string,details:any)=>`${RESOURCE_SHORT[key]} ${key==='causal_mass'||engine.resourceDiscovered(key)?fmt(details.rewards[key]):'???'}`;
   const rewardSpan=(kind:string,key:string,details:any)=>`<span data-live="harvest-${kind}-${key}">${esc(rewardText(key,details))}</span>`;
 
+  // Turns the computed urgency into the one sentence the player actually needs. The numbers behind it
+  // -- development rate against seconds to cascade -- are exact, so the call is a calculation, not a
+  // vibe: the next Cultivation Credit either fits inside the remaining window or it does not.
+  const urgencyText=(h:any)=>{
+    const u=h.urgency;
+    if(u.state==='cascading')return 'CASCADE UNDER WAY // harvest now or lose 40% of the credits';
+    const left=Number.isFinite(u.secondsOfRunLeft)?`${Math.floor(u.secondsOfRunLeft)}s`:'no limit';
+    if(u.state==='harvest')return `HARVEST NOW // credit ${u.nextCredit} needs ${Math.ceil(u.secondsToNextCredit)}s, the run can reach ${left}`;
+    if(u.state==='closing')return `CLOSING // credit ${u.nextCredit} in ${Math.ceil(u.secondsToNextCredit)}s, the run can reach ${left}`;
+    if(h.controlled.grade==='premature')return 'BUILDING // no credits until the run clears Premature';
+    return `BUILDING // credit ${u.nextCredit} in ${Math.ceil(u.secondsToNextCredit)}s`;
+  };
   // The harvest readout sits inside the rail rather than in a collapsed panel: it answers the same
   // question as CASCADE IN Xs -- stay or harvest -- and the two are only useful side by side.
-  const harvestReadout=(vm:any)=>{const h=vm.harvest;if(!h)return'';const next=h.nextBand?`NEXT <b>${esc(h.nextBand.label.toUpperCase())}</b> AT DEPTH ${h.nextBand.depthNeeded} FOR ×${h.nextBand.yieldMultiplier.toFixed(2)}`:'DEEPEST BAND REACHED';return `<div class="harvest-readout"><span>HARVEST GRADE // <b>${esc(h.controlled.grade.toUpperCase())}</b></span><strong data-live="depth">${h.depth.toFixed(1)}</strong><div class="harvest-meter" aria-hidden="true"><i data-live="harvest-meter" style="width:${pct(h.bandProgress)}"></i></div><small data-live="harvest-summary">${esc(harvestSummaryText(h.controlled))}</small><small class="next-band">${next}</small></div>`;};
+  const harvestReadout=(vm:any)=>{const h=vm.harvest;if(!h)return'';const next=h.nextBand?`NEXT <b>${esc(h.nextBand.label.toUpperCase())}</b> AT DEPTH ${h.nextBand.depthNeeded} FOR ×${h.nextBand.yieldMultiplier.toFixed(2)}`:'DEEPEST BAND REACHED';return `<div class="harvest-readout urgency-${esc(h.urgency.state)}"><span>HARVEST GRADE // <b>${esc(h.controlled.grade.toUpperCase())}</b></span><strong data-live="depth">${h.depth.toFixed(1)}</strong><div class="harvest-meter" aria-hidden="true"><i data-live="harvest-meter" style="width:${pct(h.bandProgress)}"></i></div><small data-live="harvest-summary">${esc(harvestSummaryText(h.controlled))}</small><small class="next-band">${next}</small><p class="harvest-call" role="status" data-live="harvest-call">${esc(urgencyText(h))}</p></div>`;};
   const tacticalRail=(vm:any)=>{const t=vm.tactical;if(!t)return'';const pips=Array.from({length:t.controlMax},(_,index)=>`<i class="${index<t.controlCapacity?'active':''}" aria-hidden="true"></i>`).join('');const keys=t.actions.map((action:any)=>`<b>${esc(action.shortcut)}</b>`).join(' ');const actions=t.actions.map((action:any)=>`<div class="tactical-action-wrap"><button data-action="tactical" data-id="${esc(action.id)}" aria-describedby="tactical-reason-${esc(action.id)}" ${action.enabled?'':'disabled'}><span><kbd>${esc(action.shortcut)}</kbd>${esc(action.label)}</span><b>${esc(action.summary)}</b><small>${esc(action.risk)} · COST ${action.cost}</small></button><span id="tactical-reason-${esc(action.id)}" class="tactical-reason" data-tactical-reason="${esc(action.id)}">${esc(action.reason)}</span></div>`).join('');return `<section class="tactical-rail entropy-${esc(t.entropyBand.id)}" aria-label="Tactical actions"><div class="tactical-status"><div><div class="rail-head"><span class="panel-kicker">TACTICAL ACTIONS</span><span class="rail-keys">KEYS ${keys}</span></div><strong>CONTROL CAPACITY</strong><div class="control-pips" aria-label="${t.controlCapacity} of ${t.controlMax} Control available">${pips}<b data-live="control-value">${t.controlCapacity}/${t.controlMax}</b></div></div><div class="entropy-readout"><span>ENTROPY // <b data-live="entropy-band">${esc(t.entropyBand.label)}</b></span><strong data-live="entropy-value">${t.entropy.toFixed(1)}</strong><div class="entropy-meter"><i data-live="entropy-meter" style="width:${pct(t.entropy)}"></i></div><small>Containment <b>${t.containmentRating}</b> · Pressure <b data-live="pressure-multiplier">×${t.pressureMultiplier.toFixed(2)}</b> · <b data-live="entropy-rate">${t.entropyRate.toFixed(2)}</b>/s</small><small class="cascade-eta">CASCADE IN <b data-live="cascade-eta">${t.secondsToCascade.toFixed(0)}s</b> AT CURRENT COURSE</small></div>${harvestReadout(vm)}</div><div class="tactical-actions">${actions}</div><p class="tactical-failure" aria-live="polite" data-live="tactical-failure">${esc(vm.lastActionFailure)}</p></section>`;};
 
   function renderCivilization(vm:any){const c=vm.civilization;if(!c)return;const event=vm.event;const path=c.path;const harvest=vm.harvest.controlled;const chaotic=vm.harvest.chaotic;
@@ -163,6 +175,12 @@ export function createGameUI(engine:GameEngine,world:WorldController){
     setText('[data-live="tactical-failure"]',vm.lastActionFailure);
     const entropyMeter=civPanels.querySelector<HTMLElement>('[data-live="entropy-meter"]');if(entropyMeter)entropyMeter.style.width=pct(vm.tactical.entropy);
     const harvestMeter=civPanels.querySelector<HTMLElement>('[data-live="harvest-meter"]');if(harvestMeter)harvestMeter.style.width=pct(vm.harvest.bandProgress);
+    setText('[data-live="harvest-call"]',urgencyText(vm.harvest));
+    // Both sides of the urgency threshold -- development rate and seconds to cascade -- move
+    // continuously, so the state must never enter civilizationRenderKey or a run near a boundary
+    // would rebuild the panel frame after frame. It rides the live refresh instead.
+    const readout=civPanels.querySelector<HTMLElement>('.harvest-readout');
+    if(readout)for(const state of ['building','closing','harvest','cascading'])readout.classList.toggle(`urgency-${state}`,vm.harvest.urgency.state===state);
     civPanels.querySelectorAll<HTMLElement>('.control-pips i').forEach((pip,index)=>pip.classList.toggle('active',index<vm.tactical.controlCapacity));
     for(const action of vm.tactical.actions){const button=civPanels.querySelector<HTMLButtonElement>(`[data-action="tactical"][data-id="${action.id}"]`);if(button)button.disabled=!action.enabled;const reason=civPanels.querySelector(`[data-tactical-reason="${action.id}"]`);if(reason)reason.textContent=action.reason;}
     const liveStats=[

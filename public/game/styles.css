@@ -110,6 +110,10 @@ main{padding:1rem}
 .harvest-readout small{grid-column:1/-1;color:var(--muted);line-height:1.35}
 .harvest-readout small b{color:var(--text)}
 .harvest-readout .next-band{color:#8fa6b1}
+.harvest-call{grid-column:1/-1;margin:.35rem 0 0;padding:.3rem .45rem;border-left:2px solid var(--harvest-call,#3a5563);background:#0b141b;color:var(--harvest-call,#9fb3bc);font-size:.62rem;letter-spacing:.06em;line-height:1.35}
+.harvest-readout.urgency-closing{--harvest-call:var(--amber)}
+.harvest-readout.urgency-harvest{--harvest-call:var(--mint)}
+.harvest-readout.urgency-cascading{--harvest-call:var(--danger)}
 .harvest-meter{grid-column:1/-1;height:9px;border:1px solid #43413a;background:#17150f;overflow:hidden}
 .harvest-meter i{display:block;height:100%;background:linear-gradient(90deg,#8a7a45,var(--amber));box-shadow:0 0 16px #e8c66a55;transition:width .25s linear}
 .tactical-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}

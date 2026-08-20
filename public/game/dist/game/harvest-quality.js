@@ -53,7 +53,63 @@ export function calculateCultivationCredits(quality, chaotic = false, objectiveC
     if (quality.grade === 'premature')
         return 0;
     const base = quality.credits + (objectiveCompleted ? 1 : 0);
-    return Math.max(0, chaotic ? Math.floor(base * CHAOTIC_CREDIT_RETENTION) : base);
+    // Rounded, not floored. The v1.5.0 design asked for a loss "proportional to what was at stake",
+    // but flooring is harshest exactly where the stakes are smallest: 3 credits became 1, a 67% cut,
+    // while 14 became 8, a 43% cut. Rounding makes the 60% retention mean 60% at every scale.
+    return Math.max(0, chaotic ? Math.round(base * CHAOTIC_CREDIT_RETENTION) : base);
+}
+/**
+ * How long the run can actually last, as opposed to how long it lasts if the player stops playing.
+ * `secondsToCascade` is documented as a floor that "deliberately assumes no further player
+ * intervention", which makes it useless as a horizon over the minutes a credit step takes: measured
+ * in the browser, comparing against it called HARVEST NOW at 100 s on a run that went on to 276 s and
+ * banked the credit anyway.
+ *
+ * Venting is what extends the run, and Stability is what pays for it, so the reachable horizon is the
+ * cascade floor plus the time the affordable vents buy. That makes Stability the terminal constraint,
+ * which is what it already is in practice.
+ */
+export function reachableRunSeconds(input) {
+    const floor = Math.max(0, input.secondsToCascade);
+    const rate = Math.max(0, input.entropyRate);
+    const cost = Math.max(0, input.ventStabilityCost);
+    const relief = Math.max(0, input.ventEntropyRelief);
+    if (rate <= 0)
+        return Number.POSITIVE_INFINITY;
+    if (cost <= 0 || relief <= 0)
+        return floor;
+    const ventsAffordable = Math.max(0, Math.floor(Math.max(0, input.stability) / cost));
+    return floor + ventsAffordable * relief / rate;
+}
+/**
+ * The stay-or-harvest call, computed instead of guessed. `secondsToCascade` already tells the player
+ * how long the run has; what was missing is whether the next Cultivation Credit still fits inside
+ * that window. Measured on the committed engine, a controlled harvest 11 seconds before the cascade
+ * paid 3 credits and 1056 Causal Mass while the cascade itself paid 1 and 458 -- and nothing on
+ * screen marked the difference.
+ */
+export function harvestUrgency(input) {
+    const credits = Math.max(0, Math.trunc(input.credits));
+    const nextCredit = Math.min(DEPTH_CREDIT_CAP, credits + 1);
+    const capped = credits >= DEPTH_CREDIT_CAP;
+    // The depth at which the credit step lands, inverted from credits = floor(rate * depth).
+    const depthNeeded = nextCredit / DEPTH_CREDIT_RATE;
+    const developmentNeeded = Math.max(0, (depthNeeded - input.depth) * DEPTH_DEVELOPMENT_SCALE);
+    const rate = Math.max(0, input.developmentRate);
+    const secondsToNextCredit = capped || rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;
+    const secondsOfRunLeft = reachableRunSeconds(input);
+    const view = { secondsToNextCredit, secondsOfRunLeft, nextCredit };
+    if (input.entropy >= 100)
+        return { state: 'cascading', ...view };
+    // A premature run has nothing banked yet, so "harvest now" is never the answer -- it must first
+    // clear the anti-cheese floor, whatever the clock says.
+    if (input.premature)
+        return { state: 'building', ...view };
+    if (secondsToNextCredit > secondsOfRunLeft)
+        return { state: 'harvest', ...view };
+    if (secondsToNextCredit > secondsOfRunLeft * .7)
+        return { state: 'closing', ...view };
+    return { state: 'building', ...view };
 }
 export function applyHarvestQuality(rawRewards, quality, options = {}) {
     const rewardMultiplier = quality.multiplier

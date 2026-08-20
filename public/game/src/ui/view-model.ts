@@ -2,9 +2,9 @@ import { CivilizationPaths } from '../game/paths.js';
 import { milestoneProgress } from '../game/milestones.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
-import { entropyRate, pressureMultiplier, secondsToCascade } from '../game/pressure.js';
-import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS } from '../game/tactical-actions.js';
+import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
+import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
+import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST } from '../game/tactical-actions.js';
 import type { GameEngine } from '../game/engine.js';
 
 const RESOURCE_NAMES: Record<string,string> = {
@@ -156,9 +156,9 @@ export function buildViewModel(engine: GameEngine) {
     tactical: civ ? {
       entropy: civ.tactical.entropy,
       entropyBand: entropyBand(civ.tactical.entropy),
-      entropyRate: entropyRate(civ.years, bonuses.containmentRating, civ.terminal),
-      pressureMultiplier: pressureMultiplier(civ.years),
-      secondsToCascade: secondsToCascade(civ.years, civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+      entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+      pressureMultiplier: pressureMultiplier(pressureYears(civ)),
+      secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
       controlCapacity: civ.tactical.controlCapacity,
       controlMax: 3,
       containmentRating: bonuses.containmentRating,
@@ -174,6 +174,18 @@ export function buildViewModel(engine: GameEngine) {
       depthBand: depthBand(cultivationDepth(civ)),
       bandProgress: depthBandProgress(cultivationDepth(civ)),
       nextBand: nextDepthBand(cultivationDepth(civ)),
+      urgency: harvestUrgency({
+        depth: cultivationDepth(civ),
+        credits: controlledHarvest?.credits ?? 0,
+        developmentRate: engine.developmentRate(),
+        secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+        entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+        stability: civ.stats.stability,
+        ventEntropyRelief: VENT_ENTROPY_RELIEF,
+        ventStabilityCost: VENT_STABILITY_COST,
+        entropy: civ.tactical.entropy,
+        premature: controlledHarvest?.grade === 'premature',
+      }),
       convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
     } : null,
     machineReserve: civ ? engine.runInterventions() : [],

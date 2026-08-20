@@ -114,6 +114,7 @@ export function applyTacticalAction(
     civ.tactical.entropy = clamp(civ.tactical.entropy + 8, 0, 100);
   } else if (id === 'accelerate') {
     civ.years += bonuses.accelerateYears;
+    civ.injectedYears = Math.max(0, Number(civ.injectedYears) || 0) + bonuses.accelerateYears;
     civ.development += 6 * Math.max(0.2, civ.developmentMultiplier) * (1 + civ.era * 0.2);
     civ.eventTimer = Math.max(0, civ.eventTimer - bonuses.accelerateTimer);
     civ.stats.stability = clamp(civ.stats.stability - 4, 0, civ.stats.stabilityMax);
