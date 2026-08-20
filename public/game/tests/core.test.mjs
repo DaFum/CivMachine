@@ -1858,13 +1858,20 @@ test('new state carries convergence and milestone statistics fields', () => {
   assert.equal(GameEngine.createCivilizationForTest(7).terminal, false);
 });
 
-test('a save written under the previous version is discarded', () => {
-  const stored = JSON.stringify({ ...createNewState(), saveVersion: 3 });
+// A version bump used to wipe every player's progress. It now migrates instead -- the whole path is
+// exercised in save-migration.test.mjs; this pins the engine-level guarantee.
+test('a save written under the previous version is migrated, not discarded', () => {
+  const previous = { ...createNewState(), saveVersion: 3 };
+  previous.meta.convergences = 5;
+  previous.meta.progression.machineInsight = 12;
+  const stored = JSON.stringify(previous);
   const engine = new GameEngine({
     autosave: false,
     storage: { getItem: () => stored, setItem: () => {}, removeItem: () => {} },
   });
-  assert.equal(engine.state.meta.convergences, 0);
+  assert.equal(engine.state.meta.convergences, 5);
+  assert.equal(engine.state.meta.progression.machineInsight, 12);
+  assert.equal(engine.saveMigration.status, 'migrated');
   assert.equal(engine.state.saveVersion, 4);
 });
 

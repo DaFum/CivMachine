@@ -9,4 +9,10 @@ may read it; `engine.publishCompletedDecision` is its only writer, and the `tick
 impulse deliberately bypasses it because a queued warning is not a completed decision. It stays
 optional so v4 saves load without a `SAVE_VERSION` bump.
 
+`save-migration.ts` is the only reader of a stored payload: `engine.load()` hands it the raw string
+and gets a loadable `GameState` plus a report back. It must keep treating the payload as untrusted —
+it is the one input to the engine that no code of ours wrote — and it must never invent content the
+player did not earn (a mistyped array item is dropped, not replaced by a default). Root `AGENTS.md`
+has the rule for changing `GameState`'s shape.
+
 Nothing here may import from `render/` or `ui/`.

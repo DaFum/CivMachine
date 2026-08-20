@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.10.0
+# Reality Consumption Engine — App Edition v1.11.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,26 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.11.0 a save that survives the next version
+
+v1.11.0 replaces the version gate that silently discarded a mismatched save with a migration path.
+A stored save is now brought forward in two passes: a declared step per version boundary, and a
+structural pass that rebuilds every field against the current defaults. A field added since the save
+was written gets its default, a field that no longer exists is carried along untouched, and a
+non-finite or wrongly typed value is repaired instead of poisoning the run.
+
+- an older save is migrated and re-written in the current shape, keeping currencies, upgrade levels,
+  Machine Insight, unlocks, milestones, victories and the in-progress civilization
+- a save written by a *newer* build loads in compatibility mode, with its unknown fields preserved
+- a save that cannot be read at all no longer disappears: the original bytes are copied to a backup
+  slot before anything overwrites them, and `RCE.restoreBackup()` puts them back
+- a run that cannot be simulated any more (a missing seed) is dropped on its own, so the Machine
+  behind it survives
+- a rejected `localStorage` write reports itself once instead of taking the running game down
+- the loader reports what it did in the Machine record, so a migration is visible rather than silent
+
+Balance, content and rendering are unchanged: `SAVE_VERSION` stays at 4 and no rule module moved.
 
 ## v1.10.0 a civilization that remembers what you did
 

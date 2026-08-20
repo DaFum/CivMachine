@@ -8,8 +8,9 @@ import { EXPANDED_INTERVENTIONS } from "../data/expanded-interventions.js";
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS, } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
 import { applyWorldMemory } from "./world-memory.js";
+import { parseSaveText } from "./save-migration.js";
 import { Progression, nextSystemPreviews, visibleUpgradeEntries, } from "./progression.js";
-import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
+import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention, } from "./intervention-scheduler.js";
 import { buildDecisionFeedback, captureDecisionSnapshot, } from "./decision-feedback.js";
 import { advancePressure, pressureYears } from "./pressure.js";
@@ -29,6 +30,9 @@ export const ERA_NAMES = [
     "APOTHEOSIS",
 ];
 const SAVE_KEY = "reality_consumption_engine_browser_save_v2";
+// A save that had to be migrated, repaired or refused is copied here verbatim before anything
+// overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
+export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
 const C = CONTENT;
 function mixSeed(value) {
     let mixed = value >>> 0 || 0x52434531;
@@ -59,6 +63,9 @@ export class GameEngine {
         this.decisionFeedback = null;
         this.worldImpulse = null;
         this.lastActionFailure = "";
+        // What the loader made of the stored save, for the message log and for tests.
+        this.saveMigration = null;
+        this.saveFailed = false;
         this.listeners = new Set();
         this.tickEmitAccumulator = 0;
         this.feedbackSequence = 0;
@@ -87,6 +94,11 @@ export class GameEngine {
         if (this.state.phase === "machine" &&
             this.state.machine.runBuild.nextCivilizationSeed === 0)
             this.prepareNextRun(0, false);
+        // Write the brought-forward shape back at once. Until it lands, every reload repeats the
+        // migration -- and the backup taken above is what the old bytes are preserved in anyway.
+        const migration = this.saveMigration;
+        if (migration && migration.status !== "current" && migration.status !== "empty")
+            this.save();
     }
     onChange(fn) {
         this.listeners.add(fn);
@@ -114,24 +126,83 @@ export class GameEngine {
         if (!this.autosave)
             return;
         this.state.saveVersion = SAVE_VERSION;
-        this.storage.setItem(SAVE_KEY, JSON.stringify(this.state));
-    }
-    load() {
+        // A rejected write (quota, private-mode storage) must not take the running game down with it,
+        // and must be said out loud once rather than every five seconds for the rest of the session.
         try {
-            const raw = this.storage?.getItem(SAVE_KEY);
-            if (!raw)
-                return null;
-            const parsed = JSON.parse(raw);
-            if (parsed?.saveVersion !== SAVE_VERSION)
-                return null;
-            return parsed;
+            this.storage.setItem(SAVE_KEY, JSON.stringify(this.state));
+            this.saveFailed = false;
+        }
+        catch {
+            if (!this.saveFailed)
+                this.post("Save failed: browser storage rejected the write. Progress is only in memory.");
+            this.saveFailed = true;
+        }
+    }
+    // Reads the stored save through the migrator, so an older, newer or damaged payload becomes a
+    // playable state instead of a silent wipe. The original bytes are copied to SAVE_BACKUP_KEY
+    // whenever the loader had to change anything, before the next save() overwrites the live slot.
+    load() {
+        let raw = null;
+        try {
+            raw = this.storage?.getItem(SAVE_KEY) ?? null;
         }
         catch {
             return null;
         }
+        const { state, report } = parseSaveText(raw);
+        this.saveMigration = report;
+        if (report.keepBackup && raw)
+            this.writeBackup(raw);
+        if (report.notice)
+            this.post(report.notice);
+        return state;
+    }
+    writeBackup(raw) {
+        try {
+            this.storage.setItem(SAVE_BACKUP_KEY, raw);
+        }
+        catch {
+            // A backup that does not fit is not worth failing the load over.
+        }
+    }
+    // The manual way back from a migration the player does not want: the preserved payload is put
+    // back into the live slot and loaded again. Returns false when there is nothing to restore.
+    restoreBackup() {
+        let raw = null;
+        try {
+            raw = this.storage?.getItem(SAVE_BACKUP_KEY) ?? null;
+        }
+        catch {
+            return false;
+        }
+        const { state, report } = parseSaveText(raw);
+        if (!state)
+            return false;
+        this.saveMigration = report;
+        this.state = state;
+        this.messages = [];
+        this.decisionFeedback = null;
+        this.worldImpulse = null;
+        if (this.state.civilization)
+            recentEventIds(this.state.civilization);
+        Progression.refresh(this.state, this.messages);
+        if (this.state.phase === "machine" && this.state.machine.runBuild.nextCivilizationSeed === 0)
+            this.prepareNextRun(0, false);
+        this.post("Backup save restored.");
+        this.save();
+        this.emit();
+        return true;
     }
     deleteSave() {
         this.storage.removeItem(SAVE_KEY);
+        // An explicit erase erases: leaving the backup behind would keep the progress the player just
+        // asked to be rid of one restore away.
+        try {
+            this.storage.removeItem(SAVE_BACKUP_KEY);
+        }
+        catch {
+            // Nothing to do -- the live slot is already gone.
+        }
         this.state = createNewState();
         this.messages = [];
         this.decisionFeedback = null;
@@ -176,50 +247,7 @@ export class GameEngine {
         };
     }
     static createCivilizationForTest(seed) {
-        return {
-            seed,
-            rngState: seed,
-            elapsedSeconds: 0,
-            years: 0,
-            era: 0,
-            development: 1,
-            developmentMultiplier: 1,
-            eventTimer: 4,
-            pendingEvent: "",
-            lastEvent: "",
-            eventCounts: {},
-            recentEventIds: [],
-            eventChoices: 0,
-            traits: [],
-            institutions: [],
-            flags: [],
-            scheduledEvents: [],
-            history: [],
-            stats: {
-                stability: 100,
-                stabilityMax: 100,
-                awareness: 0,
-                sanity: 100,
-                attention: 0,
-            },
-            harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
-            harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 },
-            stabilityDecayMult: 1,
-            eventDelayBonus: 0,
-            predictionLevel: 0,
-            pathState: CivilizationPaths.newState(),
-            tactical: {
-                entropy: 0,
-                controlCapacity: 3,
-                triggeredCrises: [],
-                probedEventId: "",
-                actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 },
-            },
-            directiveId: "",
-            directiveObjective: { id: "", completed: false },
-            terminal: false,
-            runInterventionUses: {},
-        };
+        return createCivilizationTemplate(seed);
     }
     currentCivilization() {
         return this.state.civilization;
