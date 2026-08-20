@@ -1,5 +1,6 @@
 import { CivilizationPaths } from '../game/paths.js';
-import { liveWorldSample, worldSnapshot } from './world-model.js';
+import { applyQualityToLiveSample, liveWorldSample, worldSnapshot } from './world-model.js';
+import { qualityFactors, RenderQualityController } from './quality.js';
 import { structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { drawConsequenceImpact } from './consequence-presentation.js';
 import { hash01, mixColor } from './primitives.js';
@@ -346,9 +347,17 @@ function drawLitWindows(surface, scene, snapshot, presentation, ground, animatio
             .fillRect(structure.x - structure.width * .28 + (i % 3) * 5, ground - structure.height + 8 + (i % rows) * 13, 2.5 + snapshot.stage * .28, 3);
     }
 }
-function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view) {
+/** A stable prefix, so shedding agents thins the crowd rather than reshuffling who is in it. */
+function cosmeticAgents(agents, fraction) {
+    if (fraction >= 1)
+        return agents;
+    return agents.slice(0, Math.ceil(agents.length * Math.max(0, fraction)));
+}
+// `agentFraction` is the adaptive-quality lever: a slow device draws fewer cosmetic inhabitants,
+// never fewer fractures, beacons, landmarks, scars or construction cues.
+function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction) {
     const { settlements, plan, species } = scene;
-    for (const pedestrian of plan.pedestrians) {
+    for (const pedestrian of cosmeticAgents(plan.pedestrians, agentFraction)) {
         const settlement = settlements[pedestrian.settlementIndex];
         if (!settlement)
             continue;
@@ -360,11 +369,11 @@ function drawInhabitants(surface, scene, snapshot, presentation, ground, animati
         drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
     }
 }
-function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view) {
+function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction) {
     const { civ, plan } = scene;
     const worldWidth = snapshot.worldWidth;
     // Road traffic.
-    for (const vehicle of plan.vehicles) {
+    for (const vehicle of cosmeticAgents(plan.vehicles, agentFraction)) {
         const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
         const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
         if (x < view.from || x > view.to)
@@ -376,7 +385,7 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
             surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
     }
     // Air corridors.
-    for (const aircraft of plan.aircraft) {
+    for (const aircraft of cosmeticAgents(plan.aircraft, agentFraction)) {
         const travel = reducedMotion ? aircraft.phase : (aircraft.phase + animationTime * .00032 * aircraft.speed) % 1;
         const x = aircraft.fromX + (aircraft.toX - aircraft.fromX) * travel;
         if (x < view.from - 10 || x > view.to + 10)
@@ -385,7 +394,7 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
         surface.lineStyle(1.5, presentation.accent, .62).line(x - 10, y, x + 10, y);
         surface.fillStyle(0xffffff, .82).fillCircle(x, y, 1.5);
     }
-    for (const orbital of plan.orbital) {
+    for (const orbital of cosmeticAgents(plan.orbital, agentFraction)) {
         const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
         if (x < view.from || x > view.to)
             continue;
@@ -458,7 +467,8 @@ function drawAnomalies(surface, scene, snapshot, presentation, ground, height, a
         }
     }
 }
-function drawDynamicContent(surface, scene, snapshot, presentation, width, height, time, tracker, view) {
+function drawDynamicContent(surface, scene, snapshot, presentation, width, height, time, tracker, view, tier) {
+    const { agentFraction } = qualityFactors(tier);
     const animationTime = reducedMotion ? 0 : time;
     const ground = height * GROUND_RATIO;
     // The hash decides where a particle lands, so the loop still visits every index; only the draw is
@@ -474,9 +484,9 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // Lit windows keep flickering across the settlement skyline.
     drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
     // Inhabitants.
-    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view);
+    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction);
     // Road traffic, air corridors, orbital, launches.
-    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view);
+    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction);
     // Banners and construction.
     drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view);
     // Fractures, beacons, sanity distortion.
@@ -651,17 +661,17 @@ class WorldRenderer {
             context.restore();
         this.sceneryScroll = scroll;
     }
-    drawDynamic(time, scene, civ, scroll, tracker, engine) {
+    drawDynamic(time, scene, civ, scroll, tracker, engine, tier) {
         const context = this.dynamicContext;
         const surface = this.surface(context);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         // Only the stat-driven counts are resampled per frame; the structural geometry is whatever the
         // cached scene already resolved, so a frame no longer rebuilds settlement and agent budgets.
-        const dynamicSnapshot = { ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) };
+        const dynamicSnapshot = applyQualityToLiveSample({ ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) }, tier);
         const dynamicPresentation = worldPresentation(civ);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
-        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1));
+        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1), tier);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
@@ -688,6 +698,7 @@ class CanvasWorld {
         this.lastStructuralKey = '';
         this.scene = null;
         this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
+        this.quality = new RenderQualityController();
         this.sceneRebuilds = 0;
         this.loop = (time) => {
             this.raf = requestAnimationFrame(this.loop);
@@ -724,7 +735,12 @@ class CanvasWorld {
                 this.renderer.drawScenery(this.scene, scroll);
             }
             this.tracker.prune(time);
-            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine);
+            // Measured around the dynamic draw only: the cached layers repaint on scroll, not per frame, so
+            // folding them in would read a drag as a slow device.
+            const drawStart = globalThis.performance?.now?.() ?? time;
+            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine, this.quality.tier);
+            const drawEnd = globalThis.performance?.now?.() ?? drawStart;
+            this.quality.update(Math.max(0, drawEnd - drawStart), time);
         };
         this.renderer = new WorldRenderer(host);
         // The topmost canvas that still takes pointer events; the dynamic layer above it is inert.
@@ -738,11 +754,13 @@ class CanvasWorld {
             staticRedraws: this.renderer.staticRedraws,
             sceneryFullRedraws: this.renderer.sceneryFullRedraws,
             sceneryStripRedraws: this.renderer.sceneryStripRedraws,
+            qualityTier: this.quality.tier,
         };
     }
     destroy() {
         cancelAnimationFrame(this.raf);
         this.tracker.reset();
+        this.quality.reset();
         this.input.destroy();
         this.renderer.destroy();
     }
@@ -763,7 +781,7 @@ export function startWorldRenderer(engine, host) {
     ensure();
     return {
         nudge(direction) { world?.nudge(direction); },
-        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0, sceneryFullRedraws: 0, sceneryStripRedraws: 0 }; },
+        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0, sceneryFullRedraws: 0, sceneryStripRedraws: 0, qualityTier: 0 }; },
         destroy() { unsubscribe(); world?.destroy(); world = null; host.replaceChildren(); },
     };
 }

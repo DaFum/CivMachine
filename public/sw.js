@@ -14,6 +14,7 @@ const APP_ASSETS = [
   '/game/dist/render/world-memory.js',
   '/game/dist/render/world-presentation.js',
   '/game/dist/render/primitives.js',
+  '/game/dist/render/quality.js',
   '/game/dist/render/draw-surface.js',
   '/game/dist/render/species.js',
   '/game/dist/render/factions.js',

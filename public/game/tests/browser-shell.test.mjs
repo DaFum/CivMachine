@@ -61,7 +61,7 @@ test('dynamic world state is sampled independently from cached structural scener
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   // The per-frame sample carries only the stat-driven counts; structural geometry is reused from the
   // cached scene, so a frame must not rebuild settlement, building or agent budgets.
-  assert.match(world, /const dynamicSnapshot\s*=\s*\{\s*\.\.\.scene\.snapshot,\s*\.\.\.liveWorldSample\(civ,\s*scene\.snapshot\.stage\)\s*\}/);
+  assert.match(world, /const dynamicSnapshot\s*=\s*applyQualityToLiveSample\(\{\s*\.\.\.scene\.snapshot,\s*\.\.\.liveWorldSample\(civ,\s*scene\.snapshot\.stage\)\s*\},\s*tier\)/);
   assert.match(world, /const dynamicPresentation\s*=\s*worldPresentation\(civ\)/);
   assert.match(world, /drawDynamicContent\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
   assert.doesNotMatch(world, /worldSnapshot\(civ,\s*this\.width\)/, 'the dynamic layer must not rebuild the structural snapshot per frame');

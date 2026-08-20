@@ -15,6 +15,8 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
+import { RenderQualityController, qualityFactors } from '../dist/render/quality.js';
+import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
 import { worldMemorySignature } from '../dist/render/world-memory.js';
 import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
 import { freshEngine } from './balance-harness.mjs';
@@ -1137,4 +1139,27 @@ test('the obsolete impulse helpers are gone from the presentation module', async
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.ok(!world.includes('function drawDecisionImpulse'), 'world.ts must orchestrate, not own impact drawing');
   assert.ok(!world.includes('function impulseColor'), 'impact colour belongs to the impact module');
+});
+
+test('adaptive quality degrades after 30 hot frames and recovers only after 180 cool frames', () => {
+  const controller = new RenderQualityController();
+  let now = 6000;
+  for (let i=0;i<29;i++) controller.update(25, now += 34);
+  assert.equal(controller.tier, 0);
+  controller.update(25, now += 34);
+  assert.equal(controller.tier, 1);
+  now += 5001;
+  for (let i=0;i<180;i++) controller.update(10, now += 34);
+  assert.equal(controller.tier, 0);
+});
+
+test('quality tiers reduce only cosmetic sample work and preserve fracture/beacon signals', () => {
+  const sample = { particleCount:150, hazeBands:9, fractureCount:12, beaconCount:10, entropyBand:4 };
+  const heavy = applyQualityToLiveSample(sample, 3);
+  assert.ok(heavy.particleCount <= 60);
+  assert.ok(heavy.hazeBands < 9);
+  assert.equal(heavy.fractureCount, 12);
+  assert.equal(heavy.beaconCount, 10);
+  assert.equal(MAX_PARTICLES,150); assert.equal(MAX_HAZE_BANDS,9); assert.equal(MAX_FRACTURES,12); assert.equal(MAX_BEACONS,10);
+  assert.equal(qualityFactors(3).agentFraction, .5);
 });

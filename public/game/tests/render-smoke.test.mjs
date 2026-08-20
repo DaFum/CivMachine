@@ -195,7 +195,7 @@ test('panning repaints the cached static layer without rebuilding the scene', as
     const controller = startWorldRenderer(engine, host);
     const frame = time => globalThis.__frame(time);
 
-    const first = { sceneRebuilds: 1, staticRedraws: 1, sceneryFullRedraws: 1, sceneryStripRedraws: 0 };
+    const first = { sceneRebuilds: 1, staticRedraws: 1, sceneryFullRedraws: 1, sceneryStripRedraws: 0, qualityTier: 0 };
     frame(100);
     assert.deepEqual(controller.stats(), first, 'the first real frame builds and paints once');
 
@@ -446,5 +446,113 @@ test('a world impulse paints only on the dynamic layer and never forces a scener
     assert.equal(controller.stats().sceneRebuilds, quiet.rebuilds, 'an impulse alone is not a structural change');
 
     controller.destroy();
+  });
+});
+
+// Drives the renderer with a synthetic frame cost, so a quality tier can be reached without needing
+// a genuinely slow machine.
+async function bucketsAtQualityTier(seed, costMs, tag) {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  let controllerStats = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    // performance.now() is what the renderer measures its own draw cost with, so a clock that jumps
+    // by `costMs` across each draw makes the frame look exactly that expensive.
+    const realPerformance = globalThis.performance;
+    let clock = 0;
+    globalThis.performance = { now: () => { clock += costMs; return clock; } };
+    try {
+      const controller = startWorldRenderer(engine, host);
+      let time = 100;
+      // Three degradation steps, each needing 30 hot frames plus the 5 s cooldown between changes.
+      for (let step = 0; step < 3; step++) {
+        for (let i = 0; i < 31; i++) { time += 40; frame(time); }
+        time += 5200;
+        frame(time);
+      }
+      staticCalls.length = 0; sceneryCalls.length = 0; dynamicCalls.length = 0;
+      time += 40; frame(time);
+      controllerStats = controller.stats();
+      controller.destroy();
+      controllerStats.afterDestroy = controller.stats().qualityTier;
+    } finally {
+      if (realPerformance === undefined) delete globalThis.performance; else globalThis.performance = realPerformance;
+    }
+  });
+  return { staticCalls, sceneryCalls, dynamicCalls, stats: controllerStats };
+}
+
+test('a Tier-3 frame sheds cosmetics but still paints every gameplay signal', async () => {
+  const tierZero = await bucketsAtQualityTier(818, 0, 'tier0');
+  const tierThree = await bucketsAtQualityTier(818, 40, 'tier3');
+
+  assert.equal(tierZero.stats.qualityTier, 0, 'a cheap frame must never degrade');
+  assert.equal(tierThree.stats.qualityTier, 3, 'a 40 ms draw must reach the lowest tier');
+  assert.ok(tierThree.dynamicCalls.length < tierZero.dynamicCalls.length,
+    `Tier 3 drew ${tierThree.dynamicCalls.length} primitives against ${tierZero.dynamicCalls.length} at Tier 0`);
+  // Cosmetics only: the cached layers carry landmarks, marks and scars and must be untouched.
+  assert.equal(tierThree.sceneryCalls.length, tierZero.sceneryCalls.length, 'quality must not thin persistent scenery');
+  assert.ok(tierThree.dynamicCalls.length > 0, 'a degraded frame still draws the world');
+  assert.equal(tierThree.stats.afterDestroy, 0, 'teardown must return the tier to 0');
+});
+
+test('a Tier-3 frame keeps drawing the current decision impact', async () => {
+  const withImpact = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext([]), trackingContext(withImpact)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const civ = developedCivilization(819);
+    civ.visualMemory = {
+      version: 1, sequence: 3,
+      marks: [{ domain:'reality', motif:'fracture', strength:3, sourceEventId:'crisis', createdAtSequence:1, anchor01:.04, repairable:true }],
+      scars: [{ domain:'reality', motif:'breach', strength:3, sourceEventId:'crisis', createdAtSequence:2, anchor01:.04, evolution:2 }],
+    };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?tier3impact=${Date.now()}`);
+    const realPerformance = globalThis.performance;
+    let clock = 0;
+    globalThis.performance = { now: () => { clock += 40; return clock; } };
+    try {
+      const controller = startWorldRenderer(engine, host);
+      let time = 100;
+      for (let step = 0; step < 3; step++) {
+        for (let i = 0; i < 31; i++) { time += 40; frame(time); }
+        time += 5200;
+        frame(time);
+      }
+      assert.equal(controller.stats().qualityTier, 3);
+      withImpact.length = 0;
+      const quiet = (time += 40, frame(time), withImpact.length);
+      withImpact.length = 0;
+      engine.worldImpulse = {
+        sequence: 11, eventId: 'entropy_crisis_75', eventTitle: 'Observation', choiceLabel: 'Endure', tone: 'negative',
+        metrics: [], affinities: [], additions: [],
+        consequence: { significance: 'turning_point', tags: ['reality_damage','surveillance'], transitions: {}, signatureProfile: 'crisis:entropy_75' },
+      };
+      time += 40; frame(time);
+      assert.ok(withImpact.length > quiet, `Tier 3 dropped the decision impact: ${withImpact.length} vs ${quiet}`);
+      controller.destroy();
+    } finally {
+      if (realPerformance === undefined) delete globalThis.performance; else globalThis.performance = realPerformance;
+    }
   });
 });

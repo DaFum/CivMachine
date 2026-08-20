@@ -1,5 +1,13 @@
 import { civilizationDramaPhase } from '../game/drama.js';
 import type { Civilization } from '../game/types.js';
+import { qualityFactors, type RenderQualityTier } from './quality.js';
+
+// The hard ceilings the whole renderer is budgeted against. Exported so the tests can state the
+// budget rather than repeat the literals, and so adaptive quality can only ever stay under them.
+export const MAX_PARTICLES = 150;
+export const MAX_HAZE_BANDS = 9;
+export const MAX_FRACTURES = 12;
+export const MAX_BEACONS = 10;
 
 export function developmentStage(civ: Civilization): number {
   return civilizationDramaPhase(civ).id;
@@ -19,11 +27,27 @@ export function liveWorldSample(civ: Civilization, stage: number = developmentSt
   const entropy = Math.max(0, Math.min(100, civ.tactical.entropy));
   const entropyBand = Math.min(4, Math.floor(entropy / 25));
   return {
-    particleCount: Math.max(18, Math.min(150, 18 + stage * 12 + Math.trunc(civ.stats.attention / 3) + Math.trunc(civ.stats.awareness / 5) + entropyBand * 7)),
-    hazeBands: Math.max(2, Math.min(9, 2 + civ.era + Math.trunc(civ.stats.attention / 35) + entropyBand)),
-    fractureCount: Math.max(civ.stats.stability < 55 ? Math.ceil((55 - civ.stats.stability) / 5) : 0, entropyBand * 2),
-    beaconCount: civ.stats.awareness >= 35 ? Math.max(1, Math.min(10, Math.trunc(civ.stats.awareness / 12))) : 0,
+    particleCount: Math.max(18, Math.min(MAX_PARTICLES, 18 + stage * 12 + Math.trunc(civ.stats.attention / 3) + Math.trunc(civ.stats.awareness / 5) + entropyBand * 7)),
+    hazeBands: Math.max(2, Math.min(MAX_HAZE_BANDS, 2 + civ.era + Math.trunc(civ.stats.attention / 35) + entropyBand)),
+    fractureCount: Math.min(MAX_FRACTURES, Math.max(civ.stats.stability < 55 ? Math.ceil((55 - civ.stats.stability) / 5) : 0, entropyBand * 2)),
+    beaconCount: civ.stats.awareness >= 35 ? Math.max(1, Math.min(MAX_BEACONS, Math.trunc(civ.stats.awareness / 12))) : 0,
     entropyBand,
+  };
+}
+
+/**
+ * Sheds cosmetics only. Fractures and beacons are how Stability and Awareness are read off the
+ * world, so a tier never reduces them -- a player must not lose a signal because their device is
+ * slow.
+ */
+export function applyQualityToLiveSample<T extends ReturnType<typeof liveWorldSample>>(sample: T, tier: RenderQualityTier): T {
+  const factors = qualityFactors(tier);
+  return {
+    ...sample,
+    particleCount: Math.max(4, Math.min(MAX_PARTICLES, Math.floor(sample.particleCount * factors.particleFraction))),
+    hazeBands: Math.max(2, Math.min(MAX_HAZE_BANDS, Math.ceil(sample.hazeBands * factors.hazeFraction))),
+    fractureCount: Math.min(MAX_FRACTURES, sample.fractureCount),
+    beaconCount: Math.min(MAX_BEACONS, sample.beaconCount),
   };
 }
 
