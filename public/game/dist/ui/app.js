@@ -107,6 +107,19 @@ export function createGameUI(engine, world) {
             return 'BUILDING // no credits until the run clears Premature';
         return `BUILDING // credit ${u.nextCredit} in ${Math.ceil(u.secondsToNextCredit)}s`;
     };
+    // The world strip is as narrow as a phone, so it gets the short form. Same states, same numbers,
+    // no room for the sentence -- and Entropy is already in the state strip directly above it.
+    const urgencyShort = (h) => {
+        const u = h.urgency;
+        if (u.state === 'cascading')
+            return 'CASCADE — HARVEST NOW';
+        if (u.state === 'harvest')
+            return `HARVEST NOW · credit ${u.nextCredit} out of reach`;
+        if (h.controlled.grade === 'premature')
+            return 'BUILDING · clears Premature first';
+        const seconds = Number.isFinite(u.secondsToNextCredit) ? `${Math.ceil(u.secondsToNextCredit)}s` : '—';
+        return `${u.state === 'closing' ? 'CLOSING' : 'BUILDING'} · credit ${u.nextCredit} in ${seconds}`;
+    };
     // The harvest readout sits inside the rail rather than in a collapsed panel: it answers the same
     // question as CASCADE IN Xs -- stay or harvest -- and the two are only useful side by side.
     const harvestReadout = (vm) => { const h = vm.harvest; if (!h)
@@ -122,7 +135,7 @@ export function createGameUI(engine, world) {
         const harvest = vm.harvest.controlled;
         const chaotic = vm.harvest.chaotic;
         const terminalBanner = c.terminal ? `<section class="panel terminal-banner ${vm.harvest.convergenceReady ? 'ready' : ''}"><div class="panel-kicker">TERMINAL CULTIVATION</div><b>CONVERGENCE TARGET DEPTH ${vm.convergence.targetDepth.toFixed(1)}</b><span>CURRENT <b data-live="convergence-depth">${vm.harvest.depth.toFixed(1)}</b> \u00B7 ${vm.harvest.convergenceReady ? 'CONVERGENCE READY' : 'INSUFFICIENT DEPTH'}</span></section>` : '';
-        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? `DOMINANT: <b>${esc(path.dominantName)}</b>` : 'PATH: <b>UNRESOLVED</b>'}</div><div class="world-state-strip"><span>ERA <b data-live="world-era">${esc(ERA_NAMES[c.era])}</b></span><span>DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span>STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span>SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span>AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span>ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span>ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="swipe-hint">↔ DRAG / SWIPE TO EXPLORE</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="Pan left">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="Pan right">›</button>`);
+        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? `DOMINANT: <b>${esc(path.dominantName)}</b>` : 'PATH: <b>UNRESOLVED</b>'}</div><div class="world-state-strip"><span>ERA <b data-live="world-era">${esc(ERA_NAMES[c.era])}</b></span><span>DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span>STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span>SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span>AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span>ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span>ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="world-mobile-strip urgency-${esc(vm.harvest.urgency.state)}"><span>CASCADE <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div><div class="swipe-hint">↔ DRAG / SWIPE TO EXPLORE</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="Pan left">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="Pan right">›</button>`);
         const eventCard = event ? `<section class="panel intervention"><div class="panel-kicker">CURRENT INTERVENTION${event.probed ? ' // PROBED' : ''}</div><h2>${esc(event.title)}</h2><p class="event-body">${esc(event.body)}</p>${event.predictionLocked ? '<div class="prediction-lock">PREDICTION CORE OFFLINE // Spend 1 Control on Probe to reveal risk directions.</div>' : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? '<button class="ghost" data-action="reroll">REROLL WITH PARADOX</button>' : ''}</section>` : `<section class="panel intervention quiet"><div class="panel-kicker">CURRENT INTERVENTION</div><h2>Monitoring civilization...</h2><p data-live="event-timer">Next intervention window in approximately ${Math.max(0, c.eventTimer).toFixed(1)} simulation seconds.</p></section>`;
         const tendencies = path.tendencies.length ? path.tendencies.map((t) => `<li><b>${esc(t.name)}</b><span>${esc(t.label)}</span></li>`).join('') : '<li><span>No coherent tendency yet.</span></li>';
         const objectiveCard = vm.directiveObjective ? card('Directive Objective', `<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${vm.directiveObjective.completed ? 'COMPLETE' : 'ACTIVE'}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>OBJECTIVE BONUS // ×1.15 rewards + 1 Cultivation Credit</small></div>`, 'directive-objective') : '';
@@ -183,6 +196,12 @@ export function createGameUI(engine, world) {
         setWorldText('[data-live="world-awareness"]', c.stats.awareness.toFixed(0));
         setWorldText('[data-live="world-attention"]', c.stats.attention.toFixed(0));
         setWorldText('[data-live="world-entropy"]', vm.tactical.entropy.toFixed(0));
+        setWorldText('[data-live="strip-cascade"]', `${vm.tactical.secondsToCascade.toFixed(0)}s`);
+        setWorldText('[data-live="strip-call"]', urgencyShort(vm.harvest));
+        const strip = worldHud.querySelector('.world-mobile-strip');
+        if (strip)
+            for (const state of ['building', 'closing', 'harvest', 'cascading'])
+                strip.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
         setText('[data-live="entropy-value"]', vm.tactical.entropy.toFixed(1));
         setText('[data-live="entropy-band"]', vm.tactical.entropyBand.label);
         setText('[data-live="control-value"]', `${vm.tactical.controlCapacity}/${vm.tactical.controlMax}`);

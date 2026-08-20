@@ -13,7 +13,7 @@ import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
-import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
+import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
 import { freshEngine } from './balance-harness.mjs';
 
 const NEWLINE = String.fromCharCode(10);
@@ -796,6 +796,37 @@ test('the service worker precaches every compiled game module', async () => {
   }
   assert.ok(source.includes("'/game/dist/main.js'"), 'sw.js must precache the entrypoint');
   assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.6.0'"), 'CACHE_NAME must be bumped');
+});
+
+test('a structure that appears animates, and the first sighting of the world does not', () => {
+  const tracker = new ConstructionTracker(1000);
+  // Loading a save must not put the whole world under scaffolding, so the first sync is silent.
+  tracker.sync([{ id: 's0:0', level: 1 }, { id: 's0:1', level: 1 }], 0);
+  assert.equal(tracker.activeCount, 0, 'the first sighting establishes a baseline only');
+
+  // Growth mostly arrives as new ids rather than higher levels, because buildingCount climbs with
+  // Development. That was silent before and is the common case.
+  tracker.sync([{ id: 's0:0', level: 1 }, { id: 's0:1', level: 1 }, { id: 's0:2', level: 1 }], 10);
+  assert.equal(tracker.isBuilding('s0:2', 20), true, 'a structure that appears must be seen to arrive');
+  assert.equal(tracker.isBuilding('s0:0', 20), false, 'its neighbours must not animate with it');
+  assert.equal(tracker.activeCount, 1);
+});
+
+test('concurrent construction is capped so a new settlement is growth, not a glitch', () => {
+  const tracker = new ConstructionTracker(1000);
+  tracker.sync([{ id: 's0:0', level: 1 }], 0);
+  // A settlement count change can bring a dozen structures at once.
+  const flood = [{ id: 's0:0', level: 1 }, ...Array.from({ length: 20 }, (_, i) => ({ id: `s1:${i}`, level: 1 }))];
+  tracker.sync(flood, 10);
+  assert.equal(tracker.activeCount, MAX_CONCURRENT_BUILDS);
+  // The budget goes to the first arrivals in document order, which is the layout's own order, so the
+  // choice is deterministic rather than dependent on Map iteration.
+  for (let i = 0; i < MAX_CONCURRENT_BUILDS; i++) assert.equal(tracker.isBuilding(`s1:${i}`, 20), true, `s1:${i} must animate`);
+  assert.equal(tracker.isBuilding(`s1:${MAX_CONCURRENT_BUILDS}`, 20), false, 'past the cap, arrivals are silent');
+
+  // Once the wave finishes the budget frees up again.
+  tracker.prune(1500);
+  assert.equal(tracker.activeCount, 0);
 });
 
 test('the construction tracker forgets structures the world no longer contains', () => {
