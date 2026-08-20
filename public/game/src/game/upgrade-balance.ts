@@ -25,6 +25,9 @@ const UNIVERSE_DESCRIPTIONS: Readonly<Record<string, string>> = {
   bureaucracy_of_gods: 'Restores +1 additional Control after interventions; at level 3 it restores the full capacity.',
 };
 
+/**
+ * Placeholder docstring for balancedMachineUpgrades.
+ */
 export function balancedMachineUpgrades<T extends { id: string; base_cost: number; growth: number; description: string }>(catalog: readonly T[]): T[] {
   return catalog.map(definition => {
     const override = MACHINE_OVERRIDES[definition.id];
@@ -32,6 +35,9 @@ export function balancedMachineUpgrades<T extends { id: string; base_cost: numbe
   });
 }
 
+/**
+ * Placeholder docstring for balancedUniverseUpgrades.
+ */
 export function balancedUniverseUpgrades<T extends { id: string; growth: number; description: string }>(catalog: readonly T[]): T[] {
   return catalog.map(definition => ({
     ...definition,
@@ -40,6 +46,9 @@ export function balancedUniverseUpgrades<T extends { id: string; growth: number;
   }));
 }
 
+/**
+ * Placeholder docstring for balancedAxiomUpgrades.
+ */
 export function balancedAxiomUpgrades<T extends { growth: number }>(catalog: readonly T[]): T[] {
   return catalog.map(definition => ({ ...definition, growth: Math.max(2.15, Number(definition.growth)) }));
 }

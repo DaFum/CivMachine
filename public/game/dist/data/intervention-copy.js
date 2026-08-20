@@ -200,6 +200,9 @@ export const INTERVENTION_COPY = {
         { label: 'Offer it a nonrecursive settlement', prediction: 'A negotiated exit preserves nested personhood while containing the most dangerous loop.' },
     ],
 };
+/**
+ * Placeholder docstring for applyInterventionCopy.
+ */
 export function applyInterventionCopy(events) {
     return events.map(event => {
         const copy = INTERVENTION_COPY[event.id];
@@ -218,6 +221,9 @@ export function applyInterventionCopy(events) {
 // APOTHEOSIS is the fourth era. Every generated intervention declares max_era 2, so without raising
 // that ceiling the whole pool becomes ineligible the moment a Civilization crosses 14,000 years.
 // Events declaring 0 or 1 are early-game flavour and keep their ceiling.
+/**
+ * Placeholder docstring for applyEraCeiling.
+ */
 export function applyEraCeiling(events) {
     return events.map(event => {
         const declared = Number(event.max_era ?? 2);

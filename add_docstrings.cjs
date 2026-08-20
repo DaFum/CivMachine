@@ -1,47 +1,68 @@
 const fs = require('fs');
 const path = require('path');
+const ts = require('typescript');
 
 function processFile(filePath) {
   let content = fs.readFileSync(filePath, 'utf8');
-  let changed = false;
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    content,
+    ts.ScriptTarget.Latest,
+    true
+  );
 
-  const functionRegex = /export\s+function\s+([a-zA-Z0-xyz_0-9]+)\s*\(/g;
+  const insertions = [];
 
-  let result = '';
-  let lastIndex = 0;
-  let match;
+  function visit(node) {
+    if (ts.isFunctionDeclaration(node)) {
+      const modifiers = node.modifiers;
+      const isExported = modifiers && modifiers.some(m => m.kind === ts.SyntaxKind.ExportKeyword);
 
-  while ((match = functionRegex.exec(content)) !== null) {
-    const funcName = match[1];
-    const startIndex = match.index;
+      if (isExported && node.name) {
+        const funcName = node.name.text;
 
-    const codeBefore = content.substring(0, startIndex);
-    const lastCommentIndex = codeBefore.lastIndexOf('/**');
+        const leadingRanges = ts.getLeadingCommentRanges(content, node.pos);
 
-    let hasComment = false;
-    if (lastCommentIndex !== -1) {
-        const afterComment = codeBefore.substring(codeBefore.lastIndexOf('*/') + 2);
-        if (afterComment.trim() === '') {
-            hasComment = true;
+        let hasJSDoc = false;
+        if (leadingRanges) {
+          const lastRange = leadingRanges[leadingRanges.length - 1];
+          const commentText = content.substring(lastRange.pos, lastRange.end);
+          if (commentText.startsWith('/**')) {
+            // Verify there is only whitespace between comment and declaration
+            const spaceBetween = content.substring(lastRange.end, node.getStart());
+            if (spaceBetween.trim() === '') {
+              hasJSDoc = true;
+            }
+          }
         }
+
+        if (!hasJSDoc) {
+          insertions.push({
+            pos: node.getStart(),
+            text: `/**\n * Placeholder docstring for ${funcName}.\n */\n`
+          });
+        }
+      }
     }
-
-    result += content.substring(lastIndex, startIndex);
-
-    if (!hasComment) {
-      result += `/**\n * Placeholder docstring for ${funcName}.\n */\n`;
-      changed = true;
-    }
-
-    lastIndex = startIndex;
+    ts.forEachChild(node, visit);
   }
 
-  result += content.substring(lastIndex);
+  visit(sourceFile);
 
-  if (changed) {
+  if (insertions.length > 0) {
+    // Sort insertions in reverse order to not mess up previous positions
+    insertions.sort((a, b) => b.pos - a.pos);
+
+    let result = content;
+    for (const insertion of insertions) {
+      result = result.substring(0, insertion.pos) + insertion.text + result.substring(insertion.pos);
+    }
+
     fs.writeFileSync(filePath, result, 'utf8');
     console.log(`Added docstrings to ${filePath}`);
+    return true;
   }
+  return false;
 }
 
 function walkDir(dir) {

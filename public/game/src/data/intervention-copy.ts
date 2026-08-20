@@ -204,6 +204,9 @@ export const INTERVENTION_COPY = {
   ],
 } as const satisfies Readonly<Record<string, EventCopy>>;
 
+/**
+ * Placeholder docstring for applyInterventionCopy.
+ */
 export function applyInterventionCopy<T extends { id: string; choices?: readonly unknown[] }>(events: readonly T[]): T[] {
   return events.map(event => {
     const copy = INTERVENTION_COPY[event.id as keyof typeof INTERVENTION_COPY];
@@ -222,6 +225,9 @@ export function applyInterventionCopy<T extends { id: string; choices?: readonly
 // APOTHEOSIS is the fourth era. Every generated intervention declares max_era 2, so without raising
 // that ceiling the whole pool becomes ineligible the moment a Civilization crosses 14,000 years.
 // Events declaring 0 or 1 are early-game flavour and keep their ceiling.
+/**
+ * Placeholder docstring for applyEraCeiling.
+ */
 export function applyEraCeiling<T extends object>(events: readonly T[]): T[] {
   return events.map(event => {
     const declared = Number((event as { max_era?: number }).max_era ?? 2);

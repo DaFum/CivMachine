@@ -17,12 +17,18 @@ const UNIVERSE_DESCRIPTIONS = {
     wide_lattice: 'Preserves this many Reality Lattice levels through Universe consumption.',
     bureaucracy_of_gods: 'Restores +1 additional Control after interventions; at level 3 it restores the full capacity.',
 };
+/**
+ * Placeholder docstring for balancedMachineUpgrades.
+ */
 export function balancedMachineUpgrades(catalog) {
     return catalog.map(definition => {
         const override = MACHINE_OVERRIDES[definition.id];
         return override ? { ...definition, ...override } : { ...definition, growth: Math.max(1.45, Math.min(1.65, Number(definition.growth))) };
     });
 }
+/**
+ * Placeholder docstring for balancedUniverseUpgrades.
+ */
 export function balancedUniverseUpgrades(catalog) {
     return catalog.map(definition => ({
         ...definition,
@@ -30,6 +36,9 @@ export function balancedUniverseUpgrades(catalog) {
         description: UNIVERSE_DESCRIPTIONS[definition.id] ?? definition.description,
     }));
 }
+/**
+ * Placeholder docstring for balancedAxiomUpgrades.
+ */
 export function balancedAxiomUpgrades(catalog) {
     return catalog.map(definition => ({ ...definition, growth: Math.max(2.15, Number(definition.growth)) }));
 }

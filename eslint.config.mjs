@@ -16,6 +16,12 @@ const eslintConfig = defineConfig([
     // build and regression suite.
     "public/game/**",
   ]),
+  {
+    files: ["*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -91,6 +91,9 @@ function buildPool<T extends SchedulerEvent>(
 
 // Three stages, tried in order. The third exists because the catalog holds only 96 finite draws:
 // without it a run past roughly 48 interventions collapses onto the single unbounded fallback event.
+/**
+ * Placeholder docstring for buildInterventionPool.
+ */
 export function buildInterventionPool<T extends SchedulerEvent>(
   events: readonly T[],
   civ: Civilization,
@@ -103,6 +106,9 @@ export function buildInterventionPool<T extends SchedulerEvent>(
   return buildPool(events, civ, options, true, true);
 }
 
+/**
+ * Placeholder docstring for chooseWeightedIntervention.
+ */
 export function chooseWeightedIntervention<T extends SchedulerEvent>(
   pool: readonly WeightedIntervention<T>[],
   roll01: number,

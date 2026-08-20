@@ -63,6 +63,9 @@ function buildPool(events, civ, options, excludeRecent, allowExhausted) {
 }
 // Three stages, tried in order. The third exists because the catalog holds only 96 finite draws:
 // without it a run past roughly 48 interventions collapses onto the single unbounded fallback event.
+/**
+ * Placeholder docstring for buildInterventionPool.
+ */
 export function buildInterventionPool(events, civ, options) {
     const fresh = buildPool(events, civ, options, true, false);
     if (fresh.length)
@@ -72,6 +75,9 @@ export function buildInterventionPool(events, civ, options) {
         return recentInclusive;
     return buildPool(events, civ, options, true, true);
 }
+/**
+ * Placeholder docstring for chooseWeightedIntervention.
+ */
 export function chooseWeightedIntervention(pool, roll01) {
     const total = pool.reduce((sum, item) => sum + item.weight, 0);
     if (!pool.length || total <= 0)
