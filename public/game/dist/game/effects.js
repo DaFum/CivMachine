@@ -9,9 +9,9 @@ export function applyEffects(civ, effects, resilience, bonuses) {
     if (!effects || typeof effects !== "object")
         return;
     const b = bonuses;
-    for (const [key, val] of Object.entries(effects)) {
-        let value = val;
-        if (["stability", "awareness", "sanity", "attention"].includes(key)) {
+    for (const key in effects) {
+        let value = effects[key];
+        if (key === "stability" || key === "awareness" || key === "sanity" || key === "attention") {
             let amount = Number(value);
             if (resilience) {
                 if (key === "stability" && amount < 0)
@@ -52,14 +52,18 @@ export function applyEffects(civ, effects, resilience, bonuses) {
                 civ.institutions.push(id);
         }
         else if (key === "flags_add" && Array.isArray(value)) {
-            for (const id of value.map(String))
+            for (let i = 0; i < value.length; i++) {
+                const id = String(value[i]);
                 if (!civ.flags.includes(id))
                     civ.flags.push(id);
+            }
         }
         else if (key === "institutions_add" && Array.isArray(value)) {
-            for (const id of value.map(String))
+            for (let i = 0; i < value.length; i++) {
+                const id = String(value[i]);
                 if (!civ.institutions.includes(id))
                     civ.institutions.push(id);
+            }
         }
         else if (key === "trait_add") {
             const id = String(value);
