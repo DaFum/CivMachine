@@ -362,65 +362,52 @@ function drawDecisionImpulse(surface, feedback, startTime, time, width, height) 
         surface.fillStyle(color, alpha * .07).fillCircle(width * .5, height * .54, radius * .45);
     }
 }
-class CanvasWorld {
-    constructor(engine, host) {
-        this.engine = engine;
-        this.host = host;
+class WorldInput {
+    constructor(target, getWidth) {
+        this.target = target;
+        this.getWidth = getWidth;
         this.scroll = 0;
-        this.raf = 0;
+        this.lastStaticScroll = Number.NaN;
         this.dragging = false;
         this.lastX = 0;
+        this.onPointerDown = (event) => {
+            this.dragging = true;
+            this.lastX = event.clientX;
+            this.target.setPointerCapture?.(event.pointerId);
+        };
+        this.onPointerMove = (event) => {
+            if (!this.dragging)
+                return;
+            this.scroll -= event.clientX - this.lastX;
+            this.lastX = event.clientX;
+            this.lastStaticScroll = Number.NaN;
+        };
+        this.onPointerUp = () => { this.dragging = false; };
+        this.onPointerCancel = () => { this.dragging = false; };
+        target.addEventListener('pointerdown', this.onPointerDown);
+        target.addEventListener('pointermove', this.onPointerMove);
+        target.addEventListener('pointerup', this.onPointerUp);
+        target.addEventListener('pointercancel', this.onPointerCancel);
+    }
+    nudge(direction) {
+        this.scroll += direction * Math.max(220, this.getWidth() * .65);
+        this.lastStaticScroll = Number.NaN;
+    }
+    destroy() {
+        this.target.removeEventListener?.('pointerdown', this.onPointerDown);
+        this.target.removeEventListener?.('pointermove', this.onPointerMove);
+        this.target.removeEventListener?.('pointerup', this.onPointerUp);
+        this.target.removeEventListener?.('pointercancel', this.onPointerCancel);
+    }
+}
+class WorldRenderer {
+    constructor(host) {
+        this.host = host;
         this.width = 0;
         this.height = 0;
-        this.lastFrame = 0;
-        this.lastStructuralKey = '';
-        this.lastStaticScroll = Number.NaN;
-        this.scene = null;
-        this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
+        this.staticRedraws = 0;
         this.feedbackSequence = 0;
         this.feedbackStartTime = 0;
-        this.sceneRebuilds = 0;
-        this.staticRedraws = 0;
-        this.loop = (time) => {
-            this.raf = requestAnimationFrame(this.loop);
-            if (time - this.lastFrame < (reducedMotion ? 180 : DYNAMIC_FRAME_MS))
-                return;
-            this.lastFrame = time;
-            const rect = this.host.getBoundingClientRect();
-            const resized = rect.width !== this.width || rect.height !== this.height;
-            if (resized) {
-                this.width = Math.max(1, rect.width);
-                this.height = Math.max(1, rect.height);
-                this.resizeCanvas(this.staticCanvas);
-                this.resizeCanvas(this.dynamicCanvas);
-                this.lastStructuralKey = '';
-            }
-            const civ = this.engine.state.civilization;
-            if (!civ)
-                return;
-            const key = `${structuralWorldKey(civ, this.width)}|${Math.round(this.height / 40)}|${civ.traits.join(',')}`;
-            // Only a structural change rebuilds the scene. Scrolling repaints the cached static layer and
-            // nothing else: panning used to trigger a full buildScene plus tracker.sync on every throttled
-            // frame, which is the per-frame budget the rest of this file is built to protect.
-            if (key !== this.lastStructuralKey) {
-                this.lastStructuralKey = key;
-                this.scene = buildScene(civ, this.width, this.height);
-                this.tracker.sync(this.scene.structures, time);
-                this.sceneRebuilds++;
-                this.lastStaticScroll = Number.NaN;
-            }
-            if (!this.scene)
-                return;
-            // Clamp before painting, so the frame on screen and the stored baseline are the same value.
-            this.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - this.width, this.scroll));
-            if (this.scroll !== this.lastStaticScroll) {
-                this.lastStaticScroll = this.scroll;
-                this.drawStatic(this.scene);
-                this.staticRedraws++;
-            }
-            this.tracker.prune(time);
-            this.drawDynamic(time, this.scene, civ);
-        };
         this.staticCanvas = document.createElement('canvas');
         this.dynamicCanvas = document.createElement('canvas');
         this.staticCanvas.className = 'fallback-canvas fallback-static';
@@ -429,24 +416,13 @@ class CanvasWorld {
         this.dynamicContext = this.dynamicCanvas.getContext('2d');
         host.appendChild(this.staticCanvas);
         host.appendChild(this.dynamicCanvas);
-        this.staticCanvas.addEventListener('pointerdown', event => {
-            this.dragging = true;
-            this.lastX = event.clientX;
-            this.staticCanvas.setPointerCapture?.(event.pointerId);
-        });
-        this.staticCanvas.addEventListener('pointermove', event => {
-            if (!this.dragging)
-                return;
-            this.scroll -= event.clientX - this.lastX;
-            this.lastX = event.clientX;
-            this.lastStaticScroll = Number.NaN;
-        });
-        this.staticCanvas.addEventListener('pointerup', () => { this.dragging = false; });
-        this.staticCanvas.addEventListener('pointercancel', () => { this.dragging = false; });
-        this.loop(0);
     }
-    nudge(direction) { this.scroll += direction * Math.max(220, this.width * .65); this.lastStaticScroll = Number.NaN; }
-    stats() { return { sceneRebuilds: this.sceneRebuilds, staticRedraws: this.staticRedraws }; }
+    resize(width, height) {
+        this.width = width;
+        this.height = height;
+        this.resizeCanvas(this.staticCanvas);
+        this.resizeCanvas(this.dynamicCanvas);
+    }
     resizeCanvas(canvas) {
         canvas.width = Math.max(1, Math.round(this.width * devicePixelRatio));
         canvas.height = Math.max(1, Math.round(this.height * devicePixelRatio));
@@ -462,39 +438,99 @@ class CanvasWorld {
     surface(context) {
         return canvasSurface(context, (value, alpha = 1) => this.color(value, alpha));
     }
-    drawStatic(scene) {
+    drawStatic(scene, scroll) {
         const context = this.staticContext;
         const surface = this.surface(context);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -this.scroll * .1 * devicePixelRatio, 0);
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * .1 * devicePixelRatio, 0);
         drawSkyContent(surface, scene, this.height);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -this.scroll * .52 * devicePixelRatio, 0);
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * .52 * devicePixelRatio, 0);
         drawTerrainContent(surface, scene, this.height);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -this.scroll * devicePixelRatio, 0);
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
         drawSettlementContent(surface, scene, this.height);
         context.setTransform(1, 0, 0, 1, 0, 0);
+        this.staticRedraws++;
     }
-    drawDynamic(time, scene, civ) {
+    drawDynamic(time, scene, civ, scroll, tracker, engine) {
         const context = this.dynamicContext;
         const surface = this.surface(context);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         const dynamicSnapshot = worldSnapshot(civ, this.width);
         const dynamicPresentation = worldPresentation(civ);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -this.scroll * devicePixelRatio, 0);
-        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, this.tracker);
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
+        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-        const feedback = this.engine.worldImpulse;
+        const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
             this.feedbackSequence = feedback.sequence;
             this.feedbackStartTime = time;
         }
-        if (feedback && this.feedbackStartTime > 0)
+        if (feedback && this.feedbackStartTime > 0) {
             drawDecisionImpulse(surface, feedback, this.feedbackStartTime, time, this.width, this.height);
+        }
         context.setTransform(1, 0, 0, 1, 0, 0);
     }
-    destroy() { cancelAnimationFrame(this.raf); this.tracker.reset(); this.staticCanvas.remove(); this.dynamicCanvas.remove(); }
+    destroy() {
+        this.staticCanvas.remove();
+        this.dynamicCanvas.remove();
+    }
+}
+class CanvasWorld {
+    constructor(engine, host) {
+        this.engine = engine;
+        this.host = host;
+        this.raf = 0;
+        this.lastFrame = 0;
+        this.lastStructuralKey = '';
+        this.scene = null;
+        this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
+        this.sceneRebuilds = 0;
+        this.loop = (time) => {
+            this.raf = requestAnimationFrame(this.loop);
+            if (time - this.lastFrame < (reducedMotion ? 180 : DYNAMIC_FRAME_MS))
+                return;
+            this.lastFrame = time;
+            const rect = this.host.getBoundingClientRect();
+            const resized = rect.width !== this.renderer.width || rect.height !== this.renderer.height;
+            if (resized) {
+                this.renderer.resize(Math.max(1, rect.width), Math.max(1, rect.height));
+                this.lastStructuralKey = '';
+            }
+            const civ = this.engine.state.civilization;
+            if (!civ)
+                return;
+            const key = `${structuralWorldKey(civ, this.renderer.width)}|${Math.round(this.renderer.height / 40)}|${civ.traits.join(',')}`;
+            if (key !== this.lastStructuralKey) {
+                this.lastStructuralKey = key;
+                this.scene = buildScene(civ, this.renderer.width, this.renderer.height);
+                this.tracker.sync(this.scene.structures, time);
+                this.sceneRebuilds++;
+                this.input.lastStaticScroll = Number.NaN;
+            }
+            if (!this.scene)
+                return;
+            this.input.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - this.renderer.width, this.input.scroll));
+            if (this.input.scroll !== this.input.lastStaticScroll) {
+                this.input.lastStaticScroll = this.input.scroll;
+                this.renderer.drawStatic(this.scene, this.input.scroll);
+            }
+            this.tracker.prune(time);
+            this.renderer.drawDynamic(time, this.scene, civ, this.input.scroll, this.tracker, this.engine);
+        };
+        this.renderer = new WorldRenderer(host);
+        this.input = new WorldInput(this.renderer.staticCanvas, () => this.renderer.width);
+        this.loop(0);
+    }
+    nudge(direction) { this.input.nudge(direction); }
+    stats() { return { sceneRebuilds: this.sceneRebuilds, staticRedraws: this.renderer.staticRedraws }; }
+    destroy() {
+        cancelAnimationFrame(this.raf);
+        this.tracker.reset();
+        this.input.destroy();
+        this.renderer.destroy();
+    }
 }
 export function startWorldRenderer(engine, host) {
     let world = null;

@@ -32,8 +32,8 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /structuralWorldKey/);
   // Cached scenery lives on the static canvas and is redrawn only on a structural key change.
-  assert.match(world, /private staticCanvas/);
-  assert.match(world, /private dynamicCanvas/);
+  assert.match(world, /readonly staticCanvas/);
+  assert.match(world, /readonly dynamicCanvas/);
   assert.match(world, /drawSkyContent/);
   assert.match(world, /drawTerrainContent/);
   assert.match(world, /drawSettlementContent/);
@@ -62,7 +62,7 @@ test('reduced-motion mode freezes ambient movement and uses a static decision si
 test('renderer re-measures its host every frame so a hidden host recovers when shown', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /private loop[\s\S]{0,400}getBoundingClientRect\(\)/);
-  assert.match(world, /rect\.width !== this\.width \|\| rect\.height !== this\.height/);
+  assert.match(world, /rect\.width !== this\.renderer\.width \|\| rect\.height !== this\.renderer\.height/);
 });
 
 test('renderer tears down its canvases and timing state when the civilization ends', async () => {
@@ -74,11 +74,11 @@ test('renderer tears down its canvases and timing state when the civilization en
 
 test('Canvas fallback keeps cached scenery separate from reactive effects', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /private staticCanvas:\s*HTMLCanvasElement/);
-  assert.match(world, /private dynamicCanvas:\s*HTMLCanvasElement/);
-  assert.match(world, /private drawStatic/);
-  assert.match(world, /private drawDynamic/);
-  assert.match(world, /structuralWorldKey\(civ,\s*this\.width\)/);
+  assert.match(world, /readonly staticCanvas:\s*HTMLCanvasElement/);
+  assert.match(world, /readonly dynamicCanvas:\s*HTMLCanvasElement/);
+  assert.match(world, /drawStatic/);
+  assert.match(world, /drawDynamic/);
+  assert.match(world, /structuralWorldKey\(civ,\s*this\.renderer\.width\)/);
   assert.match(world, /fallback-dynamic/);
 });
 
