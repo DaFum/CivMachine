@@ -51,7 +51,7 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   assert.match(world, /drawSettlementContent/);
   // Atmosphere and impulses are redrawn every throttled frame instead.
   assert.match(world, /drawDynamicContent/);
-  assert.match(world, /drawDecisionImpulse/);
+  assert.match(world, /drawConsequenceImpact/);
   assert.match(world, /DYNAMIC_FRAME_MS\s*=\s*33/);
   assert.match(world, /prefers-reduced-motion/);
   assert.match(world, /worldImpulse/);
@@ -61,7 +61,7 @@ test('dynamic world state is sampled independently from cached structural scener
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   // The per-frame sample carries only the stat-driven counts; structural geometry is reused from the
   // cached scene, so a frame must not rebuild settlement, building or agent budgets.
-  assert.match(world, /const dynamicSnapshot\s*=\s*\{\s*\.\.\.scene\.snapshot,\s*\.\.\.liveWorldSample\(civ,\s*scene\.snapshot\.stage\)\s*\}/);
+  assert.match(world, /const dynamicSnapshot\s*=\s*applyQualityToLiveSample\(\{\s*\.\.\.scene\.snapshot,\s*\.\.\.liveWorldSample\(civ,\s*scene\.snapshot\.stage\)\s*\},\s*tier\)/);
   assert.match(world, /const dynamicPresentation\s*=\s*worldPresentation\(civ\)/);
   assert.match(world, /drawDynamicContent\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
   assert.doesNotMatch(world, /worldSnapshot\(civ,\s*this\.width\)/, 'the dynamic layer must not rebuild the structural snapshot per frame');
@@ -70,8 +70,13 @@ test('dynamic world state is sampled independently from cached structural scener
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /const animationTime\s*=\s*reducedMotion\s*\?\s*0\s*:\s*time/);
-  assert.match(world, /drawPathMotif\([^;]+animationTime/);
-  assert.match(world, /function drawDecisionImpulse[\s\S]{0,700}if \(reducedMotion\)/);
+  assert.match(world, /drawPathAmbience\([^;]+animationTime/);
+  // The decision impact moved into its own module, so reduced motion is now a parameter world.ts
+  // forwards rather than a branch it owns.
+  assert.match(world, /drawConsequenceImpact\([^;]+reducedMotion\)/);
+  const impact = await readFile(new URL('../src/render/consequence-presentation.ts', import.meta.url), 'utf8');
+  assert.match(impact, /staticOnly: reducedMotion/);
+  assert.match(impact, /impact\.staticOnly \? 0 :/);
 });
 
 test('renderer re-measures its host every frame so a hidden host recovers when shown', async () => {

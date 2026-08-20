@@ -1,3 +1,5 @@
+import { buildDecisionConsequence } from './decision-consequences.js';
+import { civilizationDramaPhase } from './drama.js';
 import { CivilizationPaths } from './paths.js';
 const METRICS = [
     { key: 'stability', label: 'Stability' },
@@ -35,6 +37,11 @@ export function captureDecisionSnapshot(civ) {
         institutions: [...civ.institutions],
         flags: [...civ.flags],
         pathFlags: [...civ.pathState.choiceFlags],
+        dramaPhaseId: civilizationDramaPhase(civ).id,
+        era: civ.era,
+        dominantPath: civ.pathState.dominantPath,
+        endgameStates: [...(civ.pathState.endgameStates ?? [])],
+        entropyBand: Math.min(4, Math.floor(Math.max(0, Math.min(100, civ.tactical.entropy)) / 25)),
     };
 }
 export function buildDecisionFeedback(sequence, event, choice, before, after) {
@@ -61,6 +68,7 @@ export function buildDecisionFeedback(sequence, event, choice, before, after) {
     ];
     if (additionsList.some(item => item.kind === 'trait' || item.kind === 'institution'))
         positive = true;
+    const consequence = buildDecisionConsequence(event.id, before, after, additionsList);
     return {
         sequence,
         eventId: event.id,
@@ -70,6 +78,7 @@ export function buildDecisionFeedback(sequence, event, choice, before, after) {
         metrics,
         affinities,
         additions: additionsList,
+        consequence,
     };
 }
 //# sourceMappingURL=decision-feedback.js.map

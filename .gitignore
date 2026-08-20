@@ -38,3 +38,7 @@ next-env.d.ts
 
 # typescript build info
 *.tsbuildinfo
+
+# agent context (personal, not shared)
+CLAUDE.local.md
+AGENTS.local.md

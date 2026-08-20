@@ -5,7 +5,7 @@ import { GameEngine } from '../dist/game/engine.js';
 // Drives the renderer end to end against recording stubs, so a change that stops the world from
 // actually drawing creatures, banners or structures fails here rather than in a browser.
 
-const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame'];
+const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio'];
 
 function developedCivilization(seed = 404) {
   const civ = GameEngine.createCivilizationForTest(seed);
@@ -195,7 +195,7 @@ test('panning repaints the cached static layer without rebuilding the scene', as
     const controller = startWorldRenderer(engine, host);
     const frame = time => globalThis.__frame(time);
 
-    const first = { sceneRebuilds: 1, staticRedraws: 1, sceneryFullRedraws: 1, sceneryStripRedraws: 0 };
+    const first = { sceneRebuilds: 1, staticRedraws: 1, sceneryFullRedraws: 1, sceneryStripRedraws: 0, qualityTier: 0 };
     frame(100);
     assert.deepEqual(controller.stats(), first, 'the first real frame builds and paints once');
 
@@ -280,13 +280,14 @@ test('dragging repaints only the strip the scroll exposed', async () => {
 
 // Replays a drag script against a fresh renderer and returns the settlement-layer primitives of the
 // last frame, positioned in screen coordinates.
-async function sceneryAfterDrags(seed, drags, tag) {
+async function sceneryAfterDrags(seed, drags, tag, { makeCiv = developedCivilization, viewport = { width: 900, height: 520 } } = {}) {
   const calls = [];
   const listeners = new Map();
   let frame = null;
   await withStubbedDom(() => {
     const contexts = [trackingContext([]), trackingContext(calls), trackingContext([])];
     let created = 0;
+    if (viewport.dpr !== undefined) globalThis.devicePixelRatio = viewport.dpr;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
@@ -296,8 +297,8 @@ async function sceneryAfterDrags(seed, drags, tag) {
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
   }, async () => {
-    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
-    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: viewport.width, height: viewport.height }) };
+    const engine = { state: { phase: 'civilization', civilization: makeCiv(seed) }, worldImpulse: null, onChange: () => () => {} };
     const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
     const controller = startWorldRenderer(engine, host);
     frame(100);
@@ -370,4 +371,374 @@ test('live stats control dynamic rendering without rebuilding the static scene',
 
     controller.destroy();
   });
+});
+
+// Renders one frame for a civilization and returns the three positioned primitive buckets.
+async function bucketsForCivilization(civ, tag) {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    controller.destroy();
+  });
+  return { staticCalls, sceneryCalls, dynamicCalls };
+}
+
+test('persistent marks and scars paint on the cached scenery layer, never on the static layer', async () => {
+  const bare = await bucketsForCivilization(developedCivilization(616), 'memory-bare');
+  const remembered = developedCivilization(616);
+  remembered.visualMemory = {
+    version: 1, sequence: 4,
+    marks: [{ domain:'social', motif:'unrest', strength:3, sourceEventId:'damage', createdAtSequence:1, anchor01:.08, repairable:true }],
+    scars: [{ domain:'reality', motif:'breach', strength:3, sourceEventId:'crisis', createdAtSequence:2, anchor01:.05, evolution:2 }],
+  };
+  const withMemory = await bucketsForCivilization(remembered, 'memory-drawn');
+
+  assert.ok(withMemory.sceneryCalls.length > bare.sceneryCalls.length, 'saved memory must add persistent scenery geometry');
+  assert.equal(withMemory.staticCalls.length, bare.staticCalls.length, 'memory must never touch the sky/terrain layer');
+  for (const [label, calls] of [['scenery', withMemory.sceneryCalls], ['accents', withMemory.dynamicCalls]]) {
+    for (const call of calls) assert.ok(Number.isFinite(call.from) && Number.isFinite(call.to), `memory ${label}: ${call.name} produced a non-finite extent`);
+  }
+});
+
+test('a world impulse paints only on the dynamic layer and never forces a scenery redraw', async () => {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(717) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?impulse=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    const quiet = { scenery: controller.stats().sceneryFullRedraws + controller.stats().sceneryStripRedraws, rebuilds: controller.stats().sceneRebuilds };
+    sceneryCalls.length = 0; staticCalls.length = 0; dynamicCalls.length = 0;
+
+    engine.worldImpulse = {
+      sequence: 7, eventId: 'entropy_crisis_50', eventTitle: 'Desynchronization', choiceLabel: 'Contain', tone: 'negative',
+      metrics: [], affinities: [], additions: [],
+      consequence: { significance: 'turning_point', tags: ['reality_damage'], transitions: {}, signatureProfile: 'crisis:entropy_50' },
+    };
+    frame(400);
+
+    assert.ok(dynamicCalls.length > 0, 'the impact must paint on the dynamic layer');
+    assert.equal(sceneryCalls.length, 0, 'a transient impact must not repaint cached scenery');
+    assert.equal(staticCalls.length, 0, 'a transient impact must not repaint the static layers');
+    assert.equal(controller.stats().sceneryFullRedraws + controller.stats().sceneryStripRedraws, quiet.scenery);
+    assert.equal(controller.stats().sceneRebuilds, quiet.rebuilds, 'an impulse alone is not a structural change');
+
+    controller.destroy();
+  });
+});
+
+// Drives the renderer with a synthetic frame cost, so a quality tier can be reached without needing
+// a genuinely slow machine.
+async function bucketsAtQualityTier(seed, costMs, tag) {
+  const staticCalls = [], sceneryCalls = [], dynamicCalls = [];
+  let frame = null;
+  let controllerStats = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    // performance.now() is what the renderer measures its own draw cost with, so a clock that jumps
+    // by `costMs` across each draw makes the frame look exactly that expensive.
+    const realPerformance = globalThis.performance;
+    let clock = 0;
+    globalThis.performance = { now: () => { clock += costMs; return clock; } };
+    try {
+      const controller = startWorldRenderer(engine, host);
+      let time = 100;
+      // Three degradation steps, each needing 30 hot frames plus the 5 s cooldown between changes.
+      for (let step = 0; step < 3; step++) {
+        for (let i = 0; i < 31; i++) { time += 40; frame(time); }
+        time += 5200;
+        frame(time);
+      }
+      staticCalls.length = 0; sceneryCalls.length = 0; dynamicCalls.length = 0;
+      time += 40; frame(time);
+      controllerStats = controller.stats();
+      controller.destroy();
+      controllerStats.afterDestroy = controller.stats().qualityTier;
+    } finally {
+      if (realPerformance === undefined) delete globalThis.performance; else globalThis.performance = realPerformance;
+    }
+  });
+  return { staticCalls, sceneryCalls, dynamicCalls, stats: controllerStats };
+}
+
+test('a Tier-3 frame sheds cosmetics but still paints every gameplay signal', async () => {
+  const tierZero = await bucketsAtQualityTier(818, 0, 'tier0');
+  const tierThree = await bucketsAtQualityTier(818, 40, 'tier3');
+
+  assert.equal(tierZero.stats.qualityTier, 0, 'a cheap frame must never degrade');
+  assert.equal(tierThree.stats.qualityTier, 3, 'a 40 ms draw must reach the lowest tier');
+  assert.ok(tierThree.dynamicCalls.length < tierZero.dynamicCalls.length,
+    `Tier 3 drew ${tierThree.dynamicCalls.length} primitives against ${tierZero.dynamicCalls.length} at Tier 0`);
+  // Cosmetics only: the cached layers carry landmarks, marks and scars and must be untouched.
+  assert.equal(tierThree.sceneryCalls.length, tierZero.sceneryCalls.length, 'quality must not thin persistent scenery');
+  assert.ok(tierThree.dynamicCalls.length > 0, 'a degraded frame still draws the world');
+  assert.equal(tierThree.stats.afterDestroy, 0, 'teardown must return the tier to 0');
+});
+
+test('a Tier-3 frame keeps drawing the current decision impact', async () => {
+  const withImpact = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext([]), trackingContext(withImpact)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const civ = developedCivilization(819);
+    civ.visualMemory = {
+      version: 1, sequence: 3,
+      marks: [{ domain:'reality', motif:'fracture', strength:3, sourceEventId:'crisis', createdAtSequence:1, anchor01:.04, repairable:true }],
+      scars: [{ domain:'reality', motif:'breach', strength:3, sourceEventId:'crisis', createdAtSequence:2, anchor01:.04, evolution:2 }],
+    };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?tier3impact=${Date.now()}`);
+    const realPerformance = globalThis.performance;
+    let clock = 0;
+    globalThis.performance = { now: () => { clock += 40; return clock; } };
+    try {
+      const controller = startWorldRenderer(engine, host);
+      let time = 100;
+      for (let step = 0; step < 3; step++) {
+        for (let i = 0; i < 31; i++) { time += 40; frame(time); }
+        time += 5200;
+        frame(time);
+      }
+      assert.equal(controller.stats().qualityTier, 3);
+      withImpact.length = 0;
+      const quiet = (time += 40, frame(time), withImpact.length);
+      withImpact.length = 0;
+      engine.worldImpulse = {
+        sequence: 11, eventId: 'entropy_crisis_75', eventTitle: 'Observation', choiceLabel: 'Endure', tone: 'negative',
+        metrics: [], affinities: [], additions: [],
+        consequence: { significance: 'turning_point', tags: ['reality_damage','surveillance'], transitions: {}, signatureProfile: 'crisis:entropy_75' },
+      };
+      time += 40; frame(time);
+      assert.ok(withImpact.length > quiet, `Tier 3 dropped the decision impact: ${withImpact.length} vs ${quiet}`);
+      controller.destroy();
+    } finally {
+      if (realPerformance === undefined) delete globalThis.performance; else globalThis.performance = realPerformance;
+    }
+  });
+});
+
+test('a dominant identity and its institutions draw distinct scenery, not just a different colour', async () => {
+  function identityCiv(pathId, consolidation) {
+    const civ = developedCivilization(919);
+    civ.pathState.affinity = { ...civ.pathState.affinity, machine_faith: 0, void_communion: 0 };
+    civ.pathState.affinity[pathId] = 9;
+    civ.pathState.dominantPath = pathId;
+    civ.pathState.completedEvents.push(consolidation);
+    civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
+    return civ;
+  }
+  const plain = developedCivilization(919);
+  plain.pathState.dominantPath = '';
+  plain.pathState.affinity = Object.fromEntries(Object.keys(plain.pathState.affinity).map(id => [id, 0]));
+
+  const bare = await bucketsForCivilization(plain, 'identity-bare');
+  const faith = await bucketsForCivilization(identityCiv('machine_faith', 'synod_of_the_second_engine'), 'identity-faith');
+  const void_ = await bucketsForCivilization(identityCiv('void_communion', 'embassy_at_the_edge'), 'identity-void');
+
+  assert.ok(faith.sceneryCalls.length > bare.sceneryCalls.length, 'a capital plus three institutions must add scenery geometry');
+  // Geometry, not palette: the two capitals must differ in the primitives they emit, which a
+  // trackingContext records without recording colour at all.
+  const shape = calls => calls.map(call => `${call.name}:${Math.round(call.to - call.from)}`).join(',');
+  assert.notEqual(shape(faith.sceneryCalls), shape(void_.sceneryCalls), 'two dominant paths must differ in silhouette, not only in accent colour');
+  assert.equal(faith.staticCalls.length, bare.staticCalls.length, 'identity must not touch the sky/terrain layer');
+});
+
+test('a Drama Phase reached by surviving draws a bounded cue and writes no gameplay state', async () => {
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext([]), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    // Emergence: nothing but a little Development, no era, no institutions, no choices.
+    const civ = GameEngine.createCivilizationForTest(1010);
+    civ.development = 40;
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { civilizationDramaPhase } = await import('../dist/game/drama.js');
+    const { startWorldRenderer } = await import(`../dist/render/world.js?phase=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    assert.equal(civilizationDramaPhase(civ).name, 'emergence');
+    dynamicCalls.length = 0;
+    frame(200);
+    const baselineDynamicCalls = dynamicCalls.slice();
+
+    // Passive Development only -- no decision, no tactical action, no engine call at all.
+    civ.development = 150;
+    assert.equal(civilizationDramaPhase(civ).name, 'expansion');
+    dynamicCalls.length = 0;
+    frame(300);
+
+    assert.equal(engine.state.civilization.visualMemory, undefined, 'renderer-local phase feedback must not write gameplay state');
+    assert.ok(dynamicCalls.length > baselineDynamicCalls.length, 'phase transition should add a bounded dynamic cue');
+    // Bounded: a transition cue is a handful of lines and one ring, not a new world.
+    const duringTransition = dynamicCalls.length;
+    assert.ok(duringTransition - baselineDynamicCalls.length < 400,
+      `the cue added ${duringTransition - baselineDynamicCalls.length} primitives`);
+
+    // The growth above could come from the larger stage alone, so let the 1500 ms cue expire and
+    // draw the same world again: what disappears is the cue, and only the cue.
+    dynamicCalls.length = 0;
+    frame(2200);
+    // Only directionality is asserted here: ambient agents and particles also differ between the two
+    // frames, so the exact cue size is pinned by the unit test in presentation.test.mjs instead.
+    assert.ok(dynamicCalls.length < duringTransition, 'the cue must be transient, not a permanent overlay');
+
+    controller.destroy();
+  });
+});
+
+// The reference desktop case: a 1440x760 viewport at DPR 2 carrying the full memory budget -- six
+// marks, three scars, an entrenched capital and all three institution landmarks. Both the pinned
+// ceiling and the strip/full equivalence render this same fixture, so the equivalence actually
+// covers the memory and identity geometry rather than a bare civilization.
+const REFERENCE_VIEWPORT = { width: 1440, height: 760, dpr: 2 };
+
+function referenceCivilization(seed) {
+  const civ = developedCivilization(seed);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
+  civ.visualMemory = {
+    version: 1, sequence: 12,
+    marks: [
+      { domain:'built_environment', motif:'advanced_district', strength:2, sourceEventId:'a', createdAtSequence:1, anchor01:.10, repairable:false },
+      { domain:'identity', motif:'engine_shrine', strength:3, sourceEventId:'b', createdAtSequence:2, anchor01:.21, repairable:false },
+      { domain:'control', motif:'surveillance', strength:2, sourceEventId:'c', createdAtSequence:3, anchor01:.38, repairable:true },
+      { domain:'social', motif:'unrest', strength:3, sourceEventId:'d', createdAtSequence:4, anchor01:.51, repairable:true },
+      { domain:'ecology', motif:'blight', strength:2, sourceEventId:'e', createdAtSequence:5, anchor01:.71, repairable:true },
+      { domain:'reality', motif:'fracture', strength:3, sourceEventId:'f', createdAtSequence:6, anchor01:.88, repairable:true },
+    ],
+    scars: [
+      { domain:'reality', motif:'breach', strength:3, sourceEventId:'g', createdAtSequence:7, anchor01:.10, evolution:3 },
+      { domain:'civilization', motif:'futures_ruins', strength:3, sourceEventId:'h', createdAtSequence:8, anchor01:.51, evolution:1 },
+      { domain:'identity', motif:'replacement_monument', strength:3, sourceEventId:'i', createdAtSequence:9, anchor01:.81, evolution:2 },
+    ],
+  };
+  return civ;
+}
+
+// A 1440x760 viewport at DPR 2 -- the reference desktop case -- carrying the full memory budget: six
+// marks, three scars, an entrenched capital and all three institution landmarks. This is the ceiling
+// the whole cache design rests on, so it is pinned as a number rather than only as an equivalence.
+async function referenceStripRedraw(nudgePx) {
+  const calls = [];
+  const listeners = new Map();
+  let frame = null;
+  let full = 0;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext(calls), trackingContext([])];
+    let created = 0;
+    globalThis.devicePixelRatio = REFERENCE_VIEWPORT.dpr;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
+        addEventListener: (name, handler) => { if (context === contexts[1]) listeners.set(name, handler); },
+        removeEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: REFERENCE_VIEWPORT.width, height: REFERENCE_VIEWPORT.height }) };
+    const civ = referenceCivilization(1212);
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?ceiling=${nudgePx}-${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    full = calls.length;
+    calls.length = 0;
+    listeners.get('pointerdown')({ clientX: 700, pointerId: 1 });
+    listeners.get('pointermove')({ clientX: 700 - nudgePx, pointerId: 1 });
+    listeners.get('pointerup')({});
+    frame(200);
+    controller.destroy();
+  });
+  return { strip: calls, full };
+}
+
+test('memory and identity scenery keep the reference strip redraw under its ceiling', async () => {
+  const { strip, full } = await referenceStripRedraw(12);
+  assert.ok(full > 400, `the reference full paint drew only ${full} primitives`);
+  const stripPrimitiveCount = strip.length;
+  assert.ok(stripPrimitiveCount <= 320, `memory/identity scenery regressed strip redraw to ${stripPrimitiveCount} primitives`);
+
+  // The equivalence that makes the narrow strip legitimate in the first place, re-checked with the
+  // full memory budget in place: reaching the same scroll by a drag too wide to reuse anything gives
+  // the reference painting of the same slice.
+  // Same fixture and same viewport, but deliberately at DPR 1: `trackingContext` records the
+  // transform's horizontal component, which the renderer sets in device pixels, so `from`/`to` only
+  // share units with a primitive's CSS-pixel x at DPR 1. The pinned ceiling above covers DPR 2,
+  // where it counts primitives instead of comparing their positions.
+  // Same fixture and viewport as the ceiling, but deliberately at DPR 1: `trackingContext` records
+  // the transform's horizontal component, which the renderer sets in device pixels, so `from`/`to`
+  // only share units with a primitive's CSS-pixel x at DPR 1. The ceiling above covers DPR 2, where
+  // it counts primitives rather than comparing their positions.
+  const viewport = { width: REFERENCE_VIEWPORT.width, height: REFERENCE_VIEWPORT.height };
+  const fixture = { makeCiv: referenceCivilization, viewport };
+  // A 120 px nudge landing on the settlement that carries the mid-world mark and scar, rather than a
+  // 12 px sliver in the gap between two settlements -- memory snaps to settlement centres, so a
+  // window in a gap would compare an empty strip and pass while covering none of this geometry.
+  const NUDGE = 120, SCROLL = 1572;
+  const viaStrip = await sceneryAfterDrags(1212, [SCROLL - NUDGE, NUDGE], 'ceiling-strip', fixture);
+  const viaFull = await sceneryAfterDrags(1212, [SCROLL], 'ceiling-reference', fixture);
+  const edge = viewport.width, lip = edge - NUDGE;
+  const exposed = calls => calls
+    .filter(call => call.to >= lip && call.from <= edge)
+    .map(call => ({ name: call.name, from: Math.max(lip, call.from), to: Math.min(edge, call.to) }));
+
+  // The comparison is only worth making if the fixture's memory and identity geometry actually falls
+  // inside the window. Pin that against a bare civilization, so a future layout change cannot quietly
+  // move the marks out and leave this test comparing plain settlements.
+  const bare = await sceneryAfterDrags(1212, [SCROLL], 'ceiling-bare', { viewport });
+  assert.ok(exposed(viaFull).length > exposed(bare).length,
+    `the window must contain memory/identity primitives: ${exposed(viaFull).length} with memory vs ${exposed(bare).length} without`);
+  assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the strip');
+  assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
 });

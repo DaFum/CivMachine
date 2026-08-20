@@ -32,6 +32,11 @@ import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, st
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
+import { applyWorldMemory, emptyWorldMemory, sanitizeWorldMemory } from '../dist/game/world-memory.js';
+import { CONSEQUENCE_PROFILES, consequenceProfileFor } from '../dist/game/consequence-profiles.js';
+import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
+import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
+import { developmentStage } from '../dist/render/world-model.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
@@ -2292,4 +2297,213 @@ test('the engine integrates exactly the rates stat-drift states', () => {
   assert.ok(Math.abs((civ.stats.awareness - before.stats.awareness) - rates.awarenessGain * dt) < 1e-9, 'awareness');
   assert.ok(Math.abs((civ.stats.attention - before.stats.attention) - rates.attentionGain * dt) < 1e-9, 'attention');
   assert.ok(Math.abs((before.stats.sanity - civ.stats.sanity) - rates.sanityLoss * dt) < 1e-9, 'sanity');
+});
+
+test('Civilization Drama score preserves the v1.9.1 stage expression', () => {
+  const civ = GameEngine.createCivilizationForTest(11001);
+  civ.development = 123;
+  civ.era = 2;
+  civ.institutions.push('Consensus Office', 'Ministry Of Sanity');
+  civ.eventChoices = 7;
+  assert.equal(civilizationDramaScore(civ), 123 + 2 * 120 + 2 * 30 + 7 * 6);
+});
+
+test('Civilization Drama phase uses the exact legacy stage boundaries', () => {
+  const civ = GameEngine.createCivilizationForTest(11002);
+  const cases = [
+    [69, 0, 'emergence'], [70, 1, 'expansion'],
+    [179, 1, 'expansion'], [180, 2, 'division'],
+    [339, 2, 'division'], [340, 3, 'transformation'],
+    [559, 3, 'transformation'], [560, 4, 'crisis'],
+  ];
+  for (const [score, id, name] of cases) {
+    civ.development = score;
+    civ.era = 0;
+    civ.institutions.length = 0;
+    civ.eventChoices = 0;
+    assert.equal(civilizationDramaPhase(civ).id, id);
+    assert.equal(civilizationDramaPhase(civ).name, name);
+    assert.equal(developmentStage(civ), id, `render stage drifted at score ${score}`);
+  }
+});
+
+test('the signature catalog contains exactly the required 28 profiles', () => {
+  const ids = CONSEQUENCE_PROFILES.map(profile => profile.eventId);
+  const required = [
+    'synod_of_the_second_engine','unanimous_afternoon','sovereign_hour','department_of_permitted_physics',
+    'pollinators_of_the_state','blackout_doctrine','ministry_of_final_forms','immortal_electorate',
+    'embassy_at_the_edge','recursion_registry','entropy_crisis_25','entropy_crisis_50','entropy_crisis_75',
+    'moon_resigns','ministry_of_sanity','planetary_mind',
+    'apotheosis_ledger_of_the_cultivator','apotheosis_the_yield_census','apotheosis_observatory_of_the_hand',
+    'apotheosis_terms_of_cultivation','apotheosis_the_counteroffer','apotheosis_arbitration_of_scales',
+    'apotheosis_currency_of_unhappened','apotheosis_debt_to_the_unborn','apotheosis_futures_market_in_ruins',
+    'apotheosis_maintenance_window','apotheosis_the_replacement_part','apotheosis_recursive_audit',
+  ];
+  assert.equal(CONSEQUENCE_PROFILES.length, 28);
+  assert.deepEqual([...new Set(ids)].sort(), [...required].sort());
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
+  assert.equal(consequenceProfileFor('moon_resigns', []) ?? null, null);
+});
+
+test('generic consequence thresholds are deterministic, deduplicated, and ordered by precedence', () => {
+  const before = {
+    metrics: { stability: 80, stabilityMax: 100, awareness: 10, sanity: 80, attention: 10, years: 0, development: 100, eventTimer: 5, entropy: 20, controlCapacity: 3 },
+    affinities: { machine_faith: 0 }, traits: [], institutions: [], flags: [], pathFlags: [],
+    dramaPhaseId: 1, era: 0, dominantPath: '', endgameStates: [], entropyBand: 0,
+  };
+  const after = structuredClone(before);
+  after.metrics.development = 120;
+  after.metrics.stability = 70;
+  after.metrics.awareness = 20;
+  after.metrics.entropy = 25;
+  after.affinities.machine_faith = 3;
+  after.dramaPhaseId = 2;
+  after.entropyBand = 1;
+  const result = buildDecisionConsequence('neutral_event', before, after, []);
+  assert.equal(result.significance, 'turning_point');
+  assert.deepEqual(result.tags, ['urban_growth','technological_growth','civil_unrest','reality_damage','surveillance','path_shift']);
+  assert.deepEqual(result.transitions.dramaPhase, { from: 1, to: 2 });
+  assert.deepEqual(result.transitions.entropyBand, { from: 0, to: 1 });
+});
+
+test('major and turning-point significance rules cover raw deltas and structural transitions', () => {
+  const base = {
+    metrics: { stability: 80, stabilityMax: 100, awareness: 10, sanity: 80, attention: 10, years: 0, development: 100, eventTimer: 5, entropy: 20, controlCapacity: 3 },
+    affinities: { machine_faith: 0 }, traits: [], institutions: [], flags: [], pathFlags: [],
+    dramaPhaseId: 1, era: 0, dominantPath: '', endgameStates: [], entropyBand: 0,
+  };
+  const major = structuredClone(base); major.metrics.stability = 72;
+  assert.equal(buildDecisionConsequence('neutral_event', base, major, []).significance, 'major');
+  const dominance = structuredClone(base); dominance.dominantPath = 'machine_faith';
+  assert.equal(buildDecisionConsequence('neutral_event', base, dominance, []).significance, 'turning_point');
+  const endgame = structuredClone(base); endgame.endgameStates = ['endgame_machine_faith'];
+  assert.equal(buildDecisionConsequence('neutral_event', base, endgame, []).significance, 'turning_point');
+  for (const id of ['entropy_crisis_25','entropy_crisis_50','entropy_crisis_75']) {
+    assert.equal(buildDecisionConsequence(id, base, base, []).significance, 'turning_point');
+  }
+});
+
+function feedbackForMemory({ sequence = 1, eventId = 'neutral', significance = 'major', tags = ['urban_growth'], signatureProfile = '' } = {}) {
+  return {
+    sequence, eventId, eventTitle: eventId, choiceLabel: 'Resolve', tone: 'mixed', metrics: [], affinities: [], additions: [],
+    consequence: { significance, tags, transitions: {}, signatureProfile },
+  };
+}
+
+test('old or malformed visual memory sanitizes without touching the civilization', () => {
+  assert.deepEqual(sanitizeWorldMemory(undefined), emptyWorldMemory());
+  const malformed = { version: 99, sequence: -4, marks: 'bad', scars: [{ domain: 'reality', motif: '', strength: 99 }] };
+  assert.deepEqual(sanitizeWorldMemory(malformed), emptyWorldMemory());
+  const civ = GameEngine.createCivilizationForTest(12001);
+  civ.stats.stability = 73;
+  const before = structuredClone(civ);
+  civ.visualMemory = sanitizeWorldMemory({ version: 1, sequence: 3, marks: [{ domain:'social',motif:'unrest',strength:2,sourceEventId:'x',createdAtSequence:2,anchor01:1.7,repairable:true }], scars: [] });
+  assert.equal(civ.stats.stability, before.stats.stability);
+  assert.equal(civ.visualMemory.marks[0].anchor01, 1);
+});
+
+test('world memory coalesces six mark domains and three scar domains deterministically', () => {
+  const seed = 12002;
+  let memory = emptyWorldMemory();
+  const cases = [
+    ['urban_growth','built_environment'], ['religious_shift','identity'], ['surveillance','control'],
+    ['civil_unrest','social'], ['ecological_damage','ecology'], ['reality_damage','reality'],
+  ];
+  for (const [tag, domain] of cases) {
+    memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:`event:${tag}`, tags:[tag] }));
+    assert.ok(memory.marks.some(mark => mark.domain === domain));
+  }
+  assert.equal(memory.marks.length, 6);
+  const anchor = memory.marks.find(mark => mark.domain === 'built_environment').anchor01;
+  memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:'event:growth-2', tags:['technological_growth'] }));
+  assert.equal(memory.marks.length, 6);
+  assert.equal(memory.marks.find(mark => mark.domain === 'built_environment').anchor01, anchor, 'same-domain transformations preserve their anchor');
+
+  for (const [eventId, profile] of [
+    ['entropy_crisis_25','crisis:entropy_25'],
+    ['apotheosis_debt_to_the_unborn','apotheosis:debt'],
+    ['apotheosis_the_replacement_part','apotheosis:replacement'],
+  ]) memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId, significance:'turning_point', tags:['reality_damage'], signatureProfile:profile }));
+  assert.equal(memory.scars.length, 3);
+  assert.equal(new Set(memory.scars.map(scar => scar.domain)).size, 3);
+});
+
+test('same-domain scars evolve and Stabilize repairs at most one non-scar mark', () => {
+  const seed = 12003;
+  let memory = emptyWorldMemory();
+  memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:'entropy_crisis_25', significance:'turning_point', tags:['reality_damage'], signatureProfile:'crisis:entropy_25' }));
+  const firstScar = structuredClone(memory.scars[0]);
+  memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:'entropy_crisis_50', significance:'turning_point', tags:['reality_damage'], signatureProfile:'crisis:entropy_50' }));
+  assert.equal(memory.scars.length, 1);
+  assert.equal(memory.scars[0].domain, 'reality');
+  assert.equal(memory.scars[0].anchor01, firstScar.anchor01);
+  assert.equal(memory.scars[0].evolution, firstScar.evolution + 1);
+
+  memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:'damage', tags:['civil_unrest'] }));
+  const beforeMarks = memory.marks.length;
+  const scarsBefore = structuredClone(memory.scars);
+  memory = applyWorldMemory(seed, memory, feedbackForMemory({ eventId:'tactical:stabilize', tags:['stabilization','containment'] }), { repair: true });
+  assert.ok(memory.marks.length >= beforeMarks - 1 && memory.marks.length <= beforeMarks);
+  assert.deepEqual(memory.scars, scarsBefore, 'Stabilize must never erase or weaken scars');
+});
+
+test('visual memory cannot change harvest, depth, or progression calculations', () => {
+  const civ = GameEngine.createCivilizationForTest(12004);
+  civ.development = 420; civ.era = 2; civ.eventChoices = 8; civ.stats.stability = 64; civ.tactical.entropy = 43;
+  const beforeHarvest = calculateHarvest(civ, false, GameEngine.baseBonuses());
+  const beforeDepth = cultivationDepth(civ);
+  civ.visualMemory = {
+    version:1, sequence:99,
+    marks:[{domain:'reality',motif:'fracture',strength:3,sourceEventId:'x',createdAtSequence:1,anchor01:.5,repairable:true}],
+    scars:[{domain:'reality',motif:'breach',strength:3,sourceEventId:'y',createdAtSequence:2,anchor01:.7,evolution:4}],
+  };
+  assert.deepEqual(calculateHarvest(civ, false, GameEngine.baseBonuses()), beforeHarvest);
+  assert.equal(cultivationDepth(civ), beforeDepth);
+});
+
+test('completed decisions advance visual-memory sequence while pressure-only feedback does not', () => {
+  const engine = freshEngine();
+  engine.startCivilization(13001);
+  const civ = engine.state.civilization;
+  assert.equal(civ.visualMemory, undefined);
+  engine.forceEvent('synthetic_saint');
+  engine.chooseEvent(0);
+  assert.equal(civ.visualMemory.sequence, 1);
+  const sequenceAfterChoice = civ.visualMemory.sequence;
+  civ.tactical.entropy = 24.9;
+  engine.tick(1);
+  // Prove the threshold actually fired before reading anything into the sequence standing still: a
+  // tick that queued no crisis would leave the sequence untouched for the wrong reason and the
+  // assertion below would pass while testing nothing.
+  assert.equal(engine.worldImpulse?.eventId, 'entropy_crisis_25', 'the tick did not publish pressure feedback');
+  assert.ok(civ.scheduledEvents.includes('entropy_crisis_25'), 'the threshold did not queue its crisis');
+  assert.equal(civ.visualMemory.sequence, sequenceAfterChoice, 'pressure threshold feedback is not a completed player decision');
+});
+
+test('reserve and tactical actions use the same visual-memory reducer, and Stabilize repairs one mark', () => {
+  const engine = freshEngine();
+  engine.startCivilization(13002);
+  const civ = engine.state.civilization;
+  civ.visualMemory = {
+    version:1, sequence:4,
+    marks:[{domain:'social',motif:'unrest',strength:2,sourceEventId:'damage',createdAtSequence:3,anchor01:.4,repairable:true}],
+    scars:[{domain:'reality',motif:'breach',strength:2,sourceEventId:'crisis',createdAtSequence:2,anchor01:.6,evolution:1}],
+  };
+  civ.stats.stability = 60; civ.stats.attention = 30; civ.tactical.entropy = 30; civ.tactical.controlCapacity = 3;
+  const scars = structuredClone(civ.visualMemory.scars);
+  assert.equal(engine.useTacticalAction('stabilize'), true);
+  assert.equal(civ.visualMemory.sequence, 5);
+  assert.equal(civ.visualMemory.marks[0].strength, 1);
+  assert.deepEqual(civ.visualMemory.scars, scars);
+});
+
+test('an old v4 save without visualMemory remains loadable and gains memory only after the next decision', () => {
+  const seedEngine = freshEngine(); seedEngine.startCivilization(13003);
+  const oldState = structuredClone(seedEngine.state); delete oldState.civilization.visualMemory;
+  const storage = { value: JSON.stringify(oldState), getItem(){ return this.value; }, setItem(_k,v){ this.value=v; }, removeItem(){ this.value=''; } };
+  const engine = new GameEngine({ storage, autosave: true });
+  assert.equal(engine.state.civilization.visualMemory, undefined);
+  engine.forceEvent('synthetic_saint'); engine.chooseEvent(0);
+  assert.equal(engine.state.civilization.visualMemory.version, 1);
+  assert.equal(engine.state.saveVersion, oldState.saveVersion);
 });

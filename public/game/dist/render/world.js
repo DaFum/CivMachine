@@ -1,6 +1,8 @@
-import { CivilizationPaths } from '../game/paths.js';
-import { liveWorldSample, worldSnapshot } from './world-model.js';
-import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from './world-presentation.js';
+import { civilizationDramaPhase } from '../game/drama.js';
+import { applyQualityToLiveSample, liveWorldSample, worldSnapshot } from './world-model.js';
+import { qualityFactors, RenderQualityController } from './quality.js';
+import { structuralWorldKey, worldPresentation } from './world-presentation.js';
+import { drawConsequenceImpact, drawPhaseTransitionImpact } from './consequence-presentation.js';
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface } from './draw-surface.js';
 import { settlementLayout } from './settlements.js';
@@ -9,6 +11,8 @@ import { casteFor, drawCreature, speciesProfile } from './species.js';
 import { agentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
 import { factionRoster, UNALIGNED_COLOR } from './factions.js';
+import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
+import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identity.js';
 const DYNAMIC_FRAME_MS = 33;
 const devicePixelRatio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
 const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -170,117 +174,12 @@ function drawSettlementContent(surface, scene, height, view) {
         surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - 5 - hash01(civ.seed + i * 7) * 12, x + 96, bankTop + 2);
     }
     surface.lineStyle(1, presentation.accent, .12).line(view.from, bankTop, view.to, bankTop);
-}
-function drawPathMotif(surface, civ, worldWidth, height, ground, time, accent, view) {
-    const path = CivilizationPaths.ensure(civ).dominantPath;
-    if (!path)
-        return;
-    // Every motif scatters a handful of marks across the whole world. Each is small, so one slack
-    // covers them all, and the guard keeps the dominant path from being the one thing still painted
-    // world-wide on the layer that repaints every frame.
-    const shows = (x) => x >= view.from - MOTIF_SLACK && x <= view.to + MOTIF_SLACK;
-    switch (path) {
-        case 'machine_faith':
-            for (let i = 0; i < 8; i++) {
-                const x = worldWidth * (.08 + i * .12);
-                if (!shows(x))
-                    continue;
-                surface.lineStyle(2, accent, .32).line(x, ground - 35, x, ground - 90 - (i % 3) * 18);
-                surface.fillStyle(accent, .42).fillCircle(x, ground - 95 - (i % 3) * 18, 4);
-            }
-            break;
-        case 'collective_mind': {
-            const points = Array.from({ length: 12 }, (_, i) => ({ x: worldWidth * (.05 + hash01(civ.seed + i) * .9), y: ground - 40 - hash01(i * 17) * 100 }));
-            surface.lineStyle(1, accent, .22);
-            // A segment survives if either end shows, or the chain would break at the band edge.
-            for (let i = 1; i < points.length; i++) {
-                const a = points[i - 1], b = points[i];
-                if (!shows(a.x) && !shows(b.x))
-                    continue;
-                surface.line(a.x, a.y, b.x, b.y);
-            }
-            for (const point of points)
-                if (shows(point.x))
-                    surface.fillStyle(accent, .5).fillCircle(point.x, point.y, 3);
-            break;
-        }
-        case 'temporal_dominion':
-            for (let i = 0; i < 7; i++) {
-                const x = worldWidth * (.1 + i * .13);
-                const y = height * .22 + (i % 2) * 30;
-                if (!shows(x))
-                    continue;
-                surface.lineStyle(2, accent, .3).strokeCircle(x, y, 12 + i * 2);
-                surface.lineStyle(1, accent, .45).line(x, y, x + Math.cos(time * .001 + i) * 10, y + Math.sin(time * .001 + i) * 10);
-            }
-            break;
-        case 'reality_engineering':
-            for (let i = 0; i < 9; i++) {
-                const x = worldWidth * (.08 + i * .105);
-                const y = ground - 50 - (i % 3) * 35;
-                if (!shows(x))
-                    continue;
-                surface.lineStyle(2, accent, .3).line(x - 12, y + 12, x, y - 12).line(x, y - 12, x + 12, y + 12).line(x + 12, y + 12, x - 12, y + 12);
-            }
-            break;
-        case 'biological_transcendence':
-            for (let i = 0; i < 18; i++) {
-                const x = worldWidth * hash01(civ.seed + i * 13);
-                if (!shows(x))
-                    continue;
-                surface.fillStyle(accent, .14).fillCircle(x, ground - 10 - hash01(i * 29) * 80, 8 + hash01(i) * 14);
-            }
-            break;
-        case 'cosmic_resistance':
-            for (let i = 0; i < 12; i++) {
-                const x = worldWidth * (.03 + i * .085);
-                if (!shows(x))
-                    continue;
-                surface.fillStyle(accent, .38).fillTriangle(x, ground - 48, x + 16, ground - 43, x, ground - 36);
-                surface.lineStyle(1, 0xe5e5e5, .35).line(x, ground - 48, x, ground - 26);
-            }
-            break;
-        case 'bureaucratic_singularity':
-            for (let i = 0; i < 10; i++) {
-                const x = worldWidth * (.06 + i * .095);
-                const y = ground - 70 - (i % 2) * 28;
-                if (!shows(x))
-                    continue;
-                surface.lineStyle(1, accent, .25).strokeRect(x, y, 28, 20);
-                surface.lineStyle(1, accent, .18).line(x + 4, y + 6, x + 23, y + 6);
-            }
-            break;
-        case 'post_mortal_civilization':
-            for (let i = 0; i < 9; i++) {
-                const x = worldWidth * (.07 + i * .11);
-                const y = ground - 55 - (i % 3) * 20;
-                if (!shows(x))
-                    continue;
-                surface.fillStyle(accent, .11).fillCircle(x, y, 11);
-                surface.lineStyle(1, accent, .34).strokeCircle(x, y, 7);
-            }
-            break;
-        case 'void_communion':
-            for (let i = 0; i < 7; i++) {
-                const x = worldWidth * (.1 + i * .13);
-                const y = height * .18 + (i % 3) * 24;
-                if (!shows(x))
-                    continue;
-                surface.fillStyle(accent, .12).fillCircle(x, y, 26 + Math.sin(time * .001 + i) * 3);
-                surface.lineStyle(2, accent, .28).strokeCircle(x, y, 9);
-            }
-            break;
-        case 'recursive_simulation':
-            for (let i = 0; i < 8; i++) {
-                const x = worldWidth * (.07 + i * .115);
-                const y = ground - 75 - (i % 2) * 35;
-                if (!shows(x))
-                    continue;
-                for (let ring = 0; ring < 3; ring++)
-                    surface.lineStyle(1, accent, .18 + .06 * ring).strokeRect(x - ring * 5, y - ring * 5, 22 + ring * 10, 14 + ring * 10);
-            }
-            break;
-    }
+    // The capital silhouette and institution landmarks are permanent structures, so they belong here
+    // beside the buildings rather than being repainted 30x/s.
+    drawIdentityLandmarks(surface, civ, settlements, ground, presentation.accent, view);
+    // Saved marks and scars are persistent world geometry, so they belong on this cached layer rather
+    // than being repainted every frame. Each is culled by the same band as everything else here.
+    drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, presentation.accent, view);
 }
 /**
  * Reads `snapshot` and `presentation` live, so continuously changing state (entropy, danger,
@@ -341,25 +240,37 @@ function drawLitWindows(surface, scene, snapshot, presentation, ground, animatio
             .fillRect(structure.x - structure.width * .28 + (i % 3) * 5, ground - structure.height + 8 + (i % rows) * 13, 2.5 + snapshot.stage * .28, 3);
     }
 }
-function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view) {
+/** A stable prefix, so shedding agents thins the crowd rather than reshuffling who is in it. */
+function cosmeticAgents(agents, fraction) {
+    if (fraction >= 1)
+        return agents;
+    return agents.slice(0, Math.ceil(agents.length * Math.max(0, fraction)));
+}
+// `agentFraction` is the adaptive-quality lever: a slow device draws fewer cosmetic inhabitants,
+// never fewer fractures, beacons, landmarks, scars or construction cues.
+function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction) {
     const { settlements, plan, species } = scene;
-    for (const pedestrian of plan.pedestrians) {
+    for (const pedestrian of cosmeticAgents(plan.pedestrians, agentFraction)) {
         const settlement = settlements[pedestrian.settlementIndex];
         if (!settlement)
             continue;
         const travel = reducedMotion ? pedestrian.offset : (pedestrian.offset + animationTime * .000045 * pedestrian.speed) % 1;
-        const x = settlement.centerX - settlement.radius + travel * settlement.radius * 2;
+        // Sanity's own channel: low Sanity makes the crowd move irregularly rather than merely tinting
+        // the screen. The offset is a deterministic hash stepped every 600 ms, so it is a stagger rather
+        // than jitter, and reduced motion keeps a smaller version instead of losing the signal.
+        const irregular = (hash01(pedestrian.seed + Math.trunc(animationTime / 600)) - .5) * 12 * presentation.signals.motionIrregularity;
+        const x = settlement.centerX - settlement.radius + travel * settlement.radius * 2 + (reducedMotion ? irregular * .35 : irregular);
         if (x < view.from || x > view.to)
             continue;
         const phase = reducedMotion ? 0 : (animationTime % species.gaitPeriod) / species.gaitPeriod;
         drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
     }
 }
-function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view) {
+function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction) {
     const { civ, plan } = scene;
     const worldWidth = snapshot.worldWidth;
     // Road traffic.
-    for (const vehicle of plan.vehicles) {
+    for (const vehicle of cosmeticAgents(plan.vehicles, agentFraction)) {
         const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
         const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
         if (x < view.from || x > view.to)
@@ -371,7 +282,7 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
             surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
     }
     // Air corridors.
-    for (const aircraft of plan.aircraft) {
+    for (const aircraft of cosmeticAgents(plan.aircraft, agentFraction)) {
         const travel = reducedMotion ? aircraft.phase : (aircraft.phase + animationTime * .00032 * aircraft.speed) % 1;
         const x = aircraft.fromX + (aircraft.toX - aircraft.fromX) * travel;
         if (x < view.from - 10 || x > view.to + 10)
@@ -380,7 +291,7 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
         surface.lineStyle(1.5, presentation.accent, .62).line(x - 10, y, x + 10, y);
         surface.fillStyle(0xffffff, .82).fillCircle(x, y, 1.5);
     }
-    for (const orbital of plan.orbital) {
+    for (const orbital of cosmeticAgents(plan.orbital, agentFraction)) {
         const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
         if (x < view.from || x > view.to)
             continue;
@@ -453,7 +364,8 @@ function drawAnomalies(surface, scene, snapshot, presentation, ground, height, a
         }
     }
 }
-function drawDynamicContent(surface, scene, snapshot, presentation, width, height, time, tracker, view) {
+function drawDynamicContent(surface, scene, snapshot, presentation, width, height, time, tracker, view, tier) {
+    const { agentFraction } = qualityFactors(tier);
     const animationTime = reducedMotion ? 0 : time;
     const ground = height * GROUND_RATIO;
     // The hash decides where a particle lands, so the loop still visits every index; only the draw is
@@ -468,90 +380,32 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view);
     // Lit windows keep flickering across the settlement skyline.
     drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
+    // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible
+    // structures so a low-Stability world costs a fixed handful of lines rather than one per building.
+    if (presentation.signals.structuralStrain > .18) {
+        let drawn = 0;
+        for (const structure of scene.structures) {
+            if (drawn >= 12)
+                break;
+            if (structure.x < view.from - 20 || structure.x > view.to + 20)
+                continue;
+            const top = ground - structure.height;
+            surface.lineStyle(1, 0xee6973, .08 + presentation.signals.structuralStrain * .18)
+                .line(structure.x - structure.width * .18, top + structure.height * .25, structure.x + structure.width * .12, top + structure.height * .42);
+            drawn++;
+        }
+    }
     // Inhabitants.
-    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view);
+    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction);
     // Road traffic, air corridors, orbital, launches.
-    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view);
+    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction);
     // Banners and construction.
     drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view);
     // Fractures, beacons, sanity distortion.
     drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
-    drawPathMotif(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view);
-}
-function impulseColor(feedback, kind) {
-    if (kind === 'containment')
-        return 0x73e6bd;
-    if (kind === 'time-streak')
-        return 0xf2bd63;
-    if (kind === 'scan')
-        return 0x6bdcf6;
-    if (kind === 'fracture')
-        return entropyThresholdColor(feedback.eventId);
-    return feedback.tone === 'positive' ? 0x73e6bd : feedback.tone === 'negative' ? 0xee6973 : 0xb68cff;
-}
-/** Drawn identically on both backends; the caller owns clearing its layer. */
-function drawDecisionImpulse(surface, feedback, startTime, time, width, height) {
-    if (!feedback || startTime <= 0)
-        return;
-    const kind = decisionImpulseKind(feedback.eventId);
-    const color = impulseColor(feedback, kind);
-    if (reducedMotion) {
-        if (time - startTime >= 1400)
-            return;
-        const radius = Math.min(width, height) * .2;
-        if (kind === 'time-streak')
-            for (let i = 0; i < 4; i++)
-                surface.lineStyle(2, color, .42).line(width * .18, height * (.38 + i * .1), width * .82, height * (.38 + i * .1));
-        else if (kind === 'scan') {
-            surface.lineStyle(2, color, .48).line(width * .16, height * .5, width * .84, height * .5);
-            surface.lineStyle(1, color, .4).strokeCircle(width * .5, height * .5, radius);
-        }
-        else if (kind === 'fracture')
-            for (let i = 0; i < 6; i++)
-                surface.lineStyle(2, color, .44).line(width * (.3 + i * .07), height * .3, width * (.34 + i * .06), height * .72);
-        else {
-            surface.lineStyle(kind === 'containment' ? 4 : 2, color, .48).strokeCircle(width * .5, height * .54, radius);
-            surface.fillStyle(color, .06).fillCircle(width * .5, height * .54, radius * .72);
-        }
-        return;
-    }
-    const progress = Math.min(1, Math.max(0, (time - startTime) / 1800));
-    if (progress >= 1)
-        return;
-    const alpha = (1 - progress) * .62;
-    const radius = 34 + progress * Math.min(width, height) * .56;
-    if (kind === 'containment') {
-        for (let ring = 0; ring < 3; ring++)
-            surface.lineStyle(4 - ring, color, alpha * (1 - ring * .18)).strokeCircle(width * .5, height * .54, radius * (.58 + ring * .2));
-        surface.fillStyle(color, alpha * .08).fillCircle(width * .5, height * .54, radius * .5);
-    }
-    else if (kind === 'time-streak') {
-        for (let i = 0; i < 9; i++) {
-            const y = height * (.2 + i * .075);
-            const inset = ((i % 3) * 36 + progress * width * .18) % Math.max(1, width * .28);
-            surface.lineStyle(1.2 + (i % 2), color, alpha * (.45 + (i % 3) * .15)).line(-width * .08 + inset, y, width * (.7 + progress * .35) + inset, y);
-        }
-    }
-    else if (kind === 'scan') {
-        const y = height * (.16 + progress * .68);
-        surface.lineStyle(2, color, alpha).line(width * .12, y, width * .88, y);
-        surface.lineStyle(1, color, alpha * .75).strokeCircle(width * .5, height * .52, radius * .48);
-        surface.line(width * .5 - radius * .62, height * .52, width * .5 + radius * .62, height * .52);
-        surface.line(width * .5, height * .52 - radius * .62, width * .5, height * .52 + radius * .62);
-    }
-    else if (kind === 'fracture') {
-        for (let i = 0; i < 10; i++) {
-            const x = width * (.16 + i * .075);
-            const bend = (hash01(i * 31 + feedback.sequence) - .5) * width * .08;
-            surface.lineStyle(1.2 + (i % 3), color, alpha).line(x, height * .18, x + bend, height * (.42 + progress * .2));
-            surface.line(x + bend, height * (.42 + progress * .2), x - bend * .35, height * .84);
-        }
-    }
-    else {
-        surface.lineStyle(3 - progress * 2, color, alpha).strokeCircle(width * .5, height * .54, radius);
-        surface.lineStyle(1, 0xffffff, alpha * .5).strokeCircle(width * .5, height * .54, radius * .72);
-        surface.fillStyle(color, alpha * .07).fillCircle(width * .5, height * .54, radius * .45);
-    }
+    drawPathAmbience(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view, pathIdentity(scene.civ).tier, qualityFactors(tier).ambientLoopFraction);
+    // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
+    drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
 }
 class WorldInput {
     constructor(target, getWidth) {
@@ -719,25 +573,26 @@ class WorldRenderer {
             context.restore();
         this.sceneryScroll = scroll;
     }
-    drawDynamic(time, scene, civ, scroll, tracker, engine) {
+    drawDynamic(time, scene, civ, scroll, tracker, engine, tier, phase) {
         const context = this.dynamicContext;
         const surface = this.surface(context);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         // Only the stat-driven counts are resampled per frame; the structural geometry is whatever the
         // cached scene already resolved, so a frame no longer rebuilds settlement and agent budgets.
-        const dynamicSnapshot = { ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) };
+        const dynamicSnapshot = applyQualityToLiveSample({ ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) }, tier);
         const dynamicPresentation = worldPresentation(civ);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
-        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1));
+        drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1), tier);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
         const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
             this.feedbackSequence = feedback.sequence;
             this.feedbackStartTime = time;
         }
         if (feedback && this.feedbackStartTime > 0) {
-            drawDecisionImpulse(surface, feedback, this.feedbackStartTime, time, this.width, this.height);
+            drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
         }
         context.setTransform(1, 0, 0, 1, 0, 0);
     }
@@ -756,6 +611,11 @@ class CanvasWorld {
         this.lastStructuralKey = '';
         this.scene = null;
         this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
+        this.quality = new RenderQualityController();
+        this.lastDramaPhaseId = -1;
+        this.phaseTransitionFrom = -1;
+        this.phaseTransitionTo = -1;
+        this.phaseTransitionStart = 0;
         this.sceneRebuilds = 0;
         this.loop = (time) => {
             this.raf = requestAnimationFrame(this.loop);
@@ -775,6 +635,16 @@ class CanvasWorld {
             if (key !== this.lastStructuralKey) {
                 this.lastStructuralKey = key;
                 this.scene = buildScene(civ, this.renderer.width, this.renderer.height);
+                // Read off the scene the rebuild just resolved, so the cue and the world it describes belong to
+                // the same frame. Nothing is written back to the engine: a phase reached by surviving is
+                // presented, never recorded.
+                const nextPhase = this.scene.snapshot.stage ?? civilizationDramaPhase(civ).id;
+                if (this.lastDramaPhaseId >= 0 && nextPhase !== this.lastDramaPhaseId) {
+                    this.phaseTransitionFrom = this.lastDramaPhaseId;
+                    this.phaseTransitionTo = nextPhase;
+                    this.phaseTransitionStart = time;
+                }
+                this.lastDramaPhaseId = nextPhase;
                 this.tracker.sync(this.scene.structures, time);
                 this.sceneRebuilds++;
                 this.input.lastStaticScroll = Number.NaN;
@@ -792,7 +662,12 @@ class CanvasWorld {
                 this.renderer.drawScenery(this.scene, scroll);
             }
             this.tracker.prune(time);
-            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine);
+            // Measured around the dynamic draw only: the cached layers repaint on scroll, not per frame, so
+            // folding them in would read a drag as a slow device.
+            const drawStart = globalThis.performance?.now?.() ?? time;
+            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine, this.quality.tier, { from: this.phaseTransitionFrom, to: this.phaseTransitionTo, start: this.phaseTransitionStart });
+            const drawEnd = globalThis.performance?.now?.() ?? drawStart;
+            this.quality.update(Math.max(0, drawEnd - drawStart), time);
         };
         this.renderer = new WorldRenderer(host);
         // The topmost canvas that still takes pointer events; the dynamic layer above it is inert.
@@ -806,11 +681,17 @@ class CanvasWorld {
             staticRedraws: this.renderer.staticRedraws,
             sceneryFullRedraws: this.renderer.sceneryFullRedraws,
             sceneryStripRedraws: this.renderer.sceneryStripRedraws,
+            qualityTier: this.quality.tier,
         };
     }
     destroy() {
         cancelAnimationFrame(this.raf);
         this.tracker.reset();
+        this.quality.reset();
+        this.lastDramaPhaseId = -1;
+        this.phaseTransitionFrom = -1;
+        this.phaseTransitionTo = -1;
+        this.phaseTransitionStart = 0;
         this.input.destroy();
         this.renderer.destroy();
     }
@@ -831,7 +712,7 @@ export function startWorldRenderer(engine, host) {
     ensure();
     return {
         nudge(direction) { world?.nudge(direction); },
-        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0, sceneryFullRedraws: 0, sceneryStripRedraws: 0 }; },
+        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0, sceneryFullRedraws: 0, sceneryStripRedraws: 0, qualityTier: 0 }; },
         destroy() { unsubscribe(); world?.destroy(); world = null; host.replaceChildren(); },
     };
 }

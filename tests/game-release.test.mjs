@@ -135,11 +135,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.9.0', async () => {
+test('release metadata identifies browser app v1.10.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.9.0');
+  assert.equal(rootPackage.version, '1.10.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 
@@ -162,6 +162,13 @@ test('release metadata identifies browser app v1.9.0', async () => {
   // And each release should say what changed, under its own heading in both READMEs.
   assert.match(rootReadme, new RegExp(`^## v${escaped} `, 'm'));
   assert.match(gameReadme, new RegExp(`^## v${escaped} `, 'm'));
+
+  // The Civilization Drama Arc modules are useless to a returning player unless the hand-maintained
+  // precache list carries them, and the cache is never revalidated.
+  for (const compiled of [
+    'game/drama.js','game/consequence-profiles.js','game/decision-consequences.js','game/world-memory.js',
+    'render/identity.js','render/world-memory.js','render/consequence-presentation.js','render/quality.js',
+  ]) assert.match(worker, new RegExp(`['"]\\/game\\/dist\\/${compiled.replaceAll('.', '\\.')}['"]`));
 });
 
 test('game surface protects mobile safe areas and dynamic viewport height', async () => {

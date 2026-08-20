@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
-import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
+import { structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
+import { consequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
@@ -14,6 +15,10 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
+import { RenderQualityController, qualityFactors } from '../dist/render/quality.js';
+import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
+import { worldMemorySignature } from '../dist/render/world-memory.js';
+import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
 import { freshEngine } from './balance-harness.mjs';
 
 const NEWLINE = String.fromCharCode(10);
@@ -229,13 +234,18 @@ test('Entropy changes presentation in stable structural bands', () => {
 });
 
 test('tactical decisions and crises select distinct world impulse kinds', () => {
-  assert.equal(decisionImpulseKind('tactical:stabilize'), 'containment');
-  assert.equal(decisionImpulseKind('tactical:accelerate'), 'time-streak');
-  assert.equal(decisionImpulseKind('tactical:probe'), 'scan');
-  assert.equal(decisionImpulseKind('entropy_crisis_50'), 'fracture');
-  assert.equal(decisionImpulseKind('synthetic_saint'), 'decision');
-  assert.notEqual(entropyThresholdColor('entropy_crisis_25'), entropyThresholdColor('entropy_crisis_50'));
-  assert.notEqual(entropyThresholdColor('entropy_crisis_50'), entropyThresholdColor('entropy_crisis_75'));
+  const impulse = (eventId, consequence = { significance:'routine', tags:[], transitions:{}, signatureProfile:'' }) =>
+    consequenceImpact({ sequence:1, eventId, eventTitle:'', choiceLabel:'', tone:'mixed', metrics:[], affinities:[], additions:[], consequence }, false);
+  assert.equal(impulse('tactical:stabilize').kind, 'containment');
+  assert.equal(impulse('tactical:accelerate').kind, 'time_streak');
+  assert.equal(impulse('tactical:probe').kind, 'scan');
+  assert.equal(impulse('tactical:vent').kind, 'vent');
+  assert.equal(impulse('entropy_crisis_50').kind, 'fracture');
+  assert.equal(impulse('synthetic_saint').kind, 'generic');
+  // The three crisis thresholds stay distinguishable, now by signature variant rather than by colour.
+  const variants = ['crisis:entropy_25','crisis:entropy_50','crisis:entropy_75'].map(signatureProfile =>
+    impulse('entropy_crisis', { significance:'turning_point', tags:['reality_damage'], transitions:{}, signatureProfile }).variant);
+  assert.equal(new Set(variants).size, 3);
 });
 
 test('render primitives are deterministic and cover every path', () => {
@@ -679,7 +689,7 @@ test('world module no longer carries its own layout or hash helpers', async () =
 
 test('every render module is precached by the service worker', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation'];
+  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality'];
   for (const name of modules) {
     assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
   }
@@ -1032,4 +1042,182 @@ test('the victory screen names the dominant path instead of its identifier', asy
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
   assert.ok(app.includes('CivilizationPaths.displayName(record.dominantPath)'));
   assert.notEqual(CivilizationPaths.displayName('machine_faith'), 'machine_faith');
+});
+
+test('all ten paths expose distinct dominant silhouette identities', () => {
+  const descriptors = new Set();
+  for (const pathId of PATH_IDS) {
+    const civ = GameEngine.createCivilizationForTest(14000 + descriptors.size);
+    civ.pathState.affinity[pathId] = 8;
+    civ.pathState.dominantPath = pathId;
+    const identity = pathIdentity(civ);
+    assert.equal(identity.pathId, pathId);
+    assert.equal(identity.tier, 2);
+    descriptors.add(`${identity.landmark}|${identity.motif}|${identity.crown}`);
+  }
+  assert.equal(descriptors.size, 10);
+});
+
+test('signature consolidation or endgame upgrades dominant identity to tier 3', () => {
+  const civ = GameEngine.createCivilizationForTest(14011);
+  civ.pathState.dominantPath = 'machine_faith'; civ.pathState.affinity.machine_faith = 8;
+  assert.equal(pathIdentity(civ).tier, 2);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  assert.equal(pathIdentity(civ).tier, 3);
+});
+
+test('the three current institutions expose distinct landmark descriptors', () => {
+  const civ = GameEngine.createCivilizationForTest(14012);
+  civ.institutions.push('Lunar Ministry','Ministry Of Sanity','Consensus Office');
+  const landmarks = institutionLandmarks(civ);
+  assert.equal(landmarks.length, 3);
+  assert.equal(new Set(landmarks.map(item => item.kind)).size, 3);
+});
+
+test('identity entrenchment rebuilds the structural key while live values inside a band do not', () => {
+  const civ = lateCiv(14013);
+  civ.pathState.dominantPath = 'machine_faith'; civ.pathState.affinity.machine_faith = 8;
+  const tierTwo = structuralWorldKey(civ, 800);
+  assert.equal(pathIdentity(civ).tier, 2);
+  civ.pathState.completedEvents.push('synod_of_the_second_engine');
+  assert.equal(pathIdentity(civ).tier, 3);
+  assert.notEqual(structuralWorldKey(civ, 800), tierTwo, 'entrenched identity must rebuild the cached world');
+  const tierThree = structuralWorldKey(civ, 800);
+  civ.stats.stability = Math.trunc(civ.stats.stability / 25) * 25 + 3;
+  const shifted = structuralWorldKey(civ, 800);
+  civ.stats.stability += 4;
+  assert.equal(structuralWorldKey(civ, 800), shifted, 'a live stat inside one band must not rebuild the world');
+  assert.equal(identitySignature(civ).startsWith('machine_faith:3:'), true);
+  assert.ok(tierThree.length > 0);
+});
+
+test('world memory signatures change only for saved structural memory', () => {
+  const civ = lateCiv(15001);
+  const before = structuralWorldKey(civ, 800);
+  civ.visualMemory = { version:1, sequence:1, marks:[{domain:'social',motif:'unrest',strength:2,sourceEventId:'x',createdAtSequence:1,anchor01:.3,repairable:true}], scars:[] };
+  const after = structuralWorldKey(civ, 800);
+  assert.notEqual(after, before);
+  const signature = worldMemorySignature(civ.visualMemory);
+  civ.visualMemory.sequence = 99;
+  assert.equal(worldMemorySignature(civ.visualMemory), signature, 'sequence alone is not structural');
+  assert.equal(structuralWorldKey(civ, 800), after, 'a bumped sequence alone must not rebuild the world');
+});
+
+test('semantic consequence presentation distinguishes tactical actions and significance', () => {
+  const base = {
+    sequence:1, eventTitle:'', choiceLabel:'', tone:'mixed', metrics:[], affinities:[], additions:[],
+    consequence:{ significance:'routine', tags:[], transitions:{}, signatureProfile:'' },
+  };
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:stabilize' }, false).kind, 'containment');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:accelerate' }, false).kind, 'time_streak');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:probe' }, false).kind, 'scan');
+  assert.equal(consequenceImpact({ ...base, eventId:'tactical:vent' }, false).kind, 'vent');
+  const major = consequenceImpact({ ...base, eventId:'x', consequence:{ significance:'major', tags:['civil_unrest'], transitions:{}, signatureProfile:'' } }, false);
+  const turning = consequenceImpact({ ...base, eventId:'x', consequence:{ significance:'turning_point', tags:['civil_unrest'], transitions:{}, signatureProfile:'' } }, false);
+  assert.equal(major.kind, 'unrest');
+  assert.ok(turning.intensity > major.intensity);
+});
+
+test('reduced motion shortens impacts without deleting semantic information', () => {
+  const feedback = {
+    sequence:2, eventId:'entropy_crisis_50', eventTitle:'', choiceLabel:'', tone:'negative', metrics:[], affinities:[], additions:[],
+    consequence:{ significance:'turning_point', tags:['reality_damage'], transitions:{}, signatureProfile:'crisis:entropy_50' },
+  };
+  const full = consequenceImpact(feedback, false);
+  const reduced = consequenceImpact(feedback, true);
+  assert.equal(reduced.kind, full.kind);
+  assert.equal(reduced.variant, full.variant);
+  assert.ok(reduced.durationMs >= 250 && reduced.durationMs <= 400);
+  assert.ok(full.durationMs >= 900 && full.durationMs <= 1800);
+  assert.equal(reduced.staticOnly, true);
+});
+
+test('the obsolete impulse helpers are gone from the presentation module', async () => {
+  const source = await readFile(new URL('../src/render/world-presentation.ts', import.meta.url), 'utf8');
+  assert.ok(!source.includes('decisionImpulseKind'), 'impulse kinds now come from consequence-presentation.ts');
+  assert.ok(!source.includes('entropyThresholdColor'), 'crisis colours now come from consequence-presentation.ts');
+  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.ok(!world.includes('function drawDecisionImpulse'), 'world.ts must orchestrate, not own impact drawing');
+  assert.ok(!world.includes('function impulseColor'), 'impact colour belongs to the impact module');
+});
+
+test('adaptive quality degrades after 30 hot frames and recovers only after 180 cool frames', () => {
+  const controller = new RenderQualityController();
+  let now = 6000;
+  for (let i=0;i<29;i++) controller.update(25, now += 34);
+  assert.equal(controller.tier, 0);
+  controller.update(25, now += 34);
+  assert.equal(controller.tier, 1);
+  now += 5001;
+  for (let i=0;i<180;i++) controller.update(10, now += 34);
+  assert.equal(controller.tier, 0);
+});
+
+test('quality tiers reduce only cosmetic sample work and preserve fracture/beacon signals', () => {
+  const sample = { particleCount:150, hazeBands:9, fractureCount:12, beaconCount:10, entropyBand:4 };
+  const heavy = applyQualityToLiveSample(sample, 3);
+  assert.ok(heavy.particleCount <= 60);
+  assert.ok(heavy.hazeBands < 9);
+  assert.equal(heavy.fractureCount, 12);
+  assert.equal(heavy.beaconCount, 10);
+  assert.equal(MAX_PARTICLES,150); assert.equal(MAX_HAZE_BANDS,9); assert.equal(MAX_FRACTURES,12); assert.equal(MAX_BEACONS,10);
+  assert.equal(qualityFactors(3).agentFraction, .5);
+});
+
+test('live presentation exposes distinct primary signals for every authoritative visual state', () => {
+  const civ = GameEngine.createCivilizationForTest(17001);
+  civ.development = 120;
+  const base = worldPresentation(civ).signals;
+  const mutate = (fn) => { const copy = structuredClone(civ); fn(copy); return worldPresentation(copy).signals; };
+  assert.notEqual(mutate(c=>c.stats.stability=35).structuralStrain, base.structuralStrain);
+  assert.notEqual(mutate(c=>c.stats.sanity=35).motionIrregularity, base.motionIrregularity);
+  assert.notEqual(mutate(c=>c.stats.awareness=70).outwardObservation, base.outwardObservation);
+  assert.notEqual(mutate(c=>c.stats.attention=70).observerPressure, base.observerPressure);
+  assert.notEqual(mutate(c=>c.tactical.entropy=70).realityFailure, base.realityFailure);
+  assert.notEqual(mutate(c=>c.development=420).activity, base.activity);
+});
+
+test('named live signals stay bounded and never enter the structural key', () => {
+  const civ = lateCiv(17002);
+  const key = structuralWorldKey(civ, 800);
+  for (const [name, value] of Object.entries(worldPresentation(civ).signals)) {
+    assert.ok(value >= 0 && value <= 1, `${name} left the 0..1 range at ${value}`);
+  }
+  civ.stats.stability = Math.trunc(civ.stats.stability / 25) * 25 + 1;
+  const banded = structuralWorldKey(civ, 800);
+  civ.stats.stability += 3;
+  assert.equal(structuralWorldKey(civ, 800), banded, 'a raw signal value must not be a structural factor');
+  assert.ok(key.length > 0);
+});
+
+test('path ambience moved into the identity module and scales with the identity tier', async () => {
+  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.ok(!world.includes('function drawPathMotif'), 'path ambience belongs to identity.ts');
+  assert.match(world, /drawPathAmbience\(/);
+  const identity = await readFile(new URL('../src/render/identity.ts', import.meta.url), 'utf8');
+  assert.match(identity, /export function drawPathAmbience/);
+  assert.match(identity, /export function drawIdentityLandmarks/);
+});
+
+test('the passive phase-transition cue is small, transient and reduced-motion safe', () => {
+  const draw = (from, to, time, reduced) => {
+    const calls = [];
+    drawPhaseTransitionImpact(recordingSurface(calls), from, to, 1000, time, 900, 520, 0x6bdcf6, reduced);
+    return calls;
+  };
+  // A phase change draws a handful of rows plus one ring -- never a full-screen wash.
+  const during = draw(1, 2, 1200, false);
+  assert.ok(during.length > 0, 'a phase change must be acknowledged');
+  const strokes = during.filter(([name]) => name === 'line' || name === 'strokeCircle');
+  assert.ok(strokes.length <= 8, `the cue drew ${strokes.length} strokes`);
+  assert.equal(during.filter(([name]) => name === 'fillRect').length, 0, 'no full-screen wash');
+
+  // Transient: nothing after the 1500 ms window, and nothing at all without a real transition.
+  assert.equal(draw(1, 2, 2600, false).length, 0, 'the cue must expire');
+  assert.equal(draw(2, 2, 1200, false).length, 0, 'an unchanged phase draws nothing');
+  assert.equal(draw(-1, -1, 0, false).length, 0, 'no transition has been seen yet');
+
+  // Reduced motion keeps the cue but freezes it: same shape, shorter window.
+  assert.ok(draw(1, 2, 1200, true).length > 0);
+  assert.equal(draw(1, 2, 1400, true).length, 0, 'reduced motion ends the cue inside 320 ms');
 });

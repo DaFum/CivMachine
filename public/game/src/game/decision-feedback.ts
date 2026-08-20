@@ -1,5 +1,7 @@
+import { buildDecisionConsequence } from './decision-consequences.js';
+import { civilizationDramaPhase } from './drama.js';
 import { CivilizationPaths } from './paths.js';
-import type { Civilization, DecisionFeedback, DecisionMetricDelta } from './types.js';
+import type { Civilization, DecisionFeedback, DecisionMetricDelta, DramaPhaseId } from './types.js';
 
 export interface DecisionSnapshot {
   metrics: Record<string, number>;
@@ -8,6 +10,11 @@ export interface DecisionSnapshot {
   institutions: string[];
   flags: string[];
   pathFlags: string[];
+  dramaPhaseId: DramaPhaseId;
+  era: number;
+  dominantPath: string;
+  endgameStates: string[];
+  entropyBand: number;
 }
 
 const METRICS: ReadonlyArray<Readonly<{ key:string; label:string; inverse?:boolean }>> = [
@@ -48,6 +55,11 @@ export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
     institutions: [...civ.institutions],
     flags: [...civ.flags],
     pathFlags: [...civ.pathState.choiceFlags],
+    dramaPhaseId: civilizationDramaPhase(civ).id,
+    era: civ.era,
+    dominantPath: civ.pathState.dominantPath,
+    endgameStates: [...(civ.pathState.endgameStates ?? [])],
+    entropyBand: Math.min(4, Math.floor(Math.max(0, Math.min(100, civ.tactical.entropy)) / 25)),
   };
 }
 
@@ -76,6 +88,7 @@ export function buildDecisionFeedback(
     ...additions(after.pathFlags,before.pathFlags,'path_flag'),
   ];
   if(additionsList.some(item=>item.kind==='trait'||item.kind==='institution'))positive=true;
+  const consequence=buildDecisionConsequence(event.id,before,after,additionsList);
   return {
     sequence,
     eventId:event.id,
@@ -85,5 +98,6 @@ export function buildDecisionFeedback(
     metrics,
     affinities,
     additions:additionsList,
+    consequence,
   };
 }

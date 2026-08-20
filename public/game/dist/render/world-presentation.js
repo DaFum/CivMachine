@@ -3,26 +3,10 @@ import { mixColor as mix, pathAccentFor } from './primitives.js';
 import { speciesProfile } from './species.js';
 import { factionSignature } from './factions.js';
 import { settlementClassSignature } from './settlements.js';
+import { identitySignature } from './identity.js';
+import { worldMemorySignature } from './world-memory.js';
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const band = (value) => value < 25 ? 0 : value < 50 ? 1 : value < 75 ? 2 : 3;
-export function decisionImpulseKind(eventId) {
-    if (eventId === 'tactical:stabilize')
-        return 'containment';
-    if (eventId === 'tactical:accelerate')
-        return 'time-streak';
-    if (eventId === 'tactical:probe')
-        return 'scan';
-    if (eventId.startsWith('entropy_crisis_'))
-        return 'fracture';
-    return 'decision';
-}
-export function entropyThresholdColor(eventId) {
-    if (eventId.endsWith('_25'))
-        return 0xf2d06b;
-    if (eventId.endsWith('_50'))
-        return 0xf29a52;
-    return 0xee6973;
-}
 export function worldPresentation(civ) {
     const stability = clamp01(civ.stats.stability / Math.max(1, civ.stats.stabilityMax));
     const danger = clamp01((55 - civ.stats.stability) / 55);
@@ -40,6 +24,17 @@ export function worldPresentation(civ) {
         attention,
         entropy,
         stability,
+        // One named channel per authoritative state, so every one of them owns a distinct visual role
+        // instead of several sharing a full-screen colour wash. Bounded to 0..1 and deliberately kept out
+        // of `structuralWorldKey`: these follow live values, and keying on them would rebuild 60x/s.
+        signals: {
+            structuralStrain: danger,
+            motionIrregularity: sanityDistortion,
+            outwardObservation: awareness,
+            observerPressure: attention,
+            realityFailure: entropy,
+            activity: clamp01((developmentStage(civ) + Math.min(1, civ.development / 560)) / 5),
+        },
         bands: {
             stability: band(civ.stats.stability),
             sanity: band(civ.stats.sanity),
@@ -69,8 +64,8 @@ export function structuralWorldKey(civ, viewportWidth) {
         snapshot.stage,
         snapshot.buildingCount,
         Math.trunc(civ.development / 25),
-        civ.institutions.length,
-        civ.pathState.dominantPath || 'unaligned',
+        identitySignature(civ),
+        worldMemorySignature(civ.visualMemory),
         presentation.bands.stability,
         presentation.bands.sanity,
         presentation.bands.awareness,

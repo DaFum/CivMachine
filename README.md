@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.9.0
+# Reality Consumption Engine — App Edition v1.10.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -21,6 +21,30 @@ ending run runs out of unseen ones.
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
+
+## v1.10.0 a civilization that remembers what you did
+
+v1.10.0 adds the Civilization Drama Arc without moving the v1.9.1 balance curve. Emergence,
+Expansion, Division, Transformation and Crisis are derived from the existing Development/era/
+institution/choice stage score, so stronger machines reach later chapters by surviving longer rather
+than by crossing a wall-clock gate.
+
+Decisions now emit deterministic semantic consequence tags and one of 28 high-signal signature
+profiles. Major consequences can transform up to six persistent world-memory domains and three
+evolving scar domains. Dominant paths and the three current institutions gain distinct procedural
+landmark language, while Stability, Sanity, Awareness, Attention, Entropy and Development retain
+separate readable visual channels.
+
+The world renderer still uses the same three Canvas layers and exposed-strip scenery redraw. A new
+renderer-local quality controller sheds particles, haze and cosmetic agents before any gameplay
+signal, preserves reduced-motion semantics, and never changes simulation speed, rewards, cadence or
+save version.
+
+## v1.9.1 baseline synchronization
+
+v1.9.1 is the current balance/content baseline used by the Civilization Drama Arc work. This
+maintenance release keeps the v1.9.0 185-intervention catalog and measured survival curve intact;
+the release surfaces are synchronized to the package/cache version before v1.10.0 feature work.
 
 ## v1.9.0 a catalog that outlasts the run
 
