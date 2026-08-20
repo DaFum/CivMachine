@@ -30,6 +30,7 @@ const APP_ASSETS = [
   '/game/dist/game/decision-feedback.js',
   '/game/dist/game/development.js',
   '/game/dist/game/engine.js',
+  '/game/dist/game/effects.js',
   '/game/dist/game/harvest-quality.js',
   '/game/dist/game/intervention-scheduler.js',
   '/game/dist/game/convergence.js',
