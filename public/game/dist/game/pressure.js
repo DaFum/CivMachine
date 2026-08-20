@@ -13,6 +13,16 @@ const YEARS_PER_SECOND = 25;
 export function pressureMultiplier(years) {
     return 1 + Math.max(0, Number(years) || 0) / PRESSURE_YEAR_SCALE;
 }
+/**
+ * The years the pressure curve is allowed to see: everything the Civilization actually lived
+ * through, minus the years Accelerate injected. Measured across five seeds and three containment
+ * levels, charging injected years to the curve made Accelerate strictly dominated at every level --
+ * including the low-containment case the v1.5.0 spec expected it to be useful in -- because +200
+ * years inflates the rate for the whole remaining run while granting only +6 Development.
+ */
+export function pressureYears(civ) {
+    return Math.max(0, (Number(civ.years) || 0) - Math.max(0, Number(civ.injectedYears) || 0));
+}
 function relief(containment) {
     return 1 + CONTAINMENT_RELIEF * Math.max(0, Number(containment) || 0);
 }
@@ -31,7 +41,7 @@ export function secondsToCascade(years, entropy, containment, terminal = false) 
 }
 export function advancePressure(civ, bonuses, deltaSeconds) {
     const before = Math.max(0, Math.min(100, civ.tactical.entropy));
-    const rate = entropyRate(civ.years, bonuses.containmentRating, Boolean(civ.terminal));
+    const rate = entropyRate(pressureYears(civ), bonuses.containmentRating, Boolean(civ.terminal));
     const after = Math.max(0, Math.min(100, before + rate * Math.max(0, deltaSeconds)));
     civ.tactical.entropy = after;
     const queuedCrises = [];

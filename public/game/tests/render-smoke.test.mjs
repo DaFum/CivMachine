@@ -59,6 +59,79 @@ function assertFiniteGeometry(calls, label) {
   }
 }
 
+// Records the transform alongside each primitive, so a primitive's screen position is known and
+// off-screen work can be told apart from on-screen work.
+function trackingContext(calls) {
+  let tx = 0;
+  return {
+    set fillStyle(value) {}, set strokeStyle(value) {}, set lineWidth(value) {},
+    setTransform: (...args) => { tx = args.length >= 5 ? args[4] : 0; },
+    clearRect: () => {},
+    fillRect: (x, y, w, h) => calls.push({ name: 'fillRect', from: x + tx, to: x + tx + w }),
+    beginPath: () => {}, closePath: () => {}, fill: () => {}, stroke: () => {},
+    moveTo: (x) => calls.push({ name: 'moveTo', from: x + tx, to: x + tx }),
+    lineTo: (x) => calls.push({ name: 'lineTo', from: x + tx, to: x + tx }),
+    arc: (x, y, r) => calls.push({ name: 'arc', from: x + tx - r, to: x + tx + r }),
+  };
+}
+
+test('both layers paint the visible slice instead of the whole world', async () => {
+  const WIDTH = 900, HEIGHT = 520;
+  // A stage-4 world is four viewports wide and drawStatic runs on every scrolled pixel, so drawing
+  // the whole width is roughly four times the necessary work on the one operation the player uses to
+  // explore. Offscreen layer caches were measured and rejected: three of them at this size need
+  // hundreds of megabytes on a phone.
+  const perScroll = [];
+  const cullConstants = await import(`../dist/render/world.js?constants=${Date.now()}`);
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    let created = 0;
+    const buckets = [[], []];
+    globalThis.__buckets = buckets;
+    globalThis.document = { createElement: () => { const calls = buckets[created++] ?? [];
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => trackingContext(calls), addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { globalThis.__frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: WIDTH, height: HEIGHT }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(909) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?cull=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    const [staticCalls, dynamicCalls] = globalThis.__buckets;
+    for (const step of [0, 1, 2, 4]) {
+      if (step > 0) controller.nudge(1);
+      staticCalls.length = 0;
+      dynamicCalls.length = 0;
+      globalThis.__frame(100 + step * 100);
+      assert.ok(staticCalls.length > 0, 'static layer drew nothing');
+      assert.ok(dynamicCalls.length > 0, 'dynamic layer drew nothing');
+      // The dynamic layer repaints every throttled frame, so an unculled draw there costs more than
+      // one on the static layer. Both are held to the same ceiling.
+      perScroll.push(staticCalls.concat(dynamicCalls));
+    }
+    controller.destroy();
+    delete globalThis.__frame;
+    delete globalThis.__buckets;
+  });
+
+  for (const [index, calls] of perScroll.entries()) {
+    assert.ok(calls.length > 60, `scroll ${index} drew only ${calls.length} primitives`);
+    // Nothing may be emitted whose whole extent lies beyond the viewport plus the cull margin. The
+    // margin has to be generous enough for the widest primitive, so this is a ceiling, not equality.
+    const { CULL_MARGIN, WIDEST_STATIC_PRIMITIVE } = cullConstants;
+    // The band already reaches CULL_MARGIN past the viewport, and a primitive anchored at that edge
+    // may extend by its own width. Anything beyond that is work nobody can see.
+    const limit = CULL_MARGIN + WIDEST_STATIC_PRIMITIVE;
+    const stray = calls.filter(call => call.to < -limit || call.from > WIDTH + limit);
+    assert.equal(stray.length, 0, `scroll ${index} drew ${stray.length} primitives beyond the cull ceiling of ${limit}px, e.g. ${JSON.stringify(stray[0])}`);
+    // And something must actually be on screen, or the cull ate the world.
+    assert.ok(calls.some(call => call.to >= 0 && call.from <= WIDTH), `scroll ${index} drew nothing inside the viewport`);
+  }
+});
+
+
+
 test('the renderer actually draws a populated world', async () => {
   const staticCalls = [];
   const dynamicCalls = [];
@@ -128,5 +201,43 @@ test('panning repaints the cached static layer without rebuilding the scene', as
 
     controller.destroy();
     delete globalThis.__frame;
+  });
+});
+
+test('live stats control dynamic rendering without rebuilding the static scene', async () => {
+  const staticCalls = [];
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization() }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?dynamic=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    assert.ok(frame, 'the fallback must schedule a frame');
+    frame(100);
+
+    staticCalls.length = 0;
+    dynamicCalls.length = 0;
+
+    // Change attention slightly to stay in the same structural band (band 2 is 50-74).
+    // Original was 70. Change to 71 to alter particle generation hash but keep band same.
+    engine.state.civilization.stats.attention = 71;
+    // Advance time by more than throttle (180ms)
+    frame(300);
+
+    assert.ok(dynamicCalls.length > 0, 'dynamic layer should react to live stat change');
+    assert.equal(controller.stats().sceneRebuilds, 1, 'static scene should not be rebuilt on live stat change');
+    assert.equal(controller.stats().staticRedraws, 1, 'static scene should not be redrawn on live stat change');
+
+    controller.destroy();
   });
 });

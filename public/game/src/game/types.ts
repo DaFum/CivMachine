@@ -73,6 +73,11 @@ export interface Civilization {
   rngState: number;
   elapsedSeconds: number;
   years: number;
+  // Years injected by Accelerate rather than lived through. They advance Era and Development but are
+  // excluded from the Entropy pressure curve, so Accelerate pays a one-off price instead of a
+  // permanent rate surcharge. Optional and defaulted to 0 so v4 saves load unchanged: an in-progress
+  // run from an older save simply keeps counting its injected years as pressure, exactly as before.
+  injectedYears?: number;
   era: number;
   development: number;
   developmentMultiplier: number;

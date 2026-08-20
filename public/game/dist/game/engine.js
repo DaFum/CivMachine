@@ -7,7 +7,8 @@ import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progre
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
-import { advancePressure, cascadeDecay } from './pressure.js';
+import { advancePressure, cascadeDecay, pressureYears } from './pressure.js';
+import { developmentGrowthPerSecond } from './development.js';
 import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './tactical-actions.js';
 import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality, gradeIndex } from './harvest-quality.js';
 import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses } from './run-interventions.js';
@@ -244,11 +245,7 @@ export class GameEngine {
         if (newEra !== civ.era)
             this.enterEra(civ, newEra);
         const s = civ.stats;
-        const low = Math.max(0, Math.min(1, (100 - s.stability) / 100));
-        const paradoxGrowth = 1 + low * .35 * this.upgradeLevel('axiom', 'axiom_paradox_food');
-        const institution = civ.institutions.includes('Consensus Office') ? 1.05 : 1;
-        const growth = .75 * (1 + .2 * civ.era) * civ.developmentMultiplier * paradoxGrowth * institution * CivilizationPaths.simulationModifier(civ, 'development') * dt;
-        civ.development += growth;
+        civ.development += developmentGrowthPerSecond(civ, this.upgradeLevel('axiom', 'axiom_paradox_food')) * dt;
         let decay = .018 * (1 + .55 * civ.era) * (1 + s.attention / 140) * (1 + s.awareness / 180) * civ.stabilityDecayMult;
         if (civ.flags.includes('impossible_tax'))
             decay *= .95;
@@ -305,6 +302,9 @@ export class GameEngine {
             amount *= b.attentionGainMult;
         effects[key] = amount;
     } return effects; }
+    developmentRate() { const civ = this.state.civilization; if (!civ)
+        return 0; return developmentGrowthPerSecond(civ, this.upgradeLevel('axiom', 'axiom_paradox_food')); }
+    pressureYears() { const civ = this.state.civilization; return civ ? pressureYears(civ) : 0; }
     previewHarvestDetails(chaotic = false) { const civ = this.state.civilization; if (!civ)
         return { grade: 'premature', multiplier: .2, credits: 0, depth: 0, rewardMultiplier: .2, objectiveCompleted: false, rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 } }; const bonuses = this.runtimeBonuses(); const quality = evaluateHarvestQuality(civ, chaotic); const objectiveCompleted = quality.grade !== 'premature' && evaluateDirectiveObjective(civ); const applied = applyHarvestQuality(calculateHarvest(civ, chaotic, bonuses), quality, { collapsed: chaotic, gradeRewardMult: bonuses.gradeRewardMult, objectiveMultiplier: objectiveCompleted ? 1.15 : 1 }); return { ...quality, credits: calculateCultivationCredits(quality, chaotic, objectiveCompleted), objectiveCompleted, ...applied }; }
     previewHarvest(chaotic = false) { return this.previewHarvestDetails(chaotic).rewards; }

@@ -1,8 +1,8 @@
-# Reality Consumption Engine — App Edition v1.6.0
+# Reality Consumption Engine — App Edition v1.7.0
 
-An installable, offline-capable browser incremental roguelite. Version 1.5.0
-puts a continuous containment curve under survival, a continuous Cultivation Depth
-under the harvest, and cost-bearing decisions into every gap between interventions.
+An installable, offline-capable browser incremental roguelite. Version 1.7.0 gives
+Entropy a cost before it kills you, computes the stay-or-harvest moment instead of
+leaving it to be guessed, and paints only the slice of the world that is on screen.
 
 ## Included
 
@@ -13,14 +13,51 @@ under the harvest, and cost-bearing decisions into every gap between interventio
 - shared Control Capacity, Containment Rating, Entropy crises, and cascade pressure
 - exact before/after feedback and action-specific world impulses
 - deterministic Directive drafts, objective bonuses, and starting-trait previews
-- four Harvest Grades and an 18-Cultivation-Credit Universe requirement
+- five Harvest Grades and an 18-Cultivation-Credit Universe requirement
+- a computed harvest call: whether the next Cultivation Credit fits in the run that is left
 - 12 Traits, 12 Machine, 8 Universe, and 6 Axiom upgrades
 - state-reactive parallax world with cached scenery and throttled animation
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
 
-## v1.6.0 victory and milestones
+## v1.7.0 pressure with a cost, a harvest signal, and a world that paints only what it shows
+
+v1.7.0 closes three gaps between the v1.5.0 design and the shipped engine, and takes the
+renderer off drawing the parts of the world nobody can see.
+
+**Entropy now costs something below 100.** It used to cost nothing at all: `cascadeDecay`
+fires only at the threshold, so the four alarm bands the interface names were free, and
+obeying them measured as 69 seconds of run and 2 Cultivation Credits worse than ignoring
+them. Development growth now keeps 1.000 / 0.969 / 0.875 / 0.719 / 0.500 of its rate at
+Entropy 0 / 25 / 50 / 75 / 100. Runs are not shorter, only shallower, and the survival curve
+is untouched.
+
+**The stay-or-harvest moment is computed and shown.** The tactical rail carries the harvest
+grade, Cultivation Depth, the next depth band and the yield, and states in words whether the
+next credit still fits in the run — measured against how long the run can actually last,
+which counts the vents Stability can still pay for, not the bare cascade floor. A chaotic
+harvest now keeps 60% of its credits rounded rather than floored, so a cascade costs a
+3-credit run a third of them instead of two thirds.
+
+**Accelerate pays a one-off price.** The years it injects no longer inflate the Entropy rate
+for the rest of the run. Accelerating builds gain 9-11% yield; runs that never accelerate are
+unchanged. Waiting still wins at every containment level, so the action's direct costs remain
+an open balance question.
+
+**The world paints its visible slice.** Both canvas layers used to draw the full world width —
+four viewports at stage 4, of which one is on screen — on every scrolled pixel and, for the
+dynamic layer, thirty times a second. Draw work is down 55-62% on the cached layer and 51-68%
+on the animated one, with the number of visible primitives identical at every scroll position.
+The world's mood also glides now instead of stepping in four jumps, new structures are seen to
+arrive rather than appearing between blinks, and on phones the tactical actions sit in a 2x2
+grid with the cascade clock and harvest call moved onto the world itself.
+
+**Saves from v1.6.0 are carried over.** `SAVE_VERSION` stays 4; the fields added to a
+running Civilization in v1.7.0 are optional and default cleanly, so an in-progress run
+behaves exactly as it did when it was written.
+
+## v1.6.0 victory and milestones (Historical)
 
 v1.6.0 gives the game an explicit win condition. Meta progress unlocks the **Great
 Convergence**: a terminal cultivation that starts in APOTHEOSIS, runs at 1.6x Entropy, pays
@@ -50,7 +87,7 @@ A shallow build cannot clear Depth 14, a deep build clears it with little margin
 build clears the scaled targets of several further convergences. The target is a single constant,
 `CONVERGENCE_BASE_DEPTH` in `public/game/src/game/convergence.ts`.
 
-## v1.5.0 balance curve
+## v1.5.0 balance curve (Historical)
 
 v1.5.0 replaces binary survival with a continuous containment curve, replaces the capped harvest
 grade with a continuous Cultivation Depth, and adds an Entropy Vent plus three mid-run machine

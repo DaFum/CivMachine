@@ -47,9 +47,12 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
 
 test('dynamic world state is sampled independently from cached structural scenery', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /const dynamicSnapshot\s*=\s*worldSnapshot\(civ,\s*this\.width\)/);
+  // The per-frame sample carries only the stat-driven counts; structural geometry is reused from the
+  // cached scene, so a frame must not rebuild settlement, building or agent budgets.
+  assert.match(world, /const dynamicSnapshot\s*=\s*\{\s*\.\.\.scene\.snapshot,\s*\.\.\.liveWorldSample\(civ,\s*scene\.snapshot\.stage\)\s*\}/);
   assert.match(world, /const dynamicPresentation\s*=\s*worldPresentation\(civ\)/);
   assert.match(world, /drawDynamicContent\([^;]+dynamicSnapshot,\s*dynamicPresentation/);
+  assert.doesNotMatch(world, /worldSnapshot\(civ,\s*this\.width\)/, 'the dynamic layer must not rebuild the structural snapshot per frame');
 });
 
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {
@@ -133,6 +136,44 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /entropyBand/);
+});
+
+test('the tactical rail carries the harvest decision instead of a collapsed panel', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const viewModel = await readFile(new URL('../src/ui/view-model.ts', import.meta.url), 'utf8');
+  // Stay-or-harvest and CASCADE IN Xs answer the same question, so grade, depth, the band meter and
+  // the yield must live in the rail -- not behind a summary the player has to open mid-run.
+  assert.match(app, /class="harvest-readout /);
+  const rail = app.slice(app.indexOf('const tacticalRail='), app.indexOf('function renderCivilization'));
+  assert.match(rail, /harvestReadout\(vm\)/, 'the rail must render the harvest readout');
+  const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const tacticalRail='));
+  assert.match(readout, /HARVEST GRADE/);
+  assert.match(readout, /data-live="depth"/);
+  assert.match(readout, /data-live="harvest-summary"/);
+  assert.match(readout, /data-live="harvest-meter"/);
+  assert.match(readout, /NEXT <b>/, 'the next depth band and its yield must be named');
+  assert.match(viewModel, /bandProgress/);
+  const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
+  assert.match(refresh, /\[data-live="harvest-meter"\][\s\S]{0,120}vm\.harvest\.bandProgress/);
+
+  // The stay-or-harvest call is computed from the development rate against seconds to cascade, and
+  // it is written through the live refresh -- never through the structural key, because both sides
+  // of its threshold move continuously.
+  assert.match(app, /data-live="harvest-call"/);
+  assert.match(refresh, /\[data-live="harvest-call"\]/);
+  assert.match(refresh, /urgency-\$\{state\}/);
+  assert.doesNotMatch(viewModel.slice(viewModel.indexOf('export function civilizationRenderKey')), /urgency/);
+});
+
+test('the rail names its keyboard shortcuts once for every bound action', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  assert.match(app, /class="rail-keys"/);
+  assert.match(app, /KEYS \$\{keys\}/);
+  // The legend is generated from the same action list the buttons use, so a fifth action cannot
+  // ship with a stale legend -- and main.ts must actually bind every shortcut it advertises.
+  assert.match(app, /const keys=t\.actions\.map/);
+  for (const digit of ['Digit1', 'Digit2', 'Digit3', 'Digit4']) assert.match(main, new RegExp(digit));
 });
 
 test('keyboard map binds 1, 2, and 3 once while ignoring editable and modified input', async () => {

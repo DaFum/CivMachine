@@ -2,9 +2,9 @@ import { CivilizationPaths } from '../game/paths.js';
 import { milestoneProgress } from '../game/milestones.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
-import { entropyRate, pressureMultiplier, secondsToCascade } from '../game/pressure.js';
-import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS } from '../game/tactical-actions.js';
+import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
+import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
+import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST } from '../game/tactical-actions.js';
 import type { GameEngine } from '../game/engine.js';
 
 const RESOURCE_NAMES: Record<string,string> = {
@@ -42,6 +42,17 @@ function entropyBand(value:number):{index:number;id:string;label:string}{
   if(value>=50)return {index:2,id:'fractured',label:'FRACTURED'};
   if(value>=25)return {index:1,id:'strained',label:'STRAINED'};
   return {index:0,id:'contained',label:'CONTAINED'};
+}
+
+// How far the run has travelled inside its current depth band, as a percentage. The tactical rail
+// draws it as a meter next to the Entropy meter, so the two competing clocks -- how much time is
+// left and how much yield is still coming -- are read side by side.
+function depthBandProgress(depth: number): number {
+  const current = [...DEPTH_BANDS].reverse().find(band => depth >= band.minDepth) ?? DEPTH_BANDS[0]!;
+  const upcoming = DEPTH_BANDS.find(band => band.minDepth > depth);
+  if (!upcoming) return 100;
+  const span = upcoming.minDepth - current.minDepth;
+  return span <= 0 ? 100 : Math.max(0, Math.min(100, (depth - current.minDepth) / span * 100));
 }
 
 // The stay-or-harvest decision is a blind guess without a forecast, so the view model carries the
@@ -145,9 +156,9 @@ export function buildViewModel(engine: GameEngine) {
     tactical: civ ? {
       entropy: civ.tactical.entropy,
       entropyBand: entropyBand(civ.tactical.entropy),
-      entropyRate: entropyRate(civ.years, bonuses.containmentRating, civ.terminal),
-      pressureMultiplier: pressureMultiplier(civ.years),
-      secondsToCascade: secondsToCascade(civ.years, civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+      entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+      pressureMultiplier: pressureMultiplier(pressureYears(civ)),
+      secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
       controlCapacity: civ.tactical.controlCapacity,
       controlMax: 3,
       containmentRating: bonuses.containmentRating,
@@ -161,7 +172,21 @@ export function buildViewModel(engine: GameEngine) {
       chaotic: chaoticHarvest,
       depth: cultivationDepth(civ),
       depthBand: depthBand(cultivationDepth(civ)),
+      bandProgress: depthBandProgress(cultivationDepth(civ)),
       nextBand: nextDepthBand(cultivationDepth(civ)),
+      urgency: harvestUrgency({
+        depth: cultivationDepth(civ),
+        credits: controlledHarvest?.credits ?? 0,
+        developmentRate: engine.developmentRate(),
+        secondsToCascade: secondsToCascade(pressureYears(civ), civ.tactical.entropy, bonuses.containmentRating, civ.terminal),
+        entropyRate: entropyRate(pressureYears(civ), bonuses.containmentRating, civ.terminal),
+        stability: civ.stats.stability,
+        controlCapacity: civ.tactical.controlCapacity,
+        ventEntropyRelief: VENT_ENTROPY_RELIEF,
+        ventStabilityCost: VENT_STABILITY_COST,
+        entropy: civ.tactical.entropy,
+        premature: controlledHarvest?.grade === 'premature',
+      }),
       convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
     } : null,
     machineReserve: civ ? engine.runInterventions() : [],

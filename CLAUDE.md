@@ -43,7 +43,7 @@ Strict one-directional layering under `public/game/src/`:
 `data/` → `game/` → `ui/` + `render/`, wired together by `main.ts`.
 
 - **`game/engine.ts`** is the single source of truth. `GameEngine` holds all mutable `state`, exposes `onChange(fn)` for subscribers, and delegates every rule to a small pure module: `rules.ts` (harvest/cost math), `progression.ts` (unlocks, Machine Insight), `paths.ts` (path affinity), `pressure.ts` (Entropy/cascade), `tactical-actions.ts`, `intervention-scheduler.ts` (seeded weighted draw with repetition protection), `harvest-quality.ts`, `run-directives.ts`, `decision-feedback.ts`. Keep new rules in such modules — they are what the tests target.
-- **`main.ts`** owns the `requestAnimationFrame` loop, ticks the engine only in the `civilization` phase, autosaves every 5 s plus on `beforeunload`/`pagehide`/`visibilitychange`, and binds keys 1/2/3 to the tactical actions.
+- **`main.ts`** owns the `requestAnimationFrame` loop, ticks the engine only in the `civilization` phase, autosaves every 5 s plus on `beforeunload`/`pagehide`/`visibilitychange`, and binds keys 1/2/3/4 (digit row and numpad) to the four tactical actions — Stabilize, Accelerate, Probe, Vent.
 - **`ui/view-model.ts`** turns engine state into presentation data (labels, bands, redaction by Prediction Core level). **`ui/app.ts`** renders it into the static DOM from `index.html` using template strings plus `replaceIfChanged` (innerHTML comparison). All escaping goes through `esc()`.
 - **`render/world.ts`** owns the renderer lifecycle and a deterministic Canvas 2D world on two stacked canvases: a cached static layer (sky, terrain, settlements) redrawn only when `structuralWorldKey` changes, and a dynamic layer redrawn every throttled frame. All drawing goes through the `DrawSurface` interface in `render/draw-surface.ts`, which keeps the drawing code free of canvas transform bookkeeping and lets tests record primitives. Visuals must derive from `render/world-model.ts` (`worldSnapshot`, `developmentStage`) and `render/world-presentation.ts` (`worldPresentation`, `structuralWorldKey`). There is no second renderer — tests assert no Phaser naming survives.
 
@@ -75,7 +75,9 @@ The engine composes these over the generated catalogs in its field initializers.
 
 ## Version coupling
 
-`1.4.0` appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and both READMEs. `tests/game-release.test.mjs` asserts the two `package.json` versions match, so bump all of them together.
+The current version (`1.7.0`) appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and the title plus a release-notes heading in both READMEs.
+
+`tests/game-release.test.mjs` reads the version from the root `package.json`, asserts it once explicitly, and derives every other check from it — so a release is two edits (that assertion and `package.json`) and the test then insists on the rest. It fails on a stale `CACHE_NAME`, a stale README title, a missing `## vX.Y.Z` release-notes heading, or a drifted game package version. `CACHE_NAME` is the one that actually delivers a release: the service worker serves cache-first with no revalidation, so without a bump returning players keep the old files forever.
 
 ## Conventions
 
@@ -96,4 +98,4 @@ Everything else is pinned to an exact latest version; `npm audit` reports zero v
 
 ## Design docs
 
-`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-19` (v1.4.0 civilization visualization, and the v1.3.1 progression rebalance before it). Read the matching spec before changing balance or progression — the numbers in the tests come from there.
+`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-20` (continuous entropy cost and harvest signal specification, and the v1.4.0 civilization visualization before it). Read the matching spec before changing balance or progression — the numbers in the tests come from there.

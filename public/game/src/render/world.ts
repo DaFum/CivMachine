@@ -1,7 +1,7 @@
 import type { GameEngine } from '../game/engine.js';
 import type { Civilization, DecisionFeedback } from '../game/types.js';
 import { CivilizationPaths } from '../game/paths.js';
-import { worldSnapshot } from './world-model.js';
+import { liveWorldSample, worldSnapshot } from './world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface, type DrawSurface } from './draw-surface.js';
@@ -22,6 +22,40 @@ const CONSTRUCTION_DURATION = reducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUC
 // Ground sits low enough that the strip below it stays a framed foreground band rather than
 // a quarter of the viewport filled with nothing.
 const GROUND_RATIO = .78;
+// Parallax factors of the three cached layers, in the order they are painted.
+const SKY_PARALLAX = .1;
+const TERRAIN_PARALLAX = .52;
+// Widest single primitive any static layer draws. Exported so the cull test can state its ceiling in
+// terms of the design instead of a magic number.
+export const WIDEST_STATIC_PRIMITIVE = 230;
+// Slack on each side of the visible slice, so an element anchored just off screen still paints the
+// part that reaches into view.
+export const CULL_MARGIN = 320;
+// Half the width of a banner's cloth plus its pole, so one anchored at the band edge still paints.
+const BANNER_SLACK = 40;
+// Widest path motif: the bureaucratic filing cabinet at 28 px plus its rings.
+const MOTIF_SLACK = 60;
+
+/** The slice of world a layer actually shows, in world px. */
+interface WorldBand { from: number; to: number }
+
+/**
+ * A layer at parallax `f` is drawn under `translate(-scroll * f)`, so the world coordinates on screen
+ * run from `scroll * f` to `scroll * f + width`. Everything outside that, plus a margin, is invisible.
+ *
+ * Culling matters because `drawStatic` runs on every scrolled pixel and each layer spans
+ * `snapshot.worldWidth` -- up to four viewports at stage 4, of which one is on screen. Caching the
+ * layers into offscreen canvases instead was measured and rejected: a 1440x760 viewport at stage 4
+ * needs 11520x1520 device px per layer, about 70 MB, and three of those exceed what a mobile browser
+ * will hand out.
+ */
+function visibleBand(worldWidth: number, width: number, scroll: number, parallax: number): WorldBand {
+  const offset = scroll * parallax;
+  return {
+    from: Math.max(0, offset - CULL_MARGIN),
+    to: Math.min(worldWidth, offset + width + CULL_MARGIN),
+  };
+}
 
 
 interface WorldScene {
@@ -47,42 +81,54 @@ function factionColor(scene: WorldScene, settlement: Settlement): number {
   return settlement.factionIndex >= 0 ? (scene.roster[settlement.factionIndex]?.color ?? UNALIGNED_COLOR) : UNALIGNED_COLOR;
 }
 
-function drawSkyContent(surface: DrawSurface, scene: WorldScene, height: number): void {
+function drawSkyContent(surface: DrawSurface, scene: WorldScene, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation } = scene;
   const worldWidth = snapshot.worldWidth;
-  surface.fillStyle(presentation.colors.skyTop, 1).fillRect(0, 0, worldWidth, height * .48);
-  surface.fillStyle(presentation.colors.skyBottom, 1).fillRect(0, height * .48, worldWidth, height * .52);
+  const span = view.to - view.from;
+  if (span <= 0) return;
+  surface.fillStyle(presentation.colors.skyTop, 1).fillRect(view.from, 0, span, height * .48);
+  surface.fillStyle(presentation.colors.skyBottom, 1).fillRect(view.from, height * .48, span, height * .52);
   for (let band = 0; band < 5; band++) {
-    surface.fillStyle(presentation.colors.haze, .025 + presentation.attention * .018).fillRect(0, height * (.24 + band * .085), worldWidth, height * .08);
-  }
-  for (let i = 0; i < snapshot.particleCount; i++) {
-    surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
-      .fillCircle(hash01(civ.seed + i * 17) * worldWidth, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
+    surface.fillStyle(presentation.colors.haze, .025 + presentation.attention * .018).fillRect(view.from, height * (.24 + band * .085), span, height * .08);
   }
   if (civ.stats.attention >= 60) {
     const observerX = worldWidth * (.72 + hash01(civ.seed) * .12);
-    surface.fillStyle(presentation.accent, .035 + presentation.attention * .05).fillCircle(observerX, height * .18, 78);
-    surface.lineStyle(1.5, presentation.accent, .12 + presentation.attention * .16).strokeCircle(observerX, height * .18, 42);
+    if (observerX >= view.from && observerX <= view.to) {
+      surface.fillStyle(presentation.accent, .035 + presentation.attention * .05).fillCircle(observerX, height * .18, 78);
+      surface.lineStyle(1.5, presentation.accent, .12 + presentation.attention * .16).strokeCircle(observerX, height * .18, 42);
+    }
   }
 }
 
-function drawTerrainContent(surface: DrawSurface, scene: WorldScene, height: number): void {
+function drawTerrainContent(surface: DrawSurface, scene: WorldScene, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation } = scene;
   const worldWidth = snapshot.worldWidth;
   const horizon = height * .69;
-  for (let i = 0; i < Math.ceil(worldWidth / 160) + 1; i++) {
+  const span = view.to - view.from;
+  if (span <= 0) return;
+  // Triangles sit on a 160 px lattice at x = i * 160 - 80 and span 230 px, so the visible indices
+  // follow from the band directly instead of walking the whole world.
+  const last = Math.ceil(worldWidth / 160);
+  // A triangle at index i spans [i * 160 - 80, i * 160 + 150], so it is visible when its right edge
+  // clears view.from and its left edge lands before view.to. The lower bound ceils and the upper one
+  // floors; rounding either the other way draws a whole triangle nobody can see.
+  const firstIndex = Math.max(0, Math.ceil((view.from - WIDEST_STATIC_PRIMITIVE + 80) / 160));
+  const lastIndex = Math.min(last, Math.floor((view.to + 80) / 160));
+  for (let i = firstIndex; i <= lastIndex; i++) {
     const x = i * 160 - 80;
     surface.fillStyle(presentation.colors.farTerrain, .82).fillTriangle(x, horizon, x + 110, horizon - 60 - hash01(civ.seed * 3 + i * 29) * 100, x + 230, horizon);
   }
-  surface.fillStyle(presentation.colors.nearTerrain, .82).fillRect(0, horizon, worldWidth, height - horizon);
+  surface.fillStyle(presentation.colors.nearTerrain, .82).fillRect(view.from, horizon, span, height - horizon);
 }
 
-function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: number): void {
+function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation, settlements } = scene;
   const worldWidth = snapshot.worldWidth;
   const stage = snapshot.stage;
   const ground = height * GROUND_RATIO;
-  surface.fillStyle(presentation.colors.nearTerrain, 1).fillRect(0, ground, worldWidth, height - ground);
+  const span = view.to - view.from;
+  if (span <= 0) return;
+  surface.fillStyle(presentation.colors.nearTerrain, 1).fillRect(view.from, ground, span, height - ground);
 
   // Roads connect settlement centers rather than banding the whole world.
   if (stage > 0) {
@@ -91,20 +137,31 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
       const to = settlements[i + 1] ?? null;
       const left = to ? from.centerX : from.centerX - from.radius;
       const right = to ? to.centerX : from.centerX + from.radius;
-      const start = Math.min(left, right); const span = Math.abs(right - left);
-      surface.fillStyle(0x11191f, .98).fillRect(start, ground + 4, span, 12 + stage * 3);
-      for (let dash = 0; dash * 42 < span; dash++) {
-        surface.fillStyle(presentation.colors.window, .18).fillRect(start + dash * 42 + 10, ground + 10 + stage, 18, 2);
+      const start = Math.min(left, right); const roadSpan = Math.abs(right - left);
+      if (start > view.to || start + roadSpan < view.from) continue;
+      surface.fillStyle(0x11191f, .98).fillRect(start, ground + 4, roadSpan, 12 + stage * 3);
+      // Dashes sit on a 42 px lattice inside the road; dash d spans [start + 42d + 10, +18], so it
+      // shows once its right edge clears view.from. Ceil, or the run starts one dash too early.
+      const firstDash = Math.max(0, Math.ceil((view.from - start - 28) / 42));
+      for (let dash = firstDash; dash * 42 < roadSpan; dash++) {
+        const dashX = start + dash * 42 + 10;
+        if (dashX > view.to) break;
+        surface.fillStyle(presentation.colors.window, .18).fillRect(dashX, ground + 10 + stage, 18, 2);
       }
     }
-    if (stage >= 2) surface.lineStyle(2, presentation.accent, .24).line(0, ground - 9, worldWidth, ground - 9);
-    if (stage >= 4) surface.lineStyle(2, presentation.accent, .4).line(0, ground - 18, worldWidth, ground - 18);
+    if (stage >= 2) surface.lineStyle(2, presentation.accent, .24).line(view.from, ground - 9, view.to, ground - 9);
+    if (stage >= 4) surface.lineStyle(2, presentation.accent, .4).line(view.from, ground - 18, view.to, ground - 18);
   } else {
-    surface.fillStyle(0x493821, .98).fillRect(0, ground + 4, worldWidth, 11);
+    surface.fillStyle(0x493821, .98).fillRect(view.from, ground + 4, span, 11);
   }
 
   for (const settlement of settlements) {
+    // The settlement footprint is the cheap first cut, but a wide settlement straddling the band edge
+    // still holds structures far outside it, so each structure is checked too. Its own width is the
+    // slack, which covers the annexes and crowns drawn around the anchor.
+    if (settlement.centerX - settlement.radius > view.to || settlement.centerX + settlement.radius < view.from) continue;
     for (const structure of settlement.structures) {
+      if (structure.x + structure.width < view.from || structure.x - structure.width > view.to) continue;
       drawStructure(surface, structure, ground, presentation.colors.settlement, presentation.accent, presentation.colors.window, civ.seed);
     }
     // A faction-colored plinth marks who holds the settlement even in the cached layer.
@@ -116,21 +173,29 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
   // Foreground bank: without it the strip below the road was flat, empty fill.
   const bankTop = height - Math.max(14, (height - ground) * .34);
   const bankColor = mixColor(presentation.colors.nearTerrain, 0x000000, .5);
-  surface.fillStyle(bankColor, 1).fillRect(0, bankTop, worldWidth, height - bankTop);
-  for (let i = 0; i * 96 < worldWidth; i++) {
+  surface.fillStyle(bankColor, 1).fillRect(view.from, bankTop, span, height - bankTop);
+  // Bank triangle i spans [i * 96, i * 96 + 96], so it shows once its right edge clears view.from.
+  const firstBank = Math.max(0, Math.ceil((view.from - 96) / 96));
+  for (let i = firstBank; i * 96 < worldWidth; i++) {
     const x = i * 96;
+    if (x > view.to) break;
     surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - 5 - hash01(civ.seed + i * 7) * 12, x + 96, bankTop + 2);
   }
-  surface.lineStyle(1, presentation.accent, .12).line(0, bankTop, worldWidth, bankTop);
+  surface.lineStyle(1, presentation.accent, .12).line(view.from, bankTop, view.to, bankTop);
 }
 
-function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number): void {
+function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: WorldBand): void {
   const path = CivilizationPaths.ensure(civ).dominantPath;
   if (!path) return;
+  // Every motif scatters a handful of marks across the whole world. Each is small, so one slack
+  // covers them all, and the guard keeps the dominant path from being the one thing still painted
+  // world-wide on the layer that repaints every frame.
+  const shows = (x: number): boolean => x >= view.from - MOTIF_SLACK && x <= view.to + MOTIF_SLACK;
   switch (path) {
     case 'machine_faith':
       for (let i = 0; i < 8; i++) {
         const x = worldWidth * (.08 + i * .12);
+        if (!shows(x)) continue;
         surface.lineStyle(2, accent, .32).line(x, ground - 35, x, ground - 90 - (i % 3) * 18);
         surface.fillStyle(accent, .42).fillCircle(x, ground - 95 - (i % 3) * 18, 4);
       }
@@ -138,13 +203,19 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'collective_mind': {
       const points = Array.from({ length: 12 }, (_, i) => ({ x: worldWidth * (.05 + hash01(civ.seed + i) * .9), y: ground - 40 - hash01(i * 17) * 100 }));
       surface.lineStyle(1, accent, .22);
-      for (let i = 1; i < points.length; i++) surface.line(points[i - 1]!.x, points[i - 1]!.y, points[i]!.x, points[i]!.y);
-      for (const point of points) surface.fillStyle(accent, .5).fillCircle(point.x, point.y, 3);
+      // A segment survives if either end shows, or the chain would break at the band edge.
+      for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1]!, b = points[i]!;
+        if (!shows(a.x) && !shows(b.x)) continue;
+        surface.line(a.x, a.y, b.x, b.y);
+      }
+      for (const point of points) if (shows(point.x)) surface.fillStyle(accent, .5).fillCircle(point.x, point.y, 3);
       break;
     }
     case 'temporal_dominion':
       for (let i = 0; i < 7; i++) {
         const x = worldWidth * (.1 + i * .13); const y = height * .22 + (i % 2) * 30;
+        if (!shows(x)) continue;
         surface.lineStyle(2, accent, .3).strokeCircle(x, y, 12 + i * 2);
         surface.lineStyle(1, accent, .45).line(x, y, x + Math.cos(time * .001 + i) * 10, y + Math.sin(time * .001 + i) * 10);
       }
@@ -152,15 +223,17 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'reality_engineering':
       for (let i = 0; i < 9; i++) {
         const x = worldWidth * (.08 + i * .105); const y = ground - 50 - (i % 3) * 35;
+        if (!shows(x)) continue;
         surface.lineStyle(2, accent, .3).line(x - 12, y + 12, x, y - 12).line(x, y - 12, x + 12, y + 12).line(x + 12, y + 12, x - 12, y + 12);
       }
       break;
     case 'biological_transcendence':
-      for (let i = 0; i < 18; i++) surface.fillStyle(accent, .14).fillCircle(worldWidth * hash01(civ.seed + i * 13), ground - 10 - hash01(i * 29) * 80, 8 + hash01(i) * 14);
+      for (let i = 0; i < 18; i++) { const x = worldWidth * hash01(civ.seed + i * 13); if (!shows(x)) continue; surface.fillStyle(accent, .14).fillCircle(x, ground - 10 - hash01(i * 29) * 80, 8 + hash01(i) * 14); }
       break;
     case 'cosmic_resistance':
       for (let i = 0; i < 12; i++) {
         const x = worldWidth * (.03 + i * .085);
+        if (!shows(x)) continue;
         surface.fillStyle(accent, .38).fillTriangle(x, ground - 48, x + 16, ground - 43, x, ground - 36);
         surface.lineStyle(1, 0xe5e5e5, .35).line(x, ground - 48, x, ground - 26);
       }
@@ -168,6 +241,7 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'bureaucratic_singularity':
       for (let i = 0; i < 10; i++) {
         const x = worldWidth * (.06 + i * .095); const y = ground - 70 - (i % 2) * 28;
+        if (!shows(x)) continue;
         surface.lineStyle(1, accent, .25).strokeRect(x, y, 28, 20);
         surface.lineStyle(1, accent, .18).line(x + 4, y + 6, x + 23, y + 6);
       }
@@ -175,6 +249,7 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'post_mortal_civilization':
       for (let i = 0; i < 9; i++) {
         const x = worldWidth * (.07 + i * .11); const y = ground - 55 - (i % 3) * 20;
+        if (!shows(x)) continue;
         surface.fillStyle(accent, .11).fillCircle(x, y, 11);
         surface.lineStyle(1, accent, .34).strokeCircle(x, y, 7);
       }
@@ -182,6 +257,7 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'void_communion':
       for (let i = 0; i < 7; i++) {
         const x = worldWidth * (.1 + i * .13); const y = height * .18 + (i % 3) * 24;
+        if (!shows(x)) continue;
         surface.fillStyle(accent, .12).fillCircle(x, y, 26 + Math.sin(time * .001 + i) * 3);
         surface.lineStyle(2, accent, .28).strokeCircle(x, y, 9);
       }
@@ -189,6 +265,7 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
     case 'recursive_simulation':
       for (let i = 0; i < 8; i++) {
         const x = worldWidth * (.07 + i * .115); const y = ground - 75 - (i % 2) * 35;
+        if (!shows(x)) continue;
         for (let ring = 0; ring < 3; ring++) surface.lineStyle(1, accent, .18 + .06 * ring).strokeRect(x - ring * 5, y - ring * 5, 22 + ring * 10, 14 + ring * 10);
       }
       break;
@@ -200,21 +277,59 @@ function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: numb
  * awareness) keeps showing while the cached structural layers stay untouched. Geometry comes
  * from the cached `scene`.
  */
-function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, time: number, tracker: ConstructionTracker): void {
+/**
+ * Difference between the live palette and the one baked into the cached layers, painted as a wash so
+ * the two never drift more than a band apart. The strength is the distance the live values have
+ * travelled inside their current band, which is zero right after a rebuild and grows until the next
+ * one -- so the seam where the cached layer catches up is never visible as a jump.
+ */
+function drawMoodWash(surface: DrawSurface, scene: WorldScene, live: ReturnType<typeof worldPresentation>, view: WorldBand, height: number): void {
+  const cached = scene.presentation;
+  const drift = Math.min(1, Math.abs(live.entropy - cached.entropy) + Math.abs(live.danger - cached.danger)
+    + Math.abs(live.attention - cached.attention) + Math.abs(live.sanityDistortion - cached.sanityDistortion));
+  if (drift < .002) return;
+  // Culled like the static layers. This runs on every dynamic frame, so a wash across the whole world
+  // would hand back the cost the culling just removed.
+  const span = view.to - view.from;
+  if (span <= 0) return;
+  surface.fillStyle(live.colors.skyBottom, drift * .32).fillRect(view.from, 0, span, height * .7);
+  surface.fillStyle(live.colors.nearTerrain, drift * .34).fillRect(view.from, height * .7, span, height * .3);
+}
+
+function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, time: number, tracker: ConstructionTracker, view: WorldBand): void {
   const { civ, settlements, plan, species } = scene;
   const animationTime = reducedMotion ? 0 : time;
   const worldWidth = snapshot.worldWidth;
   const ground = height * GROUND_RATIO;
 
+  // The hash decides where a particle lands, so the loop still visits every index; only the draw is
+  // skipped. Iterating is free next to filling a circle.
+  for (let i = 0; i < snapshot.particleCount; i++) {
+    const x = hash01(civ.seed + i * 17) * worldWidth;
+    if (x < view.from || x > view.to) continue;
+    surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
+      .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
+  }
+
+  // The cached layers below hold the palette frozen at the last structural key change, and that key
+  // reads Stability, Sanity, Awareness, Attention and Entropy as 25-point bands. So the world's base
+  // mood changed in four hard steps while the overlays glided. This pass closes the gap: one tinted
+  // wash mixed from the *live* presentation, drawn over the cached scenery, so the world keeps
+  // sliding between the steps. Structure stays cached; only the mood moves.
+  drawMoodWash(surface, scene, presentation, view, height);
+
   for (let i = 0; i < snapshot.hazeBands; i++) {
     const drift = (animationTime * (.002 + i * .00035)) % (width * .6);
     const y = height * (.28 + i * .07) + Math.sin(animationTime * .0005 + i) * (reducedMotion ? 0 : 4);
-    surface.fillStyle(presentation.colors.haze, .02 + presentation.sanityDistortion * .025).fillRect(drift - width * .3, y, worldWidth * .34, 22 + i * 4);
+    const from = Math.max(view.from, drift - width * .3);
+    const to = Math.min(view.to, drift - width * .3 + worldWidth * .34);
+    if (to > from) surface.fillStyle(presentation.colors.haze, .02 + presentation.sanityDistortion * .025).fillRect(from, y, to - from, 22 + i * 4);
   }
 
   // Lit windows keep flickering across the settlement skyline.
   for (let i = 0; i < Math.min(scene.structures.length, 46); i++) {
     const structure = scene.structures[i]!;
+    if (structure.x + structure.width < view.from || structure.x - structure.width > view.to) continue;
     if (snapshot.stage === 0 || hash01(civ.seed + i * 73 + Math.trunc(animationTime / 850)) < .42) continue;
     const rows = Math.max(2, Math.min(10, Math.trunc(structure.height / 18)));
     surface.fillStyle(presentation.colors.window, .45 + hash01(i * 9) * .32)
@@ -227,6 +342,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     if (!settlement) continue;
     const travel = reducedMotion ? pedestrian.offset : (pedestrian.offset + animationTime * .000045 * pedestrian.speed) % 1;
     const x = settlement.centerX - settlement.radius + travel * settlement.radius * 2;
+    if (x < view.from || x > view.to) continue;
     const phase = reducedMotion ? 0 : (animationTime % species.gaitPeriod) / species.gaitPeriod;
     drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
   }
@@ -235,6 +351,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   for (const vehicle of plan.vehicles) {
     const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
     const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
+    if (x < view.from || x > view.to) continue;
     const length = 5 + snapshot.stage * 1.5;
     const y = ground + 10 + vehicle.lane * 7;
     surface.fillStyle(vehicle.seed % 2 ? presentation.accent : presentation.colors.window, .72).fillRect(x, y, length, 2.5);
@@ -245,6 +362,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   for (const aircraft of plan.aircraft) {
     const travel = reducedMotion ? aircraft.phase : (aircraft.phase + animationTime * .00032 * aircraft.speed) % 1;
     const x = aircraft.fromX + (aircraft.toX - aircraft.fromX) * travel;
+    if (x < view.from - 10 || x > view.to + 10) continue;
     const y = height * aircraft.altitude;
     surface.lineStyle(1.5, presentation.accent, .62).line(x - 10, y, x + 10, y);
     surface.fillStyle(0xffffff, .82).fillCircle(x, y, 1.5);
@@ -252,13 +370,14 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
 
   for (const orbital of plan.orbital) {
     const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
+    if (x < view.from || x > view.to) continue;
     surface.lineStyle(1, presentation.accent, .44).strokeRect(x - 3, height * orbital.altitude - 2, 6, 4);
   }
 
   // Launches rise from an actual pad.
   for (const launch of plan.launches) {
     const cycle = ((animationTime + launch.offset) % launch.period) / launch.period;
-    if (cycle > .42) continue;
+    if (cycle > .42 || launch.x < view.from || launch.x > view.to) continue;
     const rise = cycle / .42;
     const y = ground - rise * height * .78;
     surface.fillStyle(presentation.accent, .9).fillRect(launch.x - 1.6, y, 3.2, 9);
@@ -268,10 +387,17 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   // Banners and construction.
   for (const settlement of settlements) {
     if (snapshot.stage === 0) continue;
+    // Footprint first as the cheap cut, then the banner and each scaffolded structure on their own
+    // positions: a settlement radius reaches up to 18% of the world, so its footprint overlapping the
+    // band says almost nothing about where its banner stands.
+    if (settlement.centerX - settlement.radius > view.to || settlement.centerX + settlement.radius < view.from) continue;
     const banner = bannerGeometry(settlement, ground, height);
-    const owner = settlement.factionIndex >= 0 ? scene.roster[settlement.factionIndex] : null;
-    drawBanner(surface, banner.x, banner.topY, banner.poleHeight, owner?.color ?? UNALIGNED_COLOR, owner?.sigil ?? 'node', reducedMotion ? 0 : (animationTime % 2600) / 2600);
+    if (banner.x >= view.from - BANNER_SLACK && banner.x <= view.to + BANNER_SLACK) {
+      const owner = settlement.factionIndex >= 0 ? scene.roster[settlement.factionIndex] : null;
+      drawBanner(surface, banner.x, banner.topY, banner.poleHeight, owner?.color ?? UNALIGNED_COLOR, owner?.sigil ?? 'node', reducedMotion ? 0 : (animationTime % 2600) / 2600);
+    }
     for (const structure of settlement.structures) {
+      if (structure.x + structure.width < view.from || structure.x - structure.width > view.to) continue;
       if (!tracker.isBuilding(structure.id, time)) continue;
       const progress = tracker.progress(structure.id, time);
       const top = ground - structure.height;
@@ -288,10 +414,12 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
 
   for (let i = 0; i < snapshot.fractureCount; i++) {
     const x = worldWidth * hash01(civ.seed + i * 61);
+    if (x < view.from - 46 || x > view.to + 46) continue;
     surface.lineStyle(1.4, 0xee6973, .24 + presentation.danger * .42).line(x, ground + 2, x + (hash01(i * 11) - .5) * 46, ground + 24 + hash01(i * 17) * 34);
   }
   for (let i = 0; i < snapshot.beaconCount; i++) {
     const x = worldWidth * (.08 + hash01(civ.seed + i * 97) * .84);
+    if (x < view.from - 18 || x > view.to + 18) continue;
     const pulse = reducedMotion ? 1 : .7 + Math.sin(animationTime * .003 + i) * .3;
     surface.lineStyle(1, presentation.accent, .16 + presentation.awareness * .25 * pulse).strokeCircle(x, ground - 55 - (i % 3) * 28, 10 + pulse * 8);
   }
@@ -301,7 +429,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
       surface.lineStyle(1, 0xb68cff, .08 + presentation.sanityDistortion * .13).strokeCircle(worldWidth * (.22 + i * .29) + wobble, height * (.28 + i * .04), 35 + i * 17);
     }
   }
-  drawPathMotif(surface, civ, worldWidth, height, ground, animationTime, presentation.accent);
+  drawPathMotif(surface, civ, worldWidth, height, ground, animationTime, presentation.accent, view);
 }
 
 function impulseColor(feedback:DecisionFeedback,kind:ReturnType<typeof decisionImpulseKind>):number {
@@ -440,14 +568,17 @@ class WorldRenderer {
   drawStatic(scene: WorldScene, scroll: number): void {
     const context = this.staticContext;
     const surface = this.surface(context);
+    const worldWidth = scene.snapshot.worldWidth;
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
-    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * .1 * devicePixelRatio, 0);
-    drawSkyContent(surface, scene, this.height);
-    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * .52 * devicePixelRatio, 0);
-    drawTerrainContent(surface, scene, this.height);
+    // Each layer paints only the slice its own parallax puts on screen. This runs on every scrolled
+    // pixel, so the difference between one viewport and four is the whole cost of dragging.
+    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * SKY_PARALLAX * devicePixelRatio, 0);
+    drawSkyContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, SKY_PARALLAX));
+    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * TERRAIN_PARALLAX * devicePixelRatio, 0);
+    drawTerrainContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, TERRAIN_PARALLAX));
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
-    drawSettlementContent(surface, scene, this.height);
+    drawSettlementContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, 1));
     context.setTransform(1, 0, 0, 1, 0, 0);
     this.staticRedraws++;
   }
@@ -457,10 +588,12 @@ class WorldRenderer {
     const surface = this.surface(context);
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
-    const dynamicSnapshot = worldSnapshot(civ, this.width);
+    // Only the stat-driven counts are resampled per frame; the structural geometry is whatever the
+    // cached scene already resolved, so a frame no longer rebuilds settlement and agent budgets.
+    const dynamicSnapshot = { ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) };
     const dynamicPresentation = worldPresentation(civ);
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
-    drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker);
+    drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1));
     context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     const feedback = engine.worldImpulse;
     if (feedback && feedback.sequence !== this.feedbackSequence) {

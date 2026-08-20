@@ -1,9 +1,9 @@
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
-import { developmentStage, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
+import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { decisionImpulseKind, entropyThresholdColor, structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
@@ -13,7 +13,7 @@ import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
-import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS } from '../dist/render/construction.js';
+import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
 import { freshEngine } from './balance-harness.mjs';
 
 const NEWLINE = String.fromCharCode(10);
@@ -38,6 +38,42 @@ test('world expands from sparse camps to an arcology world', () => {
   assert.ok(snap.buildingCount >= 34);
   assert.ok(snap.particleCount > 0);
   assert.ok(snap.hazeBands >= 2);
+});
+
+test('the snapshot carries no field the renderer never draws', () => {
+  const civ = GameEngine.createCivilizationForTest(11);
+  civ.development = 600;
+  civ.era = 2;
+  const snapshot = worldSnapshot(civ, 800);
+  // These four were computed on every frame and drawn nowhere. `agentBudget` is the living source
+  // for inhabitants, traffic, aircraft and orbitals; nothing may reintroduce a parallel count.
+  for (const dead of ['populationDots', 'trafficCount', 'aircraftCount', 'satelliteCount']) {
+    assert.equal(dead in snapshot, false, `${dead} is dead weight in the per-frame path`);
+  }
+  assert.ok(snapshot.agentBudget.pedestrians > 0);
+});
+
+test('the live sample holds exactly the stat-driven counts and is reused by the snapshot', () => {
+  const civ = GameEngine.createCivilizationForTest(11);
+  civ.development = 600;
+  civ.era = 2;
+  const live = liveWorldSample(civ, developmentStage(civ));
+  assert.deepEqual(
+    Object.keys(live).sort(),
+    ['beaconCount', 'entropyBand', 'fractureCount', 'hazeBands', 'particleCount'],
+  );
+  const snapshot = worldSnapshot(civ, 800);
+  for (const key of Object.keys(live)) assert.equal(snapshot[key], live[key], `${key} must have one definition`);
+
+  // Ticking stats move the live sample without touching structural geometry.
+  const before = liveWorldSample(civ, developmentStage(civ));
+  civ.stats.attention = 90;
+  civ.stats.stability = 30;
+  civ.tactical.entropy = 80;
+  const after = liveWorldSample(civ, developmentStage(civ));
+  assert.ok(after.particleCount > before.particleCount);
+  assert.ok(after.fractureCount > before.fractureCount);
+  assert.equal(worldSnapshot(civ, 800).buildingCount, snapshot.buildingCount);
 });
 
 test('presentation palette reacts to every strategic world state', () => {
@@ -745,13 +781,55 @@ test('the render key tracks the depth band, never the depth itself', () => {
   assert.notEqual(civilizationRenderKey(buildViewModel(engine)), before, 'crossing a band must change the key');
 });
 
-test('the service worker precaches every new game module', async () => {
+test('the service worker precaches every compiled game module', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  for (const name of ['run-interventions', 'pressure', 'harvest-quality', 'paths', 'rules', 'intervention-scheduler', 'milestones', 'convergence']) {
-    assert.ok(source.includes(`'/game/dist/game/${name}.js'`), `sw.js must precache game/${name}.js`);
+  // Derived from disk rather than from a hand-kept list: the precache list is hand-maintained and a
+  // module missing from it silently fails to load for every returning player. A literal list here
+  // only guards the modules someone remembered to add to it, which is the same bug one level up.
+  for (const directory of ['game', 'ui', 'render', 'data']) {
+    const compiled = (await readdir(new URL(`../dist/${directory}`, import.meta.url)))
+      .filter(name => name.endsWith('.js'));
+    assert.ok(compiled.length > 0, `dist/${directory} must be compiled before this runs`);
+    for (const name of compiled) {
+      assert.ok(source.includes(`'/game/dist/${directory}/${name}'`), `sw.js must precache ${directory}/${name}`);
+    }
   }
-  assert.ok(source.includes("'/game/dist/data/apotheosis-events.js'"), 'sw.js must precache the Apotheosis events');
-  assert.ok(source.includes("const CACHE_NAME = 'rce-app-v1.6.0'"), 'CACHE_NAME must be bumped');
+  assert.ok(source.includes("'/game/dist/main.js'"), 'sw.js must precache the entrypoint');
+  // Pinned to the shipped version rather than merely "present": a stale cache name is how a release
+  // ships to nobody, because the old cache is served first and never revalidated.
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.ok(source.includes(`const CACHE_NAME = 'rce-app-v${version}'`), `CACHE_NAME must be bumped to ${version}`);
+});
+
+test('a structure that appears animates, and the first sighting of the world does not', () => {
+  const tracker = new ConstructionTracker(1000);
+  // Loading a save must not put the whole world under scaffolding, so the first sync is silent.
+  tracker.sync([{ id: 's0:0', level: 1 }, { id: 's0:1', level: 1 }], 0);
+  assert.equal(tracker.activeCount, 0, 'the first sighting establishes a baseline only');
+
+  // Growth mostly arrives as new ids rather than higher levels, because buildingCount climbs with
+  // Development. That was silent before and is the common case.
+  tracker.sync([{ id: 's0:0', level: 1 }, { id: 's0:1', level: 1 }, { id: 's0:2', level: 1 }], 10);
+  assert.equal(tracker.isBuilding('s0:2', 20), true, 'a structure that appears must be seen to arrive');
+  assert.equal(tracker.isBuilding('s0:0', 20), false, 'its neighbours must not animate with it');
+  assert.equal(tracker.activeCount, 1);
+});
+
+test('concurrent construction is capped so a new settlement is growth, not a glitch', () => {
+  const tracker = new ConstructionTracker(1000);
+  tracker.sync([{ id: 's0:0', level: 1 }], 0);
+  // A settlement count change can bring a dozen structures at once.
+  const flood = [{ id: 's0:0', level: 1 }, ...Array.from({ length: 20 }, (_, i) => ({ id: `s1:${i}`, level: 1 }))];
+  tracker.sync(flood, 10);
+  assert.equal(tracker.activeCount, MAX_CONCURRENT_BUILDS);
+  // The budget goes to the first arrivals in document order, which is the layout's own order, so the
+  // choice is deterministic rather than dependent on Map iteration.
+  for (let i = 0; i < MAX_CONCURRENT_BUILDS; i++) assert.equal(tracker.isBuilding(`s1:${i}`, 20), true, `s1:${i} must animate`);
+  assert.equal(tracker.isBuilding(`s1:${MAX_CONCURRENT_BUILDS}`, 20), false, 'past the cap, arrivals are silent');
+
+  // Once the wave finishes the budget frees up again.
+  tracker.prune(1500);
+  assert.equal(tracker.activeCount, 0);
 });
 
 test('the construction tracker forgets structures the world no longer contains', () => {

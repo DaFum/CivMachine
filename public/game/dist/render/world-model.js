@@ -13,12 +13,27 @@ export function developmentStage(civ) {
 export function worldWidthMultiplier(civ) {
     return [1.5, 1.9, 2.5, 3.2, 4.0][developmentStage(civ)] ?? 1.5;
 }
+/**
+ * The counts that follow continuously ticking stats -- attention, awareness, stability, entropy --
+ * rather than the structural bands the cached scene is keyed on. The dynamic layer samples these
+ * every frame; everything else in `worldSnapshot` comes from the scene and must not be recomputed.
+ * `stage` is a parameter so a caller holding a cached scene pays nothing to pass it in.
+ */
+export function liveWorldSample(civ, stage = developmentStage(civ)) {
+    const entropy = Math.max(0, Math.min(100, civ.tactical.entropy));
+    const entropyBand = Math.min(4, Math.floor(entropy / 25));
+    return {
+        particleCount: Math.max(18, Math.min(150, 18 + stage * 12 + Math.trunc(civ.stats.attention / 3) + Math.trunc(civ.stats.awareness / 5) + entropyBand * 7)),
+        hazeBands: Math.max(2, Math.min(9, 2 + civ.era + Math.trunc(civ.stats.attention / 35) + entropyBand)),
+        fractureCount: Math.max(civ.stats.stability < 55 ? Math.ceil((55 - civ.stats.stability) / 5) : 0, entropyBand * 2),
+        beaconCount: civ.stats.awareness >= 35 ? Math.max(1, Math.min(10, Math.trunc(civ.stats.awareness / 12))) : 0,
+        entropyBand,
+    };
+}
 export function worldSnapshot(civ, viewportWidth) {
     const stage = developmentStage(civ);
     const institutionCount = civ.institutions.length;
     const development = civ.development;
-    const entropy = Math.max(0, Math.min(100, civ.tactical.entropy));
-    const entropyBand = Math.min(4, Math.floor(entropy / 25));
     let buildingCount = 3;
     if (stage === 0)
         buildingCount = Math.max(3, Math.min(8, 3 + institutionCount + Math.trunc(development / 120)));
@@ -44,15 +59,7 @@ export function worldSnapshot(civ, viewportWidth) {
         agentBudget,
         worldWidth: Math.max(viewportWidth, Math.round(viewportWidth * worldWidthMultiplier(civ))),
         buildingCount,
-        populationDots: Math.max(8, Math.min(230, 8 + stage * 12 + Math.trunc(development / 12) + civ.era * 18)),
-        trafficCount: stage >= 1 ? Math.max(3, Math.min(72, stage * 5 + Math.trunc(development / 30) + civ.era * 4)) : 0,
-        aircraftCount: stage >= 2 && civ.era >= 1 ? Math.max(1, Math.min(18, 1 + (stage - 1) * 2 + civ.era + Math.trunc(development / 180))) : 0,
-        satelliteCount: stage >= 3 && civ.era >= 1 ? Math.max(1, Math.min(8, 1 + stage - 2 + Math.trunc(development / 320))) : 0,
-        particleCount: Math.max(18, Math.min(150, 18 + stage * 12 + Math.trunc(civ.stats.attention / 3) + Math.trunc(civ.stats.awareness / 5) + entropyBand * 7)),
-        hazeBands: Math.max(2, Math.min(9, 2 + civ.era + Math.trunc(civ.stats.attention / 35) + entropyBand)),
-        fractureCount: Math.max(civ.stats.stability < 55 ? Math.ceil((55 - civ.stats.stability) / 5) : 0, entropyBand * 2),
-        beaconCount: civ.stats.awareness >= 35 ? Math.max(1, Math.min(10, Math.trunc(civ.stats.awareness / 12))) : 0,
-        entropyBand,
+        ...liveWorldSample(civ, stage),
     };
 }
 //# sourceMappingURL=world-model.js.map

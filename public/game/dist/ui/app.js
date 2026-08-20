@@ -91,8 +91,45 @@ export function createGameUI(engine, world) {
     }
     const rewardText = (key, details) => `${RESOURCE_SHORT[key]} ${key === 'causal_mass' || engine.resourceDiscovered(key) ? fmt(details.rewards[key]) : '???'}`;
     const rewardSpan = (kind, key, details) => `<span data-live="harvest-${kind}-${key}">${esc(rewardText(key, details))}</span>`;
+    // Turns the computed urgency into the one sentence the player actually needs. The numbers behind it
+    // -- development rate against seconds to cascade -- are exact, so the call is a calculation, not a
+    // vibe: the next Cultivation Credit either fits inside the remaining window or it does not.
+    const urgencyText = (h) => {
+        const u = h.urgency;
+        if (u.state === 'cascading')
+            return 'CASCADE UNDER WAY // harvest now or lose 40% of the credits';
+        if (u.state === 'capped')
+            return 'DEEPEST BAND REACHED // credit cap reached';
+        const left = Number.isFinite(u.secondsOfRunLeft) ? `${Math.floor(u.secondsOfRunLeft)}s` : 'no limit';
+        if (u.state === 'harvest')
+            return `HARVEST NOW // credit ${u.nextCredit} needs ${Math.ceil(u.secondsToNextCredit)}s, the run can reach ${left}`;
+        if (u.state === 'closing')
+            return `CLOSING // credit ${u.nextCredit} in ${Math.ceil(u.secondsToNextCredit)}s, the run can reach ${left}`;
+        if (h.controlled.grade === 'premature')
+            return 'BUILDING // no credits until the run clears Premature';
+        return `BUILDING // credit ${u.nextCredit} in ${Math.ceil(u.secondsToNextCredit)}s`;
+    };
+    // The world strip is as narrow as a phone, so it gets the short form. Same states, same numbers,
+    // no room for the sentence -- and Entropy is already in the state strip directly above it.
+    const urgencyShort = (h) => {
+        const u = h.urgency;
+        if (u.state === 'cascading')
+            return 'CASCADE — HARVEST NOW';
+        if (u.state === 'capped')
+            return 'DEEPEST BAND REACHED · cap reached';
+        if (u.state === 'harvest')
+            return `HARVEST NOW · credit ${u.nextCredit} out of reach`;
+        if (h.controlled.grade === 'premature')
+            return 'BUILDING · clears Premature first';
+        const seconds = Number.isFinite(u.secondsToNextCredit) ? `${Math.ceil(u.secondsToNextCredit)}s` : '—';
+        return `${u.state === 'closing' ? 'CLOSING' : 'BUILDING'} · credit ${u.nextCredit} in ${seconds}`;
+    };
+    // The harvest readout sits inside the rail rather than in a collapsed panel: it answers the same
+    // question as CASCADE IN Xs -- stay or harvest -- and the two are only useful side by side.
+    const harvestReadout = (vm) => { const h = vm.harvest; if (!h)
+        return ''; const next = h.nextBand ? `NEXT <b>${esc(h.nextBand.label.toUpperCase())}</b> AT DEPTH ${h.nextBand.depthNeeded} FOR ×${h.nextBand.yieldMultiplier.toFixed(2)}` : 'DEEPEST BAND REACHED'; return `<div class="harvest-readout urgency-${esc(h.urgency.state)}"><span>HARVEST GRADE // <b>${esc(h.controlled.grade.toUpperCase())}</b></span><strong data-live="depth">${h.depth.toFixed(1)}</strong><div class="harvest-meter" aria-hidden="true"><i data-live="harvest-meter" style="width:${pct(h.bandProgress)}"></i></div><small data-live="harvest-summary">${esc(harvestSummaryText(h.controlled))}</small><small class="next-band">${next}</small><p class="harvest-call" role="status" data-live="harvest-call">${esc(urgencyText(h))}</p></div>`; };
     const tacticalRail = (vm) => { const t = vm.tactical; if (!t)
-        return ''; const pips = Array.from({ length: t.controlMax }, (_, index) => `<i class="${index < t.controlCapacity ? 'active' : ''}" aria-hidden="true"></i>`).join(''); const actions = t.actions.map((action) => `<div class="tactical-action-wrap"><button data-action="tactical" data-id="${esc(action.id)}" aria-describedby="tactical-reason-${esc(action.id)}" ${action.enabled ? '' : 'disabled'}><span><kbd>${esc(action.shortcut)}</kbd>${esc(action.label)}</span><b>${esc(action.summary)}</b><small>${esc(action.risk)} · COST ${action.cost}</small></button><span id="tactical-reason-${esc(action.id)}" class="tactical-reason" data-tactical-reason="${esc(action.id)}">${esc(action.reason)}</span></div>`).join(''); return `<section class="tactical-rail entropy-${esc(t.entropyBand.id)}" aria-label="Tactical actions"><div class="tactical-status"><div><span class="panel-kicker">TACTICAL ACTIONS</span><strong>CONTROL CAPACITY</strong><div class="control-pips" aria-label="${t.controlCapacity} of ${t.controlMax} Control available">${pips}<b data-live="control-value">${t.controlCapacity}/${t.controlMax}</b></div></div><div class="entropy-readout"><span>ENTROPY // <b data-live="entropy-band">${esc(t.entropyBand.label)}</b></span><strong data-live="entropy-value">${t.entropy.toFixed(1)}</strong><div class="entropy-meter"><i data-live="entropy-meter" style="width:${pct(t.entropy)}"></i></div><small>Containment <b>${t.containmentRating}</b> · Pressure <b data-live="pressure-multiplier">×${t.pressureMultiplier.toFixed(2)}</b> · <b data-live="entropy-rate">${t.entropyRate.toFixed(2)}</b>/s</small><small class="cascade-eta">CASCADE IN <b data-live="cascade-eta">${t.secondsToCascade.toFixed(0)}s</b> AT CURRENT COURSE</small></div></div><div class="tactical-actions">${actions}</div><p class="tactical-failure" aria-live="polite" data-live="tactical-failure">${esc(vm.lastActionFailure)}</p></section>`; };
+        return ''; const pips = Array.from({ length: t.controlMax }, (_, index) => `<i class="${index < t.controlCapacity ? 'active' : ''}" aria-hidden="true"></i>`).join(''); const keys = t.actions.map((action) => `<b>${esc(action.shortcut)}</b>`).join(' '); const actions = t.actions.map((action) => `<div class="tactical-action-wrap"><button data-action="tactical" data-id="${esc(action.id)}" aria-describedby="tactical-reason-${esc(action.id)}" ${action.enabled ? '' : 'disabled'}><span><kbd>${esc(action.shortcut)}</kbd>${esc(action.label)}</span><b>${esc(action.summary)}</b><small>${esc(action.risk)} · COST ${action.cost}</small></button><span id="tactical-reason-${esc(action.id)}" class="tactical-reason" data-tactical-reason="${esc(action.id)}">${esc(action.reason)}</span></div>`).join(''); return `<section class="tactical-rail entropy-${esc(t.entropyBand.id)}" aria-label="Tactical actions"><div class="tactical-status"><div><div class="rail-head"><span class="panel-kicker">TACTICAL ACTIONS</span><span class="rail-keys">KEYS ${keys}</span></div><strong>CONTROL CAPACITY</strong><div class="control-pips" aria-label="${t.controlCapacity} of ${t.controlMax} Control available">${pips}<b data-live="control-value">${t.controlCapacity}/${t.controlMax}</b></div></div><div class="entropy-readout"><span>ENTROPY // <b data-live="entropy-band">${esc(t.entropyBand.label)}</b></span><strong data-live="entropy-value">${t.entropy.toFixed(1)}</strong><div class="entropy-meter"><i data-live="entropy-meter" style="width:${pct(t.entropy)}"></i></div><small>Containment <b>${t.containmentRating}</b> · Pressure <b data-live="pressure-multiplier">×${t.pressureMultiplier.toFixed(2)}</b> · <b data-live="entropy-rate">${t.entropyRate.toFixed(2)}</b>/s</small><small class="cascade-eta">CASCADE IN <b data-live="cascade-eta">${t.secondsToCascade.toFixed(0)}s</b> AT CURRENT COURSE</small></div>${harvestReadout(vm)}</div><div class="tactical-actions">${actions}</div><p class="tactical-failure" aria-live="polite" data-live="tactical-failure">${esc(vm.lastActionFailure)}</p></section>`; };
     function renderCivilization(vm) {
         const c = vm.civilization;
         if (!c)
@@ -102,7 +139,7 @@ export function createGameUI(engine, world) {
         const harvest = vm.harvest.controlled;
         const chaotic = vm.harvest.chaotic;
         const terminalBanner = c.terminal ? `<section class="panel terminal-banner ${vm.harvest.convergenceReady ? 'ready' : ''}"><div class="panel-kicker">TERMINAL CULTIVATION</div><b>CONVERGENCE TARGET DEPTH ${vm.convergence.targetDepth.toFixed(1)}</b><span>CURRENT <b data-live="convergence-depth">${vm.harvest.depth.toFixed(1)}</b> \u00B7 ${vm.harvest.convergenceReady ? 'CONVERGENCE READY' : 'INSUFFICIENT DEPTH'}</span></section>` : '';
-        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? `DOMINANT: <b>${esc(path.dominantName)}</b>` : 'PATH: <b>UNRESOLVED</b>'}</div><div class="world-state-strip"><span>ERA <b data-live="world-era">${esc(ERA_NAMES[c.era])}</b></span><span>DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span>STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span>SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span>AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span>ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span>ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="swipe-hint">↔ DRAG / SWIPE TO EXPLORE</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="Pan left">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="Pan right">›</button>`);
+        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? `DOMINANT: <b>${esc(path.dominantName)}</b>` : 'PATH: <b>UNRESOLVED</b>'}</div><div class="world-state-strip"><span>ERA <b data-live="world-era">${esc(ERA_NAMES[c.era])}</b></span><span>DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span>STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span>SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span>AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span>ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span>ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="world-mobile-strip urgency-${esc(vm.harvest.urgency.state)}"><span>CASCADE <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div><div class="swipe-hint">↔ DRAG / SWIPE TO EXPLORE</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="Pan left">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="Pan right">›</button>`);
         const eventCard = event ? `<section class="panel intervention"><div class="panel-kicker">CURRENT INTERVENTION${event.probed ? ' // PROBED' : ''}</div><h2>${esc(event.title)}</h2><p class="event-body">${esc(event.body)}</p>${event.predictionLocked ? '<div class="prediction-lock">PREDICTION CORE OFFLINE // Spend 1 Control on Probe to reveal risk directions.</div>' : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? '<button class="ghost" data-action="reroll">REROLL WITH PARADOX</button>' : ''}</section>` : `<section class="panel intervention quiet"><div class="panel-kicker">CURRENT INTERVENTION</div><h2>Monitoring civilization...</h2><p data-live="event-timer">Next intervention window in approximately ${Math.max(0, c.eventTimer).toFixed(1)} simulation seconds.</p></section>`;
         const tendencies = path.tendencies.length ? path.tendencies.map((t) => `<li><b>${esc(t.name)}</b><span>${esc(t.label)}</span></li>`).join('') : '<li><span>No coherent tendency yet.</span></li>';
         const objectiveCard = vm.directiveObjective ? card('Directive Objective', `<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${vm.directiveObjective.completed ? 'COMPLETE' : 'ACTIVE'}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>OBJECTIVE BONUS // ×1.15 rewards + 1 Cultivation Credit</small></div>`, 'directive-objective') : '';
@@ -114,7 +151,7 @@ export function createGameUI(engine, world) {
       <details><summary>Intervention Control</summary>${card('', `<div class="speed-row"><span>Simulation speed</span>${[1, 2, 4].filter(x => x <= vm.maxSimulationSpeed).map(x => `<button data-action="speed" data-speed="${x}" class="${vm.simulationSpeed === x ? 'active' : ''}">${x}×</button>`).join('')}</div>`)}</details>
       <details><summary>Civilization Identity</summary>${card('', `<p><b>${esc(c.species.name)}</b> · ${esc(c.species.bodyType)} · ${esc(c.species.culture)}</p><p>Visual motif: ${esc(c.species.motif)}</p><p><b>${esc(c.faction.name)}</b><br>Doctrine: ${esc(c.faction.doctrine)}<br>Focus: ${esc(c.faction.focus)}</p>`)}</details>
       <details><summary>Species & Faction Dossier</summary>${card('', `<div class="tag-row">${c.traits.map((t) => `<span>${esc(t.name)}</span>`).join('')}</div><h4>Emerging Tendencies</h4><ul class="tendency-list">${tendencies}</ul>${c.institutions.length ? `<h4>Institutions</h4><p>${c.institutions.map(esc).join(' · ')}</p>` : ''}`)}</details>
-      <details><summary>Harvest Projection</summary>${card('', `<div class="harvest-grade"><span>HARVEST GRADE</span><b>${esc(harvest.grade.toUpperCase())}</b><small data-live="harvest-summary">${esc(harvestSummaryText(harvest))}</small><small>CULTIVATION DEPTH <b data-live="depth">${vm.harvest.depth.toFixed(1)}</b>${vm.harvest.nextBand ? ` · NEXT: ${esc(vm.harvest.nextBand.label.toUpperCase())} AT DEPTH ${vm.harvest.nextBand.depthNeeded} FOR ×${vm.harvest.nextBand.yieldMultiplier.toFixed(2)}` : ' · DEEPEST BAND REACHED'}</small></div><div class="harvest-grid"><div><b>CONTROLLED</b>${CONTROLLED_KEYS.map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>CHAOTIC</b>${CHAOTIC_KEYS.map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>Automatic at zero Stability; Premature collapses retain a salvage floor.</small></div></div>`)}</details>
+      <details><summary>Harvest Yield Detail</summary>${card('', `<p class="panel-note">Grade, Cultivation Depth and the next band are in the tactical rail above; this is the per-resource breakdown behind them.</p><div class="harvest-grid"><div><b>CONTROLLED</b>${CONTROLLED_KEYS.map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>CHAOTIC</b>${CHAOTIC_KEYS.map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>Automatic at zero Stability; Premature collapses retain a salvage floor.</small></div></div>`)}</details>
       <details><summary>Civilization Record</summary>${card('', `<ol class="history">${c.history.length ? c.history.map((h) => `<li>${esc(h)}</li>`).join('') : '<li>No recorded history yet.</li>'}</ol>`)}</details>
       ${c.stats.stability < 25 || vm.tactical.entropy >= 100 ? '<div class="collapse-warning">⚠ REALITY COLLAPSE IMMINENT — CHAOTIC HARVEST WILL TRIGGER AT ZERO STABILITY</div>' : ''}
       <section class="harvest-actions"><button class="primary" data-action="harvest">CONTROLLED HARVEST</button><button class="danger" data-action="chaos">FORCE CHAOTIC HARVEST</button><button class="ghost" data-action="abandon">ABANDON WITHOUT REWARD</button></section>`);
@@ -163,6 +200,12 @@ export function createGameUI(engine, world) {
         setWorldText('[data-live="world-awareness"]', c.stats.awareness.toFixed(0));
         setWorldText('[data-live="world-attention"]', c.stats.attention.toFixed(0));
         setWorldText('[data-live="world-entropy"]', vm.tactical.entropy.toFixed(0));
+        setWorldText('[data-live="strip-cascade"]', `${vm.tactical.secondsToCascade.toFixed(0)}s`);
+        setWorldText('[data-live="strip-call"]', urgencyShort(vm.harvest));
+        const strip = worldHud.querySelector('.world-mobile-strip');
+        if (strip)
+            for (const state of ['building', 'closing', 'harvest', 'cascading'])
+                strip.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
         setText('[data-live="entropy-value"]', vm.tactical.entropy.toFixed(1));
         setText('[data-live="entropy-band"]', vm.tactical.entropyBand.label);
         setText('[data-live="control-value"]', `${vm.tactical.controlCapacity}/${vm.tactical.controlMax}`);
@@ -170,6 +213,17 @@ export function createGameUI(engine, world) {
         const entropyMeter = civPanels.querySelector('[data-live="entropy-meter"]');
         if (entropyMeter)
             entropyMeter.style.width = pct(vm.tactical.entropy);
+        const harvestMeter = civPanels.querySelector('[data-live="harvest-meter"]');
+        if (harvestMeter)
+            harvestMeter.style.width = pct(vm.harvest.bandProgress);
+        setText('[data-live="harvest-call"]', urgencyText(vm.harvest));
+        // Both sides of the urgency threshold -- development rate and seconds to cascade -- move
+        // continuously, so the state must never enter civilizationRenderKey or a run near a boundary
+        // would rebuild the panel frame after frame. It rides the live refresh instead.
+        const readout = civPanels.querySelector('.harvest-readout');
+        if (readout)
+            for (const state of ['building', 'closing', 'harvest', 'cascading'])
+                readout.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
         civPanels.querySelectorAll('.control-pips i').forEach((pip, index) => pip.classList.toggle('active', index < vm.tactical.controlCapacity));
         for (const action of vm.tactical.actions) {
             const button = civPanels.querySelector(`[data-action="tactical"][data-id="${action.id}"]`);

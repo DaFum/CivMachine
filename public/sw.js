@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.6.0';
+const CACHE_NAME = 'rce-app-v1.7.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -26,6 +26,7 @@ const APP_ASSETS = [
   '/game/dist/data/intervention-copy.js',
   '/game/dist/data/apotheosis-events.js',
   '/game/dist/game/decision-feedback.js',
+  '/game/dist/game/development.js',
   '/game/dist/game/engine.js',
   '/game/dist/game/harvest-quality.js',
   '/game/dist/game/harvest-quality.js.map',
