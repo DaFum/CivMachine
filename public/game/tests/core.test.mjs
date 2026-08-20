@@ -297,14 +297,29 @@ test('the scheduler allows each intervention exactly one draw per run', () => {
   assert.equal(interventionExhausted(fallback, civ), true);
   assert.equal(interventionExhausted(ordinary, civ), true);
 
-  // Exhausted is not unreachable: with nothing fresh left the saturation stage returns them, ordered
-  // by how often they have already been served.
-  const pool = buildInterventionPool([fallback, { ...ordinary, id: 'unseen_event' }], civ, {
+  const options = {
     pathMultiplier: () => 1,
     stateMultiplier: () => 1,
     exhausted: event => interventionExhausted(event, civ),
-  });
-  assert.deepEqual(pool.map(entry => entry.event.id), ['unseen_event']);
+  };
+  // Anything already served is out of the pool while something unseen is left.
+  const fresh = buildInterventionPool([fallback, { ...ordinary, id: 'unseen_event' }], civ, options);
+  assert.deepEqual(fresh.map(entry => entry.event.id), ['unseen_event']);
+
+  // Exhausted is not unreachable: with nothing fresh left the saturation stage returns the spent
+  // events anyway, so a run stretched past the catalog still gets an intervention. They are not
+  // ordered -- buildPool weights each one down by how often it has already been served.
+  const saturated = buildInterventionPool([fallback, ordinary], civ, options);
+  assert.deepEqual(saturated.map(entry => entry.event.id).sort(), ['dreams_of_gears', 'routine_compliance_audit']);
+  civ.eventCounts.dreams_of_gears = 4;
+  const weights = new Map(buildInterventionPool([fallback, ordinary], civ, options).map(entry => [entry.event.id, entry.weight]));
+  assert.ok(weights.get('routine_compliance_audit') > weights.get('dreams_of_gears') * 2);
+
+  // The recency window still applies in that third stage: the last thing served stays excluded even
+  // when every candidate is spent, which is what keeps a saturated run from repeating back to back.
+  recordRecentIntervention(civ, 'routine_compliance_audit');
+  const afterRecent = buildInterventionPool([fallback, ordinary], civ, options);
+  assert.deepEqual(afterRecent.map(entry => entry.event.id), ['dreams_of_gears']);
 });
 
 test('scheduler makes a deterministic weighted selection for an identical roll', () => {

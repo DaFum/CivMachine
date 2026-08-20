@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { CONTENT } from '../public/game/dist/data/content.generated.js';
 import { EXPANDED_INTERVENTIONS } from '../public/game/dist/data/expanded-interventions.js';
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../public/game/dist/data/expanded-path-interventions.js';
@@ -119,6 +119,20 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.match(worker, new RegExp(`rce-app-v${version.replaceAll('.', '\\.')}['"]`));
   assert.match(worker, /caches\.delete/);
+
+  // Every listed path must resolve to a file. cache.addAll() rejects as a whole on a single 404, so
+  // one mistyped entry costs the entire precache -- and the install failure only shows up in a
+  // browser, long after this test could have caught it.
+  const listed = worker
+    .slice(worker.indexOf('APP_ASSETS'), worker.indexOf('];', worker.indexOf('APP_ASSETS')))
+    .match(/'\/[^']*'/g)
+    .map(entry => entry.slice(1, -1));
+  assert.ok(listed.length >= 40, `only ${listed.length} precached paths parsed`);
+  for (const path of listed) {
+    // '/' is a route the shell renders, not a file on disk.
+    if (path === '/') continue;
+    await stat(new URL(`../public${path}`, import.meta.url));
+  }
 });
 
 test('release metadata identifies browser app v1.9.0', async () => {

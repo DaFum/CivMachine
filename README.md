@@ -1,14 +1,15 @@
 # Reality Consumption Engine — App Edition v1.9.0
 
-An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a catalog
-large enough that a run never serves the same intervention twice, and a scheduler that allows
-each intervention exactly one draw per run.
+An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
+that allows each intervention one draw per run, and a catalog large enough that no naturally
+ending run runs out of unseen ones.
 
 ## Included
 
-- 185 production interventions and 10 Civilization paths, no repetition within a run
+- 185 production interventions and 10 Civilization paths, no repeats while unseen eligible ones remain
 - 389 individually written English action labels and consequence texts
-- deterministic weighted scheduling: one draw per intervention per run, six-event recency window
+- deterministic weighted scheduling: one draw per intervention per run while unseen eligible
+  interventions remain, then freshness-weighted repeats; six-event recency window throughout
 - Stabilize, Accelerate, Probe, and Entropy Vent actions on keys 1, 2, 3, and 4
 - shared Control Capacity, Containment Rating, Entropy crises, and cascade pressure
 - exact before/after feedback and action-specific world impulses
@@ -21,10 +22,11 @@ each intervention exactly one draw per run.
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
 
-## v1.9.0 a catalog that outlasts the run: no intervention repeats
+## v1.9.0 a catalog that outlasts the run
 
 v1.9.0 is a content release. A run used to serve about a third of its interventions twice. It
-no longer serves any of them twice.
+now repeats one only after every eligible intervention has been served, which no naturally ending
+run reaches.
 
 **The catalog grew from 90 interventions to 185.** 36 pathless interventions across three era
 bands, a second four-step chain for each of the ten Civilization paths (impulse, reinforcement,

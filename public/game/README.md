@@ -1,6 +1,6 @@
 # Reality Consumption Engine — App Edition v1.9.0
 
-A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185 so that a run never repeats one.
+A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
 ## Run locally
 
@@ -53,10 +53,11 @@ npm test
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
 
-## v1.9.0 a catalog that outlasts the run: no intervention repeats
+## v1.9.0 a catalog that outlasts the run
 
 v1.9.0 is a content release. A run used to serve about a third of its interventions twice. It
-no longer serves any of them twice.
+now repeats one only after every eligible intervention has been served, which no naturally ending
+run reaches.
 
 **The catalog grew from 90 interventions to 185.** 36 pathless interventions across three era
 bands, a second four-step chain for each of the ten Civilization paths (impulse, reinforcement,
@@ -200,7 +201,8 @@ build clears the scaled targets of several further convergences. The target is a
   paths, one extra dominance-gated consolidation per path, and three branching chains whose
   consequences are scheduled by the branch the player took
 - 389 individually written choice actions and consequence descriptions
-- deterministic weighted scheduling: one draw per intervention per run, six-event recency window
+- deterministic weighted scheduling: one draw per intervention per run while unseen eligible
+  interventions remain, then freshness-weighted repeats; six-event recency window throughout
 - exact before/after decision feedback and state-reactive visual impulses
 - shared Control Capacity with Stabilize, Accelerate, Probe, and Entropy Vent tactical actions
 - keyboard shortcuts 1/2/3/4 plus touch-safe action controls
