@@ -1,6 +1,6 @@
-# Reality Consumption Engine — App Edition v1.8.0
+# Reality Consumption Engine — App Edition v1.9.0
 
-A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer.
+A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185 so that a run never repeats one.
 
 ## Run locally
 
@@ -52,6 +52,41 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.9.0 a catalog that outlasts the run: no intervention repeats
+
+v1.9.0 is a content release. A run used to serve about a third of its interventions twice. It
+no longer serves any of them twice.
+
+**The catalog grew from 90 interventions to 185.** 36 pathless interventions across three era
+bands, a second four-step chain for each of the ten Civilization paths (impulse, reinforcement,
+conflict, consolidation, gated on path affinity alone rather than on dominance), one extra
+dominance-gated consolidation per path that does not require the 460 Development the frozen
+endgames do, and three branching chains of three interventions each. Every one of the 389 choices
+has its own action label and consequence text; the generated catalog in `data/content.generated.ts`
+is untouched, and the new content is layered on top of it the way the Entropy crises and the
+Apotheosis events already were.
+
+**Three branching chains.** A root intervention now schedules a different consequence depending on
+how it was resolved, using the `follow_up` mechanism the frozen catalog already had: the monetization
+of absence (enforce a patent on empty space, or declare nothing open-source), chronological liver
+failure (ban next Tuesday's parties, or drink through the paradox), and a lunar labor dispute that
+only a civilization with a sentient moon ever sees. The six consequences are scheduled-only and
+single-choice: the decision happened one intervention earlier, and this is the bill.
+
+**One draw per intervention per run.** The scheduler used to allow two or three, and the one
+catalog event that declared `max_count: 999` as a fallback dominated long runs. The declared
+`max_count` is now ignored: an intervention already served this run is out of the pool. Up to 145
+of the 185 are eligible inside a single run, and the longest naturally ending run draws about 100,
+so the guarantee holds with room to spare. A run stretched far past its natural length -- Vent can
+keep a Civilization alive for roughly three times as long -- eventually exhausts even that, and
+from there the freshness weighting spreads the repeats instead of concentrating them: measured over
+a 240-intervention marathon, no single intervention took more than 3% of the run.
+
+**The balance curve did not move.** The new interventions were written to the frozen catalog's
+numeric scale and then measured against it: median survival 182 s with no upgrades, 360 s at
+Containment 4, 972 s at Containment 28, against 181 s / 360 s / 971 s before. First-run and
+chaotic-collapse harvests still fund a median of two Machine levels.
 
 ## v1.8.0 a layer that scrolls instead of repainting, a loop that stops, and a front-loaded Accelerate
 
@@ -160,9 +195,12 @@ build clears the scaled targets of several further convergences. The target is a
 
 ## Ported game systems
 
-- 90 production interventions, including three scheduled Entropy crises and twelve Apotheosis events
-- 192 individually written choice actions and consequence descriptions
-- deterministic weighted scheduling with six-event repetition protection
+- 185 production interventions: 75 in the frozen generated catalog, three scheduled Entropy crises,
+  twelve Apotheosis events, 36 pathless interventions, a second four-step chain for each of the ten
+  paths, one extra dominance-gated consolidation per path, and three branching chains whose
+  consequences are scheduled by the branch the player took
+- 389 individually written choice actions and consequence descriptions
+- deterministic weighted scheduling: one draw per intervention per run, six-event recency window
 - exact before/after decision feedback and state-reactive visual impulses
 - shared Control Capacity with Stabilize, Accelerate, Probe, and Entropy Vent tactical actions
 - keyboard shortcuts 1/2/3/4 plus touch-safe action controls

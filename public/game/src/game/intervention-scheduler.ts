@@ -25,17 +25,16 @@ const PHASE_WEIGHTS: ReadonlyArray<Readonly<Record<string, number>>> = [
   { impulse: 0.3, reinforcement: 0.5, conflict: 0.9, consolidation: 1.3, endgame: 2 },
 ];
 
-// One catalog event declares max_count 999 as an always-available fallback. Left uncapped it keeps
-// the fresh pool non-empty forever, so the saturation stage never activates and that one event
-// dominates a long run -- measured 11 of 94 interventions. Cap the effective allowance instead.
-export const MAX_COUNT_CEILING = 3;
+// One draw per intervention per run. The catalog holds more interventions eligible in a single run
+// than the longest natural run draws, so a second serving of the same intervention is a content gap
+// rather than a pacing tool, and the declared max_count is ignored: it predates the expanded
+// catalog, and the one event that declares 999 as an always-available fallback used to keep the
+// fresh pool non-empty forever -- the saturation stage never activated and that single event
+// dominated a long run, measured 11 of 94 interventions.
+export const INTERVENTION_ALLOWANCE_PER_RUN = 1;
 
-export function interventionExhausted(
-  event: SchedulerEvent & { max_count?: number },
-  civ: Civilization,
-): boolean {
-  const allowance = Math.min(MAX_COUNT_CEILING, Math.max(1, Number(event.max_count ?? 2)));
-  return Math.max(0, Number(civ.eventCounts[event.id] ?? 0)) >= allowance;
+export function interventionExhausted(event: SchedulerEvent, civ: Civilization): boolean {
+  return Math.max(0, Number(civ.eventCounts[event.id] ?? 0)) >= INTERVENTION_ALLOWANCE_PER_RUN;
 }
 
 export function recentEventIds(civ: Civilization): string[] {
@@ -80,8 +79,10 @@ function buildPool<T extends SchedulerEvent>(
   return pool;
 }
 
-// Three stages, tried in order. The third exists because the catalog holds only 96 finite draws:
-// without it a run past roughly 48 interventions collapses onto the single unbounded fallback event.
+// Three stages, tried in order. The third is the safety net for a run stretched far past its natural
+// length -- spending Vent at every opportunity keeps a Civilization alive for roughly three times as
+// long -- where even the expanded catalog runs out of unseen interventions. Freshness weighting then spreads the unavoidable repeats instead of
+// concentrating them on one event.
 export function buildInterventionPool<T extends SchedulerEvent>(
   events: readonly T[],
   civ: Civilization,

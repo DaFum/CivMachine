@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { CONTENT } from '../public/game/dist/data/content.generated.js';
+import { EXPANDED_INTERVENTIONS } from '../public/game/dist/data/expanded-interventions.js';
+import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../public/game/dist/data/expanded-path-interventions.js';
+import { APOTHEOSIS_EVENTS } from '../public/game/dist/data/apotheosis-events.js';
+import { ENTROPY_CRISES } from '../public/game/dist/data/entropy-crises.js';
+import { EVENT_CHAINS } from '../public/game/dist/data/event-chains.js';
 
 test('bundled game preserves the full release catalog', () => {
   assert.equal(CONTENT.events.length, 75);
@@ -12,6 +17,18 @@ test('bundled game preserves the full release catalog', () => {
   assert.equal(CONTENT.axiom_upgrades.length, 6);
   assert.equal(CONTENT.directives.length, 6);
   assert.equal(CONTENT.breeding_matrices.length, 6);
+  // The layered catalogs are the shipped content too, and the count is what keeps a run
+  // repetition-free: 185 interventions, of which up to about 145 are eligible within a single run.
+  assert.equal(ENTROPY_CRISES.length, 3);
+  assert.equal(APOTHEOSIS_EVENTS.length, 12);
+  assert.equal(EXPANDED_INTERVENTIONS.length, 36);
+  assert.equal(EXPANDED_PATH_INTERVENTIONS.length, 40);
+  assert.equal(EXPANDED_DOMINANT_INTERVENTIONS.length, 10);
+  assert.equal(EVENT_CHAINS.length, 9);
+  const total = CONTENT.events.length + ENTROPY_CRISES.length + APOTHEOSIS_EVENTS.length
+    + EXPANDED_INTERVENTIONS.length + EXPANDED_PATH_INTERVENTIONS.length + EXPANDED_DOMINANT_INTERVENTIONS.length
+    + EVENT_CHAINS.length;
+  assert.equal(total, 185);
 });
 
 test('bundled game exposes the playable surfaces', async () => {
@@ -84,6 +101,9 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /['"]\/game\/dist\/game\/intervention-scheduler\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/decision-feedback\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/data\/entropy-crises\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/event-chains\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/expanded-interventions\.js['"]/);
+  assert.match(worker, /['"]\/game\/dist\/data\/expanded-path-interventions\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/pressure\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/tactical-actions\.js['"]/);
   assert.match(worker, /['"]\/game\/dist\/game\/harvest-quality\.js['"]/);
@@ -101,11 +121,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   assert.match(worker, /caches\.delete/);
 });
 
-test('release metadata identifies browser app v1.8.0', async () => {
+test('release metadata identifies browser app v1.9.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.8.0');
+  assert.equal(rootPackage.version, '1.9.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 

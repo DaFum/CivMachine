@@ -2,6 +2,9 @@ import { CONTENT } from '../data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy } from '../data/intervention-copy.js';
 import { APOTHEOSIS_EVENTS } from '../data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
+import { EVENT_CHAINS } from '../data/event-chains.js';
+import { EXPANDED_INTERVENTIONS } from '../data/expanded-interventions.js';
+import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../data/expanded-path-interventions.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
@@ -51,7 +54,7 @@ export class GameEngine {
   private listeners=new Set<()=>void>();
   private tickEmitAccumulator=0;
   private feedbackSequence=0;
-  private traits:any[]=C.traits; private events:any[]=[...applyEraCeiling(applyInterventionCopy(C.events)),...ENTROPY_CRISES,...APOTHEOSIS_EVENTS]; private machineUpgrades:any[]=balancedMachineUpgrades(C.machine_upgrades); private universeUpgrades:any[]=balancedUniverseUpgrades(C.universe_upgrades); private axiomUpgrades:any[]=balancedAxiomUpgrades(C.axiom_upgrades); private directives:any[]=C.directives; private matrices:any[]=C.breeding_matrices; private mutations:any[]=C.mutations;
+  private traits:any[]=C.traits; private events:any[]=[...applyEraCeiling(applyInterventionCopy(C.events)),...ENTROPY_CRISES,...APOTHEOSIS_EVENTS,...EXPANDED_INTERVENTIONS,...EXPANDED_PATH_INTERVENTIONS,...EXPANDED_DOMINANT_INTERVENTIONS,...EVENT_CHAINS]; private machineUpgrades:any[]=balancedMachineUpgrades(C.machine_upgrades); private universeUpgrades:any[]=balancedUniverseUpgrades(C.universe_upgrades); private axiomUpgrades:any[]=balancedAxiomUpgrades(C.axiom_upgrades); private directives:any[]=C.directives; private matrices:any[]=C.breeding_matrices; private mutations:any[]=C.mutations;
   constructor(options:EngineOptions={}){
     this.storage=options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave=options.autosave ?? true;

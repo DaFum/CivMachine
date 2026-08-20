@@ -1,14 +1,14 @@
-# Reality Consumption Engine — App Edition v1.8.0
+# Reality Consumption Engine — App Edition v1.9.0
 
-An installable, offline-capable browser incremental roguelite. Version 1.8.0 scrolls the
-world by moving what it has already painted, stops the frame loop when there is nothing to
-cultivate, and charges Accelerate a price that rises with the era instead of a flat one.
+An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a catalog
+large enough that a run never serves the same intervention twice, and a scheduler that allows
+each intervention exactly one draw per run.
 
 ## Included
 
-- 90 production interventions and 10 Civilization paths
-- 192 individually written English action labels and consequence texts
-- deterministic weighted scheduling with six-event repetition protection
+- 185 production interventions and 10 Civilization paths, no repetition within a run
+- 389 individually written English action labels and consequence texts
+- deterministic weighted scheduling: one draw per intervention per run, six-event recency window
 - Stabilize, Accelerate, Probe, and Entropy Vent actions on keys 1, 2, 3, and 4
 - shared Control Capacity, Containment Rating, Entropy crises, and cascade pressure
 - exact before/after feedback and action-specific world impulses
@@ -20,6 +20,41 @@ cultivate, and charges Accelerate a price that rises with the era instead of a f
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression
+
+## v1.9.0 a catalog that outlasts the run: no intervention repeats
+
+v1.9.0 is a content release. A run used to serve about a third of its interventions twice. It
+no longer serves any of them twice.
+
+**The catalog grew from 90 interventions to 185.** 36 pathless interventions across three era
+bands, a second four-step chain for each of the ten Civilization paths (impulse, reinforcement,
+conflict, consolidation, gated on path affinity alone rather than on dominance), one extra
+dominance-gated consolidation per path that does not require the 460 Development the frozen
+endgames do, and three branching chains of three interventions each. Every one of the 389 choices
+has its own action label and consequence text; the generated catalog in `data/content.generated.ts`
+is untouched, and the new content is layered on top of it the way the Entropy crises and the
+Apotheosis events already were.
+
+**Three branching chains.** A root intervention now schedules a different consequence depending on
+how it was resolved, using the `follow_up` mechanism the frozen catalog already had: the monetization
+of absence (enforce a patent on empty space, or declare nothing open-source), chronological liver
+failure (ban next Tuesday's parties, or drink through the paradox), and a lunar labor dispute that
+only a civilization with a sentient moon ever sees. The six consequences are scheduled-only and
+single-choice: the decision happened one intervention earlier, and this is the bill.
+
+**One draw per intervention per run.** The scheduler used to allow two or three, and the one
+catalog event that declared `max_count: 999` as a fallback dominated long runs. The declared
+`max_count` is now ignored: an intervention already served this run is out of the pool. Up to 145
+of the 185 are eligible inside a single run, and the longest naturally ending run draws about 100,
+so the guarantee holds with room to spare. A run stretched far past its natural length -- Vent can
+keep a Civilization alive for roughly three times as long -- eventually exhausts even that, and
+from there the freshness weighting spreads the repeats instead of concentrating them: measured over
+a 240-intervention marathon, no single intervention took more than 3% of the run.
+
+**The balance curve did not move.** The new interventions were written to the frozen catalog's
+numeric scale and then measured against it: median survival 182 s with no upgrades, 360 s at
+Containment 4, 972 s at Containment 28, against 181 s / 360 s / 971 s before. First-run and
+chaotic-collapse harvests still fund a median of two Machine levels.
 
 ## v1.8.0 a layer that scrolls instead of repainting, a loop that stops, and a front-loaded Accelerate
 

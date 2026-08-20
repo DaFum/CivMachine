@@ -2,6 +2,9 @@ import { CONTENT } from '../data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy } from '../data/intervention-copy.js';
 import { APOTHEOSIS_EVENTS } from '../data/apotheosis-events.js';
 import { ENTROPY_CRISES } from '../data/entropy-crises.js';
+import { EVENT_CHAINS } from '../data/event-chains.js';
+import { EXPANDED_INTERVENTIONS } from '../data/expanded-interventions.js';
+import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../data/expanded-path-interventions.js';
 import { CivilizationPaths } from './paths.js';
 import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progression.js';
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
@@ -42,7 +45,7 @@ export class GameEngine {
         this.tickEmitAccumulator = 0;
         this.feedbackSequence = 0;
         this.traits = C.traits;
-        this.events = [...applyEraCeiling(applyInterventionCopy(C.events)), ...ENTROPY_CRISES, ...APOTHEOSIS_EVENTS];
+        this.events = [...applyEraCeiling(applyInterventionCopy(C.events)), ...ENTROPY_CRISES, ...APOTHEOSIS_EVENTS, ...EXPANDED_INTERVENTIONS, ...EXPANDED_PATH_INTERVENTIONS, ...EXPANDED_DOMINANT_INTERVENTIONS, ...EVENT_CHAINS];
         this.machineUpgrades = balancedMachineUpgrades(C.machine_upgrades);
         this.universeUpgrades = balancedUniverseUpgrades(C.universe_upgrades);
         this.axiomUpgrades = balancedAxiomUpgrades(C.axiom_upgrades);
