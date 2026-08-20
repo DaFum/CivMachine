@@ -689,7 +689,7 @@ test('world module no longer carries its own layout or hash helpers', async () =
 
 test('every render module is precached by the service worker', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation'];
+  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality'];
   for (const name of modules) {
     assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
   }
