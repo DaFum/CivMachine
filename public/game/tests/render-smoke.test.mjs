@@ -104,6 +104,8 @@ test('both layers paint the visible slice instead of the whole world', async () 
       staticCalls.length = 0;
       dynamicCalls.length = 0;
       globalThis.__frame(100 + step * 100);
+      assert.ok(staticCalls.length > 0, 'static layer drew nothing');
+      assert.ok(dynamicCalls.length > 0, 'dynamic layer drew nothing');
       // The dynamic layer repaints every throttled frame, so an unculled draw there costs more than
       // one on the static layer. Both are held to the same ceiling.
       perScroll.push(staticCalls.concat(dynamicCalls));
@@ -199,5 +201,43 @@ test('panning repaints the cached static layer without rebuilding the scene', as
 
     controller.destroy();
     delete globalThis.__frame;
+  });
+});
+
+test('live stats control dynamic rendering without rebuilding the static scene', async () => {
+  const staticCalls = [];
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext(staticCalls), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization() }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?dynamic=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    assert.ok(frame, 'the fallback must schedule a frame');
+    frame(100);
+
+    staticCalls.length = 0;
+    dynamicCalls.length = 0;
+
+    // Change attention slightly to stay in the same structural band (band 2 is 50-74).
+    // Original was 70. Change to 71 to alter particle generation hash but keep band same.
+    engine.state.civilization.stats.attention = 71;
+    // Advance time by more than throttle (180ms)
+    frame(300);
+
+    assert.ok(dynamicCalls.length > 0, 'dynamic layer should react to live stat change');
+    assert.equal(controller.stats().sceneRebuilds, 1, 'static scene should not be rebuilt on live stat change');
+    assert.equal(controller.stats().staticRedraws, 1, 'static scene should not be redrawn on live stat change');
+
+    controller.destroy();
   });
 });

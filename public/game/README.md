@@ -85,11 +85,11 @@ The world's mood also glides now instead of stepping in four jumps, new structur
 arrive rather than appearing between blinks, and on phones the tactical actions sit in a 2x2
 grid with the cascade clock and harvest call moved onto the world itself.
 
-**Saves from v1.6.0 are carried over.** `SAVE_VERSION` stays 4; the one field added to a
-running Civilization is optional and defaults so an in-progress run behaves exactly as it did
-when it was written.
+**Saves from v1.6.0 are carried over.** `SAVE_VERSION` stays 4; the fields added to a
+running Civilization in v1.7.0 are optional and default cleanly, so an in-progress run
+behaves exactly as it did when it was written.
 
-## v1.6.0 victory and milestones
+## v1.6.0 victory and milestones (Historical)
 
 v1.6.0 gives the game an explicit win condition. Meta progress unlocks the **Great
 Convergence**: a terminal cultivation that starts in APOTHEOSIS, runs at 1.6x Entropy, pays

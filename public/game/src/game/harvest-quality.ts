@@ -79,7 +79,7 @@ export function calculateCultivationCredits(
   return Math.max(0, chaotic ? Math.round(base * CHAOTIC_CREDIT_RETENTION) : base);
 }
 
-export type HarvestUrgency = 'building' | 'closing' | 'harvest' | 'cascading';
+export type HarvestUrgency = 'building' | 'closing' | 'harvest' | 'cascading' | 'capped';
 
 export interface HarvestUrgencyInput {
   depth: number;
@@ -89,6 +89,7 @@ export interface HarvestUrgencyInput {
   entropy: number;
   entropyRate: number;
   stability: number;
+  controlCapacity: number;
   ventEntropyRelief: number;
   ventStabilityCost: number;
   premature: boolean;
@@ -113,14 +114,14 @@ export interface HarvestUrgencyView {
  * which is what it already is in practice.
  */
 export function reachableRunSeconds(input: Pick<HarvestUrgencyInput,
-  'secondsToCascade' | 'entropyRate' | 'stability' | 'ventEntropyRelief' | 'ventStabilityCost'>): number {
+  'secondsToCascade' | 'entropyRate' | 'stability' | 'controlCapacity' | 'ventEntropyRelief' | 'ventStabilityCost'>): number {
   const floor = Math.max(0, input.secondsToCascade);
   const rate = Math.max(0, input.entropyRate);
   const cost = Math.max(0, input.ventStabilityCost);
   const relief = Math.max(0, input.ventEntropyRelief);
   if (rate <= 0) return Number.POSITIVE_INFINITY;
   if (cost <= 0 || relief <= 0) return floor;
-  const ventsAffordable = Math.max(0, Math.floor(Math.max(0, input.stability) / cost));
+  const ventsAffordable = Math.min(input.controlCapacity, Math.max(0, Math.floor(Math.max(0, input.stability) / cost)));
   return floor + ventsAffordable * relief / rate;
 }
 
@@ -139,10 +140,11 @@ export function harvestUrgency(input: HarvestUrgencyInput): HarvestUrgencyView {
   const depthNeeded = nextCredit / DEPTH_CREDIT_RATE;
   const developmentNeeded = Math.max(0, (depthNeeded - input.depth) * DEPTH_DEVELOPMENT_SCALE);
   const rate = Math.max(0, input.developmentRate);
-  const secondsToNextCredit = capped || rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;
+  const secondsToNextCredit = rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;
   const secondsOfRunLeft = reachableRunSeconds(input);
   const view = { secondsToNextCredit, secondsOfRunLeft, nextCredit };
   if (input.entropy >= 100) return { state: 'cascading', ...view };
+  if (capped) return { state: 'capped', ...view };
   // A premature run has nothing banked yet, so "harvest now" is never the answer -- it must first
   // clear the anti-cheese floor, whatever the clock says.
   if (input.premature) return { state: 'building', ...view };

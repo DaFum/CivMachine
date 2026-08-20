@@ -98,4 +98,4 @@ Everything else is pinned to an exact latest version; `npm audit` reports zero v
 
 ## Design docs
 
-`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-19` (v1.4.0 civilization visualization, and the v1.3.1 progression rebalance before it). Read the matching spec before changing balance or progression — the numbers in the tests come from there.
+`docs/superpowers/specs/` holds design documents and `docs/superpowers/plans/` the corresponding implementation plans, newest dated `2026-08-20` (continuous entropy cost and harvest signal specification, and the v1.4.0 civilization visualization before it). Read the matching spec before changing balance or progression — the numbers in the tests come from there.

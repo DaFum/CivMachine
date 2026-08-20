@@ -98,6 +98,8 @@ export function createGameUI(engine, world) {
         const u = h.urgency;
         if (u.state === 'cascading')
             return 'CASCADE UNDER WAY // harvest now or lose 40% of the credits';
+        if (u.state === 'capped')
+            return 'DEEPEST BAND REACHED // credit cap reached';
         const left = Number.isFinite(u.secondsOfRunLeft) ? `${Math.floor(u.secondsOfRunLeft)}s` : 'no limit';
         if (u.state === 'harvest')
             return `HARVEST NOW // credit ${u.nextCredit} needs ${Math.ceil(u.secondsToNextCredit)}s, the run can reach ${left}`;
@@ -113,6 +115,8 @@ export function createGameUI(engine, world) {
         const u = h.urgency;
         if (u.state === 'cascading')
             return 'CASCADE — HARVEST NOW';
+        if (u.state === 'capped')
+            return 'DEEPEST BAND REACHED · cap reached';
         if (u.state === 'harvest')
             return `HARVEST NOW · credit ${u.nextCredit} out of reach`;
         if (h.controlled.grade === 'premature')
