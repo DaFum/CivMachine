@@ -302,28 +302,19 @@ function drawMoodWash(surface: DrawSurface, scene: WorldScene, live: ReturnType<
   surface.fillStyle(live.colors.nearTerrain, drift * .34).fillRect(view.from, height * .7, span, height * .3);
 }
 
-function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, time: number, tracker: ConstructionTracker, view: WorldBand): void {
-  const { civ, settlements, plan, species } = scene;
-  const animationTime = reducedMotion ? 0 : time;
-  const worldWidth = snapshot.worldWidth;
-  const ground = height * GROUND_RATIO;
 
-  // The hash decides where a particle lands, so the loop still visits every index; only the draw is
-  // skipped. Iterating is free next to filling a circle.
+function drawParticles(surface: DrawSurface, civ: Civilization, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, height: number, view: WorldBand): void {
+  const worldWidth = snapshot.worldWidth;
   for (let i = 0; i < snapshot.particleCount; i++) {
     const x = hash01(civ.seed + i * 17) * worldWidth;
     if (x < view.from || x > view.to) continue;
     surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
       .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
   }
+}
 
-  // The cached layers below hold the palette frozen at the last structural key change, and that key
-  // reads Stability, Sanity, Awareness, Attention and Entropy as 25-point bands. So the world's base
-  // mood changed in four hard steps while the overlays glided. This pass closes the gap: one tinted
-  // wash mixed from the *live* presentation, drawn over the cached scenery, so the world keeps
-  // sliding between the steps. Structure stays cached; only the mood moves.
-  drawMoodWash(surface, scene, presentation, view, height);
-
+function drawHazeBands(surface: DrawSurface, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, animationTime: number, view: WorldBand): void {
+  const worldWidth = snapshot.worldWidth;
   for (let i = 0; i < snapshot.hazeBands; i++) {
     const drift = (animationTime * (.002 + i * .00035)) % (width * .6);
     const y = height * (.28 + i * .07) + Math.sin(animationTime * .0005 + i) * (reducedMotion ? 0 : 4);
@@ -331,8 +322,10 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     const to = Math.min(view.to, drift - width * .3 + worldWidth * .34);
     if (to > from) surface.fillStyle(presentation.colors.haze, .02 + presentation.sanityDistortion * .025).fillRect(from, y, to - from, 22 + i * 4);
   }
+}
 
-  // Lit windows keep flickering across the settlement skyline.
+function drawLitWindows(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, animationTime: number, view: WorldBand): void {
+  const civ = scene.civ;
   for (let i = 0; i < Math.min(scene.structures.length, 46); i++) {
     const structure = scene.structures[i]!;
     if (structure.x + structure.width < view.from || structure.x - structure.width > view.to) continue;
@@ -341,8 +334,10 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     surface.fillStyle(presentation.colors.window, .45 + hash01(i * 9) * .32)
       .fillRect(structure.x - structure.width * .28 + (i % 3) * 5, ground - structure.height + 8 + (i % rows) * 13, 2.5 + snapshot.stage * .28, 3);
   }
+}
 
-  // Inhabitants.
+function drawInhabitants(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, animationTime: number, view: WorldBand): void {
+  const { settlements, plan, species } = scene;
   for (const pedestrian of plan.pedestrians) {
     const settlement = settlements[pedestrian.settlementIndex];
     if (!settlement) continue;
@@ -352,6 +347,11 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     const phase = reducedMotion ? 0 : (animationTime % species.gaitPeriod) / species.gaitPeriod;
     drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
   }
+}
+
+function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, height: number, animationTime: number, view: WorldBand): void {
+  const { civ, plan } = scene;
+  const worldWidth = snapshot.worldWidth;
 
   // Road traffic.
   for (const vehicle of plan.vehicles) {
@@ -389,8 +389,10 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     surface.fillStyle(presentation.accent, .9).fillRect(launch.x - 1.6, y, 3.2, 9);
     surface.fillStyle(0xffd9a0, .5 * (1 - rise)).fillTriangle(launch.x - 3, y + 9, launch.x, y + 9 + 16 * (1 - rise), launch.x + 3, y + 9);
   }
+}
 
-  // Banners and construction.
+function drawBannersAndConstruction(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, height: number, time: number, tracker: ConstructionTracker, animationTime: number, view: WorldBand): void {
+  const { settlements } = scene;
   for (const settlement of settlements) {
     if (snapshot.stage === 0) continue;
     // Footprint first as the cheap cut, then the banner and each scaffolded structure on their own
@@ -417,7 +419,11 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
       }
     }
   }
+}
 
+function drawAnomalies(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, height: number, animationTime: number, view: WorldBand): void {
+  const { civ } = scene;
+  const worldWidth = snapshot.worldWidth;
   for (let i = 0; i < snapshot.fractureCount; i++) {
     const x = worldWidth * hash01(civ.seed + i * 61);
     if (x < view.from - 46 || x > view.to + 46) continue;
@@ -435,8 +441,43 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
       surface.lineStyle(1, 0xb68cff, .08 + presentation.sanityDistortion * .13).strokeCircle(worldWidth * (.22 + i * .29) + wobble, height * (.28 + i * .04), 35 + i * 17);
     }
   }
-  drawPathMotif(surface, civ, worldWidth, height, ground, animationTime, presentation.accent, view);
 }
+
+function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, time: number, tracker: ConstructionTracker, view: WorldBand): void {
+  const animationTime = reducedMotion ? 0 : time;
+  const ground = height * GROUND_RATIO;
+
+  // The hash decides where a particle lands, so the loop still visits every index; only the draw is
+  // skipped. Iterating is free next to filling a circle.
+  drawParticles(surface, scene.civ, snapshot, presentation, height, view);
+
+  // The cached layers below hold the palette frozen at the last structural key change, and that key
+  // reads Stability, Sanity, Awareness, Attention and Entropy as 25-point bands. So the world's base
+  // mood changed in four hard steps while the overlays glided. This pass closes the gap: one tinted
+  // wash mixed from the *live* presentation, drawn over the cached scenery, so the world keeps
+  // sliding between the steps. Structure stays cached; only the mood moves.
+  drawMoodWash(surface, scene, presentation, view, height);
+
+  drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view);
+
+  // Lit windows keep flickering across the settlement skyline.
+  drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
+
+  // Inhabitants.
+  drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view);
+
+  // Road traffic, air corridors, orbital, launches.
+  drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view);
+
+  // Banners and construction.
+  drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view);
+
+  // Fractures, beacons, sanity distortion.
+  drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
+
+  drawPathMotif(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view);
+}
+
 
 function impulseColor(feedback:DecisionFeedback,kind:ReturnType<typeof decisionImpulseKind>):number {
   if(kind==='containment')return 0x73e6bd;
