@@ -48,6 +48,58 @@ export interface DramaPhase {
   label: string;
 }
 
+export type DecisionSignificance = 'routine' | 'major' | 'turning_point';
+export type ConsequenceTag =
+  | 'urban_growth' | 'technological_growth' | 'urban_decline' | 'militarization' | 'civil_unrest'
+  | 'religious_shift' | 'ecological_damage' | 'reality_damage' | 'surveillance' | 'mass_casualty'
+  | 'stabilization' | 'containment' | 'institution_growth' | 'path_shift' | 'apotheosis_contact';
+
+export interface DecisionTransition {
+  dramaPhase?: { from: DramaPhaseId; to: DramaPhaseId };
+  era?: { from: number; to: number };
+  dominantPath?: { from: string; to: string };
+  endgameStateAdded?: string;
+  entropyBand?: { from: number; to: number };
+}
+
+export interface DecisionConsequence {
+  significance: DecisionSignificance;
+  tags: ConsequenceTag[];
+  transitions: DecisionTransition;
+  signatureProfile: string;
+}
+
+export type MemoryDomain = 'built_environment' | 'identity' | 'control' | 'social' | 'ecology' | 'reality';
+export type ScarDomain = 'reality' | 'civilization' | 'identity';
+
+export interface WorldMemoryMark {
+  domain: MemoryDomain;
+  motif: string;
+  strength: 1 | 2 | 3;
+  sourceEventId: string;
+  createdAtSequence: number;
+  anchor01: number;
+  repairable: boolean;
+  repaired?: boolean;
+}
+
+export interface WorldScar {
+  domain: ScarDomain;
+  motif: string;
+  strength: 1 | 2 | 3;
+  sourceEventId: string;
+  createdAtSequence: number;
+  anchor01: number;
+  evolution: number;
+}
+
+export interface WorldMemoryState {
+  version: 1;
+  sequence: number;
+  marks: WorldMemoryMark[];
+  scars: WorldScar[];
+}
+
 export interface DecisionAddition {
   kind: 'trait' | 'institution' | 'flag' | 'path_flag';
   label: string;
@@ -62,6 +114,7 @@ export interface DecisionFeedback {
   metrics: DecisionMetricDelta[];
   affinities: DecisionAffinityDelta[];
   additions: DecisionAddition[];
+  consequence: DecisionConsequence;
 }
 
 export interface TacticalState {
@@ -101,6 +154,9 @@ export interface Civilization {
   flags: string[];
   scheduledEvents: string[];
   history: string[];
+  // Presentation-only narrative memory. Optional so v4 saves load unchanged, and deliberately never
+  // read by progression, pressure, harvest, or scheduler rules -- only the renderer consumes it.
+  visualMemory?: WorldMemoryState;
   stats: Stats;
   harvestBonus: Record<ResourceKey, number>;
   harvestMult: Record<ResourceKey, number>;

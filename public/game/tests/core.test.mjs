@@ -32,6 +32,8 @@ import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, st
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
+import { CONSEQUENCE_PROFILES, consequenceProfileFor } from '../dist/game/consequence-profiles.js';
+import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
 import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
 import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
@@ -2321,5 +2323,61 @@ test('Civilization Drama phase uses the exact legacy stage boundaries', () => {
     assert.equal(civilizationDramaPhase(civ).id, id);
     assert.equal(civilizationDramaPhase(civ).name, name);
     assert.equal(developmentStage(civ), id, `render stage drifted at score ${score}`);
+  }
+});
+
+test('the signature catalog contains exactly the required 28 profiles', () => {
+  const ids = CONSEQUENCE_PROFILES.map(profile => profile.eventId);
+  const required = [
+    'synod_of_the_second_engine','unanimous_afternoon','sovereign_hour','department_of_permitted_physics',
+    'pollinators_of_the_state','blackout_doctrine','ministry_of_final_forms','immortal_electorate',
+    'embassy_at_the_edge','recursion_registry','entropy_crisis_25','entropy_crisis_50','entropy_crisis_75',
+    'moon_resigns','ministry_of_sanity','planetary_mind',
+    'apotheosis_ledger_of_the_cultivator','apotheosis_the_yield_census','apotheosis_observatory_of_the_hand',
+    'apotheosis_terms_of_cultivation','apotheosis_the_counteroffer','apotheosis_arbitration_of_scales',
+    'apotheosis_currency_of_unhappened','apotheosis_debt_to_the_unborn','apotheosis_futures_market_in_ruins',
+    'apotheosis_maintenance_window','apotheosis_the_replacement_part','apotheosis_recursive_audit',
+  ];
+  assert.equal(CONSEQUENCE_PROFILES.length, 28);
+  assert.deepEqual([...new Set(ids)].sort(), [...required].sort());
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
+  assert.equal(consequenceProfileFor('moon_resigns', []) ?? null, null);
+});
+
+test('generic consequence thresholds are deterministic, deduplicated, and ordered by precedence', () => {
+  const before = {
+    metrics: { stability: 80, stabilityMax: 100, awareness: 10, sanity: 80, attention: 10, years: 0, development: 100, eventTimer: 5, entropy: 20, controlCapacity: 3 },
+    affinities: { machine_faith: 0 }, traits: [], institutions: [], flags: [], pathFlags: [],
+    dramaPhaseId: 1, era: 0, dominantPath: '', endgameStates: [], entropyBand: 0,
+  };
+  const after = structuredClone(before);
+  after.metrics.development = 120;
+  after.metrics.stability = 70;
+  after.metrics.awareness = 20;
+  after.metrics.entropy = 25;
+  after.affinities.machine_faith = 3;
+  after.dramaPhaseId = 2;
+  after.entropyBand = 1;
+  const result = buildDecisionConsequence('neutral_event', before, after, []);
+  assert.equal(result.significance, 'turning_point');
+  assert.deepEqual(result.tags, ['urban_growth','technological_growth','civil_unrest','reality_damage','surveillance','path_shift']);
+  assert.deepEqual(result.transitions.dramaPhase, { from: 1, to: 2 });
+  assert.deepEqual(result.transitions.entropyBand, { from: 0, to: 1 });
+});
+
+test('major and turning-point significance rules cover raw deltas and structural transitions', () => {
+  const base = {
+    metrics: { stability: 80, stabilityMax: 100, awareness: 10, sanity: 80, attention: 10, years: 0, development: 100, eventTimer: 5, entropy: 20, controlCapacity: 3 },
+    affinities: { machine_faith: 0 }, traits: [], institutions: [], flags: [], pathFlags: [],
+    dramaPhaseId: 1, era: 0, dominantPath: '', endgameStates: [], entropyBand: 0,
+  };
+  const major = structuredClone(base); major.metrics.stability = 72;
+  assert.equal(buildDecisionConsequence('neutral_event', base, major, []).significance, 'major');
+  const dominance = structuredClone(base); dominance.dominantPath = 'machine_faith';
+  assert.equal(buildDecisionConsequence('neutral_event', base, dominance, []).significance, 'turning_point');
+  const endgame = structuredClone(base); endgame.endgameStates = ['endgame_machine_faith'];
+  assert.equal(buildDecisionConsequence('neutral_event', base, endgame, []).significance, 'turning_point');
+  for (const id of ['entropy_crisis_25','entropy_crisis_50','entropy_crisis_75']) {
+    assert.equal(buildDecisionConsequence(id, base, base, []).significance, 'turning_point');
   }
 });
