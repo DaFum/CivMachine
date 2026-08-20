@@ -16,7 +16,7 @@ That separation is deliberate — the game survives shell/platform rewrites unto
 ```bash
 npm run dev          # Next dev server
 npm run build        # next build (also runs tsc over app/)
-npm test             # compiles public/game/src, then runs both test suites (97 tests)
+npm test             # compiles public/game/src, then runs both test suites (243 tests)
 npm run lint         # eslint (public/game/** is intentionally excluded)
 npm run typecheck    # tsc --noEmit over the shell
 ```
@@ -42,10 +42,10 @@ Strict one-directional layering under `public/game/src/`:
 
 `data/` → `game/` → `ui/` + `render/`, wired together by `main.ts`.
 
-- **`game/engine.ts`** is the single source of truth. `GameEngine` holds all mutable `state`, exposes `onChange(fn)` for subscribers, and delegates every rule to a small pure module: `rules.ts` (harvest/cost math), `progression.ts` (unlocks, Machine Insight), `paths.ts` (path affinity), `pressure.ts` (Entropy/cascade), `tactical-actions.ts`, `intervention-scheduler.ts` (seeded weighted draw with repetition protection), `harvest-quality.ts`, `run-directives.ts`, `decision-feedback.ts`. Keep new rules in such modules — they are what the tests target.
-- **`main.ts`** owns the `requestAnimationFrame` loop, ticks the engine only in the `civilization` phase, autosaves every 5 s plus on `beforeunload`/`pagehide`/`visibilitychange`, and binds keys 1/2/3/4 (digit row and numpad) to the four tactical actions — Stabilize, Accelerate, Probe, Vent.
+- **`game/engine.ts`** is the single source of truth. `GameEngine` holds all mutable `state`, exposes `onChange(fn)` for subscribers, and delegates every rule to a small pure module: `rules.ts` (harvest/cost math), `progression.ts` (unlocks, Machine Insight), `paths.ts` (path affinity), `pressure.ts` (Entropy/cascade), `stat-drift.ts` (per-second Stability/Awareness/Attention/Sanity rates), `tactical-actions.ts`, `intervention-scheduler.ts` (seeded weighted draw with repetition protection), `harvest-quality.ts`, `run-directives.ts`, `decision-feedback.ts`. Keep new rules in such modules — they are what the tests target.
+- **`main.ts`** owns the `requestAnimationFrame` loop. The loop only exists during the `civilization` phase: it stops on any other phase and is restarted from `engine.onChange`, so an idle machine layer wakes nothing and rewrites no save. Inside it, the engine ticks and autosaves every 5 s; `beforeunload`/`pagehide`/`visibilitychange` save independently. It also binds keys 1/2/3/4 (digit row and numpad) to the four tactical actions — Stabilize, Accelerate, Probe, Vent.
 - **`ui/view-model.ts`** turns engine state into presentation data (labels, bands, redaction by Prediction Core level). **`ui/app.ts`** renders it into the static DOM from `index.html` using template strings plus `replaceIfChanged` (innerHTML comparison). All escaping goes through `esc()`.
-- **`render/world.ts`** owns the renderer lifecycle and a deterministic Canvas 2D world on two stacked canvases: a cached static layer (sky, terrain, settlements) redrawn only when `structuralWorldKey` changes, and a dynamic layer redrawn every throttled frame. All drawing goes through the `DrawSurface` interface in `render/draw-surface.ts`, which keeps the drawing code free of canvas transform bookkeeping and lets tests record primitives. Visuals must derive from `render/world-model.ts` (`worldSnapshot`, `developmentStage`) and `render/world-presentation.ts` (`worldPresentation`, `structuralWorldKey`). There is no second renderer — tests assert no Phaser naming survives.
+- **`render/world.ts`** owns the renderer lifecycle and a deterministic Canvas 2D world on three stacked canvases: `staticCanvas` (sky and terrain, the slow parallax layers — under 100 primitives, so a scroll simply repaints them), `sceneryCanvas` (settlements, over 90% of the static cost and the only layer that moves 1:1 with the scroll, so a scroll copies the canvas onto itself and repaints only the strip the move exposed), and `dynamicCanvas` (everything animated, repainted every throttled frame). All three paint at a device-pixel-aligned scroll — a fractional copy would resample the scenery layer once per drag frame. `render-smoke.test.mjs` pins the strip redraw against a full redraw of the same slice; that equivalence is what allows `SCENERY_SLACK` to stay small. All drawing goes through the `DrawSurface` interface in `render/draw-surface.ts`, which keeps the drawing code free of canvas transform bookkeeping and lets tests record primitives. Visuals must derive from `render/world-model.ts` (`worldSnapshot`, `developmentStage`) and `render/world-presentation.ts` (`worldPresentation`, `structuralWorldKey`). There is no second renderer — tests assert no Phaser naming survives.
 
 ### Two invariants the tests enforce
 
@@ -72,10 +72,11 @@ The engine composes these over the generated catalogs in its field initializers.
 
 - Adding or renaming a module under `public/game/dist/` requires adding it to `APP_ASSETS`. `public/game/tests/presentation.test.mjs` asserts that all eleven `dist/render/*.js` modules are listed.
 - Any release requires bumping `CACHE_NAME`, or returning players keep the old files forever.
+- Source maps are deliberately **not** precached; `tests/game-release.test.mjs` fails if one reappears in the list.
 
 ## Version coupling
 
-The current version (`1.7.0`) appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and the title plus a release-notes heading in both READMEs.
+The current version (`1.8.0`) appears in `package.json`, `public/game/package.json`, the footer of `public/game/index.html`, `CACHE_NAME` in `public/sw.js`, and the title plus a release-notes heading in both READMEs.
 
 `tests/game-release.test.mjs` reads the version from the root `package.json`, asserts it once explicitly, and derives every other check from it — so a release is two edits (that assertion and `package.json`) and the test then insists on the rest. It fails on a stale `CACHE_NAME`, a stale README title, a missing `## vX.Y.Z` release-notes heading, or a drifted game package version. `CACHE_NAME` is the one that actually delivers a release: the service worker serves cache-first with no revalidation, so without a bump returning players keep the old files forever.
 

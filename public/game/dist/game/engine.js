@@ -7,7 +7,8 @@ import { Progression, nextSystemPreviews, visibleUpgradeEntries } from './progre
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost } from './rules.js';
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention } from './intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from './decision-feedback.js';
-import { advancePressure, cascadeDecay, pressureYears } from './pressure.js';
+import { advancePressure, pressureYears } from './pressure.js';
+import { statDrift } from './stat-drift.js';
 import { developmentGrowthPerSecond } from './development.js';
 import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability } from './tactical-actions.js';
 import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality, gradeIndex } from './harvest-quality.js';
@@ -246,27 +247,12 @@ export class GameEngine {
             this.enterEra(civ, newEra);
         const s = civ.stats;
         civ.development += developmentGrowthPerSecond(civ, this.upgradeLevel('axiom', 'axiom_paradox_food')) * dt;
-        let decay = .018 * (1 + .55 * civ.era) * (1 + s.attention / 140) * (1 + s.awareness / 180) * civ.stabilityDecayMult;
-        if (civ.flags.includes('impossible_tax'))
-            decay *= .95;
-        if (civ.flags.includes('resistance'))
-            decay *= 1.2;
-        decay *= CivilizationPaths.simulationModifier(civ, 'stability');
-        decay += cascadeDecay(civ.tactical.entropy, s.stabilityMax);
-        s.stability -= decay * dt;
-        let awareness = .006 * civ.era;
-        if (civ.flags.includes('machine_cult'))
-            awareness *= 1.35;
-        if (civ.flags.includes('planetary_mind'))
-            awareness *= 1.2;
-        awareness *= CivilizationPaths.simulationModifier(civ, 'awareness');
-        s.awareness += awareness * b.awarenessGainMult * dt;
-        s.attention += .004 * civ.era * b.attentionGainMult * CivilizationPaths.simulationModifier(civ, 'attention') * dt;
-        let sanity = .003 * civ.era * (1 + s.attention / 60);
-        if (civ.institutions.includes('Ministry Of Sanity'))
-            sanity *= .72;
-        sanity *= CivilizationPaths.simulationModifier(civ, 'sanity');
-        s.sanity -= sanity * b.sanityLossMult * dt;
+        // Every stat moves at the rate stat-drift.ts states; the tick only integrates it over the frame.
+        const drift = statDrift(civ, b);
+        s.stability -= drift.stabilityDecay * dt;
+        s.awareness += drift.awarenessGain * dt;
+        s.attention += drift.attentionGain * dt;
+        s.sanity -= drift.sanityLoss * dt;
         this.clampStats(civ);
         for (const m of Progression.recordCivilizationProgress(this.state, civ))
             this.post(m);

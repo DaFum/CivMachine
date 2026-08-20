@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.7.0
+# Reality Consumption Engine — App Edition v1.8.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer.
 
@@ -52,6 +52,45 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.8.0 a layer that scrolls instead of repainting, a loop that stops, and a front-loaded Accelerate
+
+v1.8.0 is an optimization release. Nothing about the run changes except one price that was
+measurably wrong.
+
+**Panning costs about a fifth of what it did.** The settlement layer -- over 90% of the static
+drawing and the only layer that moves 1:1 with the scroll -- now lives on its own canvas. A
+scroll copies what is already painted and repaints only the strip the move exposed, clipped so
+the copy cannot be damaged. Measured on a 1440x760 viewport at device pixel ratio 2, a stage-4
+world, dragging at 12 px per frame: 1140 static drawing primitives per frame before, 242 after.
+Sky and terrain, at 14 and 80 primitives, are still simply repainted. A render test replays the
+same scroll reached two different ways and requires the strip to paint the exposed slice exactly
+as a full redraw does.
+
+**The frame loop stops when there is nothing to cultivate.** It used to run at 60 Hz in the
+machine layer, ticking nothing and rewriting an unchanged save every five seconds. Measured in
+the browser: 62 callbacks per half second during cultivation, 0 in the machine layer.
+
+**Accelerate is front-loaded instead of dominated.** Its Entropy surcharge was flat at +5, which
+made the action worse than doing nothing at every containment level -- measured over five seeds,
+2.0 Cultivation Credits against 4.8 for touching nothing at containment 8. It now costs 3 Entropy
+in Emergence and 3 more per era after, so an early push is affordable and a late one is not. The
+documented v1.3.1 progression envelope is unchanged.
+
+**The civilization view is ordered by what it asks of the player.** The intervention -- the one
+thing a run demands an answer to -- now sits directly under the world it is about, instead of below
+a block of status readouts. The old rail answered three questions at once; it is two now: `TACTICAL
+ACTIONS` (Control, the four actions as a 2x2, simulation speed) and `PRESSURE & HARVEST` (Entropy,
+the harvest forecast, and the harvest buttons directly under it). Run context follows, reference
+material last. The mislabelled `Intervention Control` accordion, which held nothing but the speed
+control, is gone; `Cosmic Conditions` is a line in `Strategic Overview`, next to the bars it
+describes.
+
+**Smaller things.** The stat drift -- how fast Stability, Awareness, Attention and Sanity move --
+moved out of the tick into `game/stat-drift.ts`, where it can be addressed by tests like every
+other rule. The service worker no longer precaches source maps, which were six of the thirty-five
+maps and pure download weight. The game's heaviest modules are preloaded, so the first visit does
+not discover them one import at a time.
 
 ## v1.7.0 pressure with a cost, a harvest signal, and a world that paints only what it shows
 

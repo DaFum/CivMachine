@@ -4,7 +4,7 @@ import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
 import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST } from '../game/tactical-actions.js';
+import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalRisk } from '../game/tactical-actions.js';
 const RESOURCE_NAMES = {
     causal_mass: 'Causal Mass', cognition: 'Cognition', paradox: 'Paradox', existence: 'Existence', universal_residue: 'Universal Residue', axioms: 'Axioms'
 };
@@ -162,6 +162,8 @@ export function buildViewModel(engine) {
             containmentRating: bonuses.containmentRating,
             actions: Object.keys(TACTICAL_ACTIONS).map(id => ({
                 ...TACTICAL_ACTIONS[id],
+                // Accelerate's Entropy price rises with the era, so the rail names the price charged now.
+                risk: tacticalRisk(civ, id),
                 ...engine.tacticalAvailability(id),
             })),
         } : null,

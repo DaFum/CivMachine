@@ -29,6 +29,12 @@ export const CULL_MARGIN = 320;
 const BANNER_SLACK = 40;
 // Widest path motif: the bureaucratic filing cabinet at 28 px plus its rings.
 const MOTIF_SLACK = 60;
+// Slack added around the strip a scroll exposes. `drawSettlementContent` already culls every
+// settlement by its radius and every structure by its own width, so a narrow band is as correct as a
+// wide one; this margin only absorbs the few marks drawn slightly beyond a declared extent. The
+// strip redraw is checked against a full redraw of the same slice in the render tests, which is what
+// keeps this number honest.
+const SCENERY_SLACK = 48;
 /**
  * A layer at parallax `f` is drawn under `translate(-scroll * f)`, so the world coordinates on screen
  * run from `scroll * f` to `scroll * f + width`. Everything outside that, plus a margin, is invisible.
@@ -555,29 +561,54 @@ class WorldInput {
         this.target.removeEventListener?.('pointercancel', this.onPointerCancel);
     }
 }
+/**
+ * Three stacked canvases, back to front:
+ *
+ * - `staticCanvas` holds the two slow parallax layers. They are cheap -- under a hundred primitives
+ *   for the whole viewport -- so they are simply repainted whenever the scroll moves.
+ * - `sceneryCanvas` holds the settlement layer, which is over 90% of the static drawing cost and the
+ *   only one that moves 1:1 with the scroll. Because it does, a scroll is a translation of what is
+ *   already painted: the layer is blitted onto itself and only the strip the move exposed is redrawn.
+ * - `dynamicCanvas` holds everything that animates, repainted every throttled frame.
+ *
+ * Splitting the settlement layer onto its own canvas is what makes that blit possible at all -- on a
+ * shared canvas the slow layers would be dragged along at the wrong rate and the parallax would die.
+ */
 class WorldRenderer {
     constructor(host) {
         this.host = host;
         this.width = 0;
         this.height = 0;
         this.staticRedraws = 0;
+        this.sceneryFullRedraws = 0;
+        this.sceneryStripRedraws = 0;
+        /** The scroll the scenery canvas currently shows, or NaN when its content cannot be reused. */
+        this.sceneryScroll = Number.NaN;
         this.feedbackSequence = 0;
         this.feedbackStartTime = 0;
         this.staticCanvas = document.createElement('canvas');
+        this.sceneryCanvas = document.createElement('canvas');
         this.dynamicCanvas = document.createElement('canvas');
         this.staticCanvas.className = 'fallback-canvas fallback-static';
+        this.sceneryCanvas.className = 'fallback-canvas fallback-scenery';
         this.dynamicCanvas.className = 'fallback-canvas fallback-dynamic';
         this.staticContext = this.staticCanvas.getContext('2d');
+        this.sceneryContext = this.sceneryCanvas.getContext('2d');
         this.dynamicContext = this.dynamicCanvas.getContext('2d');
         host.appendChild(this.staticCanvas);
+        host.appendChild(this.sceneryCanvas);
         host.appendChild(this.dynamicCanvas);
     }
     resize(width, height) {
         this.width = width;
         this.height = height;
         this.resizeCanvas(this.staticCanvas);
+        this.resizeCanvas(this.sceneryCanvas);
         this.resizeCanvas(this.dynamicCanvas);
+        this.invalidateScenery();
     }
+    /** Drops the reuse of the scenery canvas: the next paint redraws the whole visible slice. */
+    invalidateScenery() { this.sceneryScroll = Number.NaN; }
     resizeCanvas(canvas) {
         canvas.width = Math.max(1, Math.round(this.width * devicePixelRatio));
         canvas.height = Math.max(1, Math.round(this.height * devicePixelRatio));
@@ -593,22 +624,70 @@ class WorldRenderer {
     surface(context) {
         return canvasSurface(context, (value, alpha = 1) => this.color(value, alpha));
     }
+    /** The two slow parallax layers. Small enough that a scroll simply repaints them. */
     drawStatic(scene, scroll) {
         const context = this.staticContext;
         const surface = this.surface(context);
         const worldWidth = scene.snapshot.worldWidth;
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
-        // Each layer paints only the slice its own parallax puts on screen. This runs on every scrolled
-        // pixel, so the difference between one viewport and four is the whole cost of dragging.
+        // Each layer paints only the slice its own parallax puts on screen.
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * SKY_PARALLAX * devicePixelRatio, 0);
         drawSkyContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, SKY_PARALLAX));
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * TERRAIN_PARALLAX * devicePixelRatio, 0);
         drawTerrainContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, TERRAIN_PARALLAX));
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
-        drawSettlementContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, 1));
         context.setTransform(1, 0, 0, 1, 0, 0);
         this.staticRedraws++;
+    }
+    /**
+     * The settlement layer. It moves 1:1 with the scroll, so a scroll of d pixels leaves every painted
+     * pixel valid at a position d to the side: the canvas is copied onto itself and only the strip the
+     * move exposed is repainted, clipped so the copy cannot be damaged.
+     *
+     * `scroll` must be device-pixel aligned. The caller aligns it for every layer, so the copy is an
+     * integer pixel move -- otherwise each drag frame would resample the layer and blur it.
+     */
+    drawScenery(scene, scroll) {
+        const context = this.sceneryContext;
+        const surface = this.surface(context);
+        const worldWidth = scene.snapshot.worldWidth;
+        const deviceWidth = this.sceneryCanvas.width;
+        const deviceHeight = this.sceneryCanvas.height;
+        const shift = Number.isFinite(this.sceneryScroll) ? Math.round((this.sceneryScroll - scroll) * devicePixelRatio) : Number.NaN;
+        const reusable = Number.isFinite(shift) && Math.abs(shift) < deviceWidth;
+        if (reusable && shift === 0)
+            return;
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        let band;
+        if (!reusable) {
+            context.clearRect(0, 0, deviceWidth, deviceHeight);
+            band = visibleBand(worldWidth, this.width, scroll, 1);
+            this.sceneryFullRedraws++;
+        }
+        else {
+            // 'copy' rather than 'source-over': the strip the move exposes must end up transparent, not
+            // holding the pixels that used to be there.
+            context.globalCompositeOperation = 'copy';
+            context.drawImage(this.sceneryCanvas, shift, 0);
+            context.globalCompositeOperation = 'source-over';
+            const exposedFrom = shift > 0 ? 0 : this.width + shift / devicePixelRatio;
+            const exposedSpan = Math.abs(shift) / devicePixelRatio;
+            band = {
+                from: Math.max(0, scroll + exposedFrom - SCENERY_SLACK),
+                to: Math.min(worldWidth, scroll + exposedFrom + exposedSpan + SCENERY_SLACK),
+            };
+            context.save();
+            context.beginPath();
+            context.rect(exposedFrom * devicePixelRatio, 0, exposedSpan * devicePixelRatio, deviceHeight);
+            context.clip();
+            this.sceneryStripRedraws++;
+        }
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
+        drawSettlementContent(surface, scene, this.height, band);
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        if (reusable)
+            context.restore();
+        this.sceneryScroll = scroll;
     }
     drawDynamic(time, scene, civ, scroll, tracker, engine) {
         const context = this.dynamicContext;
@@ -634,6 +713,7 @@ class WorldRenderer {
     }
     destroy() {
         this.staticCanvas.remove();
+        this.sceneryCanvas.remove();
         this.dynamicCanvas.remove();
     }
 }
@@ -668,23 +748,36 @@ class CanvasWorld {
                 this.tracker.sync(this.scene.structures, time);
                 this.sceneRebuilds++;
                 this.input.lastStaticScroll = Number.NaN;
+                this.renderer.invalidateScenery();
             }
             if (!this.scene)
                 return;
             this.input.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - this.renderer.width, this.input.scroll));
-            if (this.input.scroll !== this.input.lastStaticScroll) {
-                this.input.lastStaticScroll = this.input.scroll;
-                this.renderer.drawStatic(this.scene, this.input.scroll);
+            // Every layer paints at the same device-pixel-aligned scroll: the scenery layer moves by copying
+            // itself, and a fractional move would resample -- and blur -- it once per drag frame.
+            const scroll = Math.round(this.input.scroll * devicePixelRatio) / devicePixelRatio;
+            if (scroll !== this.input.lastStaticScroll) {
+                this.input.lastStaticScroll = scroll;
+                this.renderer.drawStatic(this.scene, scroll);
+                this.renderer.drawScenery(this.scene, scroll);
             }
             this.tracker.prune(time);
-            this.renderer.drawDynamic(time, this.scene, civ, this.input.scroll, this.tracker, this.engine);
+            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine);
         };
         this.renderer = new WorldRenderer(host);
-        this.input = new WorldInput(this.renderer.staticCanvas, () => this.renderer.width);
+        // The topmost canvas that still takes pointer events; the dynamic layer above it is inert.
+        this.input = new WorldInput(this.renderer.sceneryCanvas, () => this.renderer.width);
         this.loop(0);
     }
     nudge(direction) { this.input.nudge(direction); }
-    stats() { return { sceneRebuilds: this.sceneRebuilds, staticRedraws: this.renderer.staticRedraws }; }
+    stats() {
+        return {
+            sceneRebuilds: this.sceneRebuilds,
+            staticRedraws: this.renderer.staticRedraws,
+            sceneryFullRedraws: this.renderer.sceneryFullRedraws,
+            sceneryStripRedraws: this.renderer.sceneryStripRedraws,
+        };
+    }
     destroy() {
         cancelAnimationFrame(this.raf);
         this.tracker.reset();
@@ -708,7 +801,7 @@ export function startWorldRenderer(engine, host) {
     ensure();
     return {
         nudge(direction) { world?.nudge(direction); },
-        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0 }; },
+        stats() { return world?.stats() ?? { sceneRebuilds: 0, staticRedraws: 0, sceneryFullRedraws: 0, sceneryStripRedraws: 0 }; },
         destroy() { unsubscribe(); world?.destroy(); world = null; host.replaceChildren(); },
     };
 }

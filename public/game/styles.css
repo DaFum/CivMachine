@@ -90,12 +90,16 @@ main{padding:1rem}
 .world-arrow.left{left:10px}
 .world-arrow.right{right:10px}
 .civilization-panels{margin-top:1rem}
-.tactical-rail{--entropy-color:var(--mint);margin-bottom:1rem;padding:1rem;border:1px solid #365868;background:linear-gradient(135deg,#0c1a22f2,#090e15f7);box-shadow:0 14px 32px #0005}
+/* The command rail is what the player spends, the pressure rail is when the run ends. Side by side
+   on a wide screen so neither pushes the other below the fold; stacked when there is no room. */
+.run-controls{display:grid;gap:1rem;margin-bottom:1rem}
+@media(min-width:1000px){.run-controls{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:start}}
+.tactical-rail{--entropy-color:var(--mint);display:grid;gap:.8rem;align-content:start;padding:1rem;border:1px solid #365868;background:linear-gradient(135deg,#0c1a22f2,#090e15f7);box-shadow:0 14px 32px #0005}
 .tactical-rail.entropy-strained{--entropy-color:var(--amber)}
 .tactical-rail.entropy-fractured{--entropy-color:#f39b5a}
 .tactical-rail.entropy-critical,.tactical-rail.entropy-cascade{--entropy-color:var(--danger)}
-.tactical-status{display:grid;grid-template-columns:minmax(190px,.6fr) minmax(260px,1.1fr) minmax(230px,.95fr);gap:1rem;align-items:end;margin-bottom:.75rem}
-.tactical-status strong{display:block;margin:.25rem 0;color:#dcebf1;font-size:.78rem;letter-spacing:.06em}
+.control-line{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.control-line strong{color:#dcebf1;font-size:.78rem;letter-spacing:.06em}
 .rail-head{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
 .rail-keys{color:var(--muted);font-size:.62rem;letter-spacing:.1em}
 .rail-keys b{color:var(--cyan)}
@@ -111,7 +115,7 @@ main{padding:1rem}
 .entropy-meter i{display:block;height:100%;background:linear-gradient(90deg,var(--mint),var(--entropy-color));box-shadow:0 0 16px var(--entropy-color);transition:width .25s linear}
 .entropy-readout small{grid-column:1/-1;color:var(--muted)}
 .entropy-readout small b{color:var(--text)}
-.harvest-readout{display:grid;grid-template-columns:1fr auto;gap:.28rem .8rem;padding-left:.9rem;border-left:1px solid #24404e}
+.harvest-readout{display:grid;grid-template-columns:1fr auto;gap:.28rem .8rem;padding-top:.8rem;border-top:1px solid #24404e}
 .harvest-readout>span{color:#9fb3bc;font-size:.7rem;letter-spacing:.06em}
 .harvest-readout>span b,.harvest-readout>strong{color:var(--amber)}
 .harvest-readout>strong{font-size:1.05rem}
@@ -124,7 +128,7 @@ main{padding:1rem}
 .harvest-readout.urgency-cascading{--harvest-call:var(--danger)}
 .harvest-meter{grid-column:1/-1;height:9px;border:1px solid #43413a;background:#17150f;overflow:hidden}
 .harvest-meter i{display:block;height:100%;background:linear-gradient(90deg,#8a7a45,var(--amber));box-shadow:0 0 16px #e8c66a55;transition:width .25s linear}
-.tactical-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem}
+.tactical-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}
 .tactical-action-wrap{display:grid;grid-template-rows:1fr auto;min-width:0}
 .tactical-action-wrap button{display:grid;gap:.35rem;min-height:112px;padding:.8rem;text-align:left;border-color:#315160;background:linear-gradient(180deg,#132631,#0e1921)}
 .tactical-action-wrap button>span{display:flex;align-items:center;gap:.5rem;font-weight:800;color:#e4f5fb}
@@ -197,7 +201,13 @@ details .panel{margin:0;border:0;border-top:1px solid #1b2a34;box-shadow:none}
 .history{max-height:300px;overflow:auto;padding-left:1.6rem;color:#8fa3af}
 .history li{margin:.45rem 0}
 .collapse-warning{border:1px solid #8c3d48;background:#35151b;color:#ffb5bd;padding:.8rem;margin-bottom:.7rem;font-weight:700}
-.harvest-actions{display:flex;gap:.65rem;flex-wrap:wrap;margin:1rem 0}
+.harvest-actions{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:0}
+.harvest-actions .primary{grid-column:1/-1}
+.pressure-rail .collapse-warning{margin:0}
+.cosmic-line{margin:.7rem 0 0;color:var(--muted);font-size:.78rem}
+/* Reserve commitments read like the tactical actions and are laid out like them. */
+.reserve-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.65rem}
+.panel-note{margin:0 0 .8rem;color:var(--muted);font-size:.78rem}
 .machine-log{margin-top:1.2rem}
 .machine-log ul{list-style:none;padding:0;margin:.5rem 0;max-height:220px;overflow:auto;font-size:.74rem;color:#8195a0}
 .machine-log li{padding:.3rem 0;border-bottom:1px solid #15232b}
@@ -217,10 +227,9 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 .upgrade{align-items:flex-start}
 .upgrade button{min-width:88px}
 .choice-list{grid-template-columns:1fr}
-.tactical-status{grid-template-columns:1fr}
 .rail-keys{display:none}
-.harvest-readout{padding-left:0;border-left:0;border-top:1px solid #24404e;padding-top:.6rem}
-.tactical-actions{grid-template-columns:1fr}
+/* .tactical-actions keeps its 2x2 grid here: mobile.css states why four stacked buttons are wrong. */
+.harvest-actions{grid-template-columns:1fr}
 .tactical-action-wrap button{min-height:88px}
 .start-run{width:100%;min-width:0}
 .last-harvest{width:100%}

@@ -19,6 +19,17 @@ test('browser entrypoint wires game engine, DOM UI and world renderer', async ()
   assert.match(source, /requestAnimationFrame/);
 });
 
+test('the frame loop runs only while a civilization is being cultivated', async () => {
+  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  // Outside the civilization phase there is nothing to advance and every mutating call already saves,
+  // so the loop stops rather than waking the device sixty times a second to tick nothing.
+  assert.match(source, /phase !== 'civilization'\)\{ looping = false; return; \}/);
+  assert.match(source, /engine\.onChange\(ensureLoop\)/, 'starting a civilization must restart the loop');
+  // The periodic save lives inside the loop, so an idle machine layer cannot rewrite an unchanged save.
+  const loopBody = source.slice(source.indexOf('function frame'), source.indexOf('function ensureLoop'));
+  assert.match(loopBody, /accumulator >= 5\)\{ accumulator = 0; engine\.save\(\); \}/);
+});
+
 test('the Canvas renderer is the only renderer and loads no remote code', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
@@ -33,6 +44,7 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   assert.match(world, /structuralWorldKey/);
   // Cached scenery lives on the static canvas and is redrawn only on a structural key change.
   assert.match(world, /readonly staticCanvas/);
+  assert.match(world, /readonly sceneryCanvas/);
   assert.match(world, /readonly dynamicCanvas/);
   assert.match(world, /drawSkyContent/);
   assert.match(world, /drawTerrainContent/);
@@ -132,7 +144,11 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(app, /data-action="tactical"/);
   assert.match(app, /aria-describedby/);
   assert.match(app, /TACTICAL ACTIONS/);
-  assert.ok(app.indexOf('tacticalRail') < app.indexOf('<details>'));
+  // Both rails are rendered before the first accordion: what the run asks of the player is never
+  // behind a summary they have to open mid-run.
+  const panels = app.slice(app.indexOf('replaceIfChanged(civPanels,'));
+  assert.ok(panels.indexOf('commandRail(vm)') < panels.indexOf('<details>'));
+  assert.ok(panels.indexOf('pressureRail(vm)') < panels.indexOf('<details>'));
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /entropyBand/);
@@ -144,9 +160,13 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   // Stay-or-harvest and CASCADE IN Xs answer the same question, so grade, depth, the band meter and
   // the yield must live in the rail -- not behind a summary the player has to open mid-run.
   assert.match(app, /class="harvest-readout /);
-  const rail = app.slice(app.indexOf('const tacticalRail='), app.indexOf('function renderCivilization'));
-  assert.match(rail, /harvestReadout\(vm\)/, 'the rail must render the harvest readout');
-  const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const tacticalRail='));
+  const rail = app.slice(app.indexOf('const pressureRail='), app.indexOf('function renderCivilization'));
+  assert.match(rail, /harvestReadout\(vm\)/, 'the pressure rail must render the harvest readout');
+  // And the buttons that end the run sit in the same rail as the readout that says whether to press
+  // them, instead of at the bottom of the view behind every accordion.
+  assert.match(rail, /data-action="harvest"/);
+  assert.match(rail, /data-action="chaos"/);
+  const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const speedRow='));
   assert.match(readout, /HARVEST GRADE/);
   assert.match(readout, /data-live="depth"/);
   assert.match(readout, /data-live="harvest-summary"/);
@@ -163,6 +183,29 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(refresh, /\[data-live="harvest-call"\]/);
   assert.match(refresh, /urgency-\$\{state\}/);
   assert.doesNotMatch(viewModel.slice(viewModel.indexOf('export function civilizationRenderKey')), /urgency/);
+});
+
+test('the civilization view is ordered by what it asks of the player', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const panels = app.slice(app.indexOf('replaceIfChanged(civPanels,'));
+  const at = fragment => {
+    const index = panels.indexOf(fragment);
+    assert.ok(index >= 0, `the civilization panel column must contain ${fragment}`);
+    return index;
+  };
+
+  // The intervention is the one thing the run asks the player to answer, so it sits directly under
+  // the world it is asking about -- ahead of every readout, control and accordion.
+  assert.match(panels, /\$\{terminalBanner\}\$\{eventCard\}/);
+  assert.ok(at('${eventCard}') < at('run-controls'), 'the intervention comes before the rails');
+  assert.ok(at('run-controls') < at("card('Strategic Overview'"), 'the rails come before the run context');
+  assert.ok(at("card('Strategic Overview'") < at('<details>'), 'reference material comes last');
+
+  // Simulation speed is a pacing control used mid-run; it belongs with the actions, not behind an
+  // accordion that was misleadingly called Intervention Control next to the actual interventions.
+  assert.doesNotMatch(app, /Intervention Control/);
+  const command = app.slice(app.indexOf('const commandRail='), app.indexOf('const pressureRail='));
+  assert.match(command, /speedRow\(vm\)/);
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {

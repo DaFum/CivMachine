@@ -11,6 +11,16 @@
   <link rel="manifest" href="../manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./mobile.css">
+  <!-- The module graph is four levels deep and unbundled, so without these the browser discovers the
+       heaviest leaves only after parsing their importers. Cheap on repeat visits (the service worker
+       has them), decisive on the first one. -->
+  <link rel="modulepreload" href="./dist/data/content.generated.js">
+  <link rel="modulepreload" href="./dist/game/engine.js">
+  <link rel="modulepreload" href="./dist/render/world.js">
+  <link rel="modulepreload" href="./dist/ui/app.js">
+  <link rel="modulepreload" href="./dist/ui/view-model.js">
+  <link rel="modulepreload" href="./dist/data/intervention-copy.js">
+  <link rel="modulepreload" href="./dist/data/apotheosis-events.js">
 </head>
 <body>
   <div class="background-noise"></div>
@@ -33,7 +43,7 @@
       <section id="victory-view" class="phase-view is-hidden"></section>
       <section class="machine-log panel"><div class="panel-kicker">MACHINE RECORD</div><ul id="machine-log"></ul></section>
     </main>
-    <footer><span>Reality Consumption Engine Browser v1.7.0</span><span>v4 save · localStorage · No offline progression</span></footer>
+    <footer><span>Reality Consumption Engine Browser v1.8.0</span><span>v4 save · localStorage · No offline progression</span></footer>
   </div>
   <script type="module" src="./dist/main.js"></script>
 </body>
