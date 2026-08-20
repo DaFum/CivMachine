@@ -165,10 +165,10 @@ test('release metadata identifies browser app v1.10.0', async () => {
 
   // The Civilization Drama Arc modules are useless to a returning player unless the hand-maintained
   // precache list carries them, and the cache is never revalidated.
-  for (const module of [
+  for (const compiled of [
     'game/drama.js','game/consequence-profiles.js','game/decision-consequences.js','game/world-memory.js',
     'render/identity.js','render/world-memory.js','render/consequence-presentation.js','render/quality.js',
-  ]) assert.match(worker, new RegExp(`['"]\\/game\\/dist\\/${module.replaceAll('.', '\\.')}['"]`));
+  ]) assert.match(worker, new RegExp(`['"]\\/game\\/dist\\/${compiled.replaceAll('.', '\\.')}['"]`));
 });
 
 test('game surface protects mobile safe areas and dynamic viewport height', async () => {
