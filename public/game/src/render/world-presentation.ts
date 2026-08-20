@@ -28,6 +28,17 @@ export function worldPresentation(civ: Civilization) {
     attention,
     entropy,
     stability,
+    // One named channel per authoritative state, so every one of them owns a distinct visual role
+    // instead of several sharing a full-screen colour wash. Bounded to 0..1 and deliberately kept out
+    // of `structuralWorldKey`: these follow live values, and keying on them would rebuild 60x/s.
+    signals: {
+      structuralStrain: danger,
+      motionIrregularity: sanityDistortion,
+      outwardObservation: awareness,
+      observerPressure: attention,
+      realityFailure: entropy,
+      activity: clamp01((developmentStage(civ) + Math.min(1, civ.development / 560)) / 5),
+    },
     bands: {
       stability: band(civ.stats.stability),
       sanity: band(civ.stats.sanity),

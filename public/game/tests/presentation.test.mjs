@@ -1163,3 +1163,38 @@ test('quality tiers reduce only cosmetic sample work and preserve fracture/beaco
   assert.equal(MAX_PARTICLES,150); assert.equal(MAX_HAZE_BANDS,9); assert.equal(MAX_FRACTURES,12); assert.equal(MAX_BEACONS,10);
   assert.equal(qualityFactors(3).agentFraction, .5);
 });
+
+test('live presentation exposes distinct primary signals for every authoritative visual state', () => {
+  const civ = GameEngine.createCivilizationForTest(17001);
+  civ.development = 120;
+  const base = worldPresentation(civ).signals;
+  const mutate = (fn) => { const copy = structuredClone(civ); fn(copy); return worldPresentation(copy).signals; };
+  assert.notEqual(mutate(c=>c.stats.stability=35).structuralStrain, base.structuralStrain);
+  assert.notEqual(mutate(c=>c.stats.sanity=35).motionIrregularity, base.motionIrregularity);
+  assert.notEqual(mutate(c=>c.stats.awareness=70).outwardObservation, base.outwardObservation);
+  assert.notEqual(mutate(c=>c.stats.attention=70).observerPressure, base.observerPressure);
+  assert.notEqual(mutate(c=>c.tactical.entropy=70).realityFailure, base.realityFailure);
+  assert.notEqual(mutate(c=>c.development=420).activity, base.activity);
+});
+
+test('named live signals stay bounded and never enter the structural key', () => {
+  const civ = lateCiv(17002);
+  const key = structuralWorldKey(civ, 800);
+  for (const [name, value] of Object.entries(worldPresentation(civ).signals)) {
+    assert.ok(value >= 0 && value <= 1, `${name} left the 0..1 range at ${value}`);
+  }
+  civ.stats.stability = Math.trunc(civ.stats.stability / 25) * 25 + 1;
+  const banded = structuralWorldKey(civ, 800);
+  civ.stats.stability += 3;
+  assert.equal(structuralWorldKey(civ, 800), banded, 'a raw signal value must not be a structural factor');
+  assert.ok(key.length > 0);
+});
+
+test('path ambience moved into the identity module and scales with the identity tier', async () => {
+  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.ok(!world.includes('function drawPathMotif'), 'path ambience belongs to identity.ts');
+  assert.match(world, /drawPathAmbience\(/);
+  const identity = await readFile(new URL('../src/render/identity.ts', import.meta.url), 'utf8');
+  assert.match(identity, /export function drawPathAmbience/);
+  assert.match(identity, /export function drawIdentityLandmarks/);
+});

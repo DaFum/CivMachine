@@ -556,3 +556,29 @@ test('a Tier-3 frame keeps drawing the current decision impact', async () => {
     }
   });
 });
+
+test('a dominant identity and its institutions draw distinct scenery, not just a different colour', async () => {
+  function identityCiv(pathId, consolidation) {
+    const civ = developedCivilization(919);
+    civ.pathState.affinity = { ...civ.pathState.affinity, machine_faith: 0, void_communion: 0 };
+    civ.pathState.affinity[pathId] = 9;
+    civ.pathState.dominantPath = pathId;
+    civ.pathState.completedEvents.push(consolidation);
+    civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
+    return civ;
+  }
+  const plain = developedCivilization(919);
+  plain.pathState.dominantPath = '';
+  plain.pathState.affinity = Object.fromEntries(Object.keys(plain.pathState.affinity).map(id => [id, 0]));
+
+  const bare = await bucketsForCivilization(plain, 'identity-bare');
+  const faith = await bucketsForCivilization(identityCiv('machine_faith', 'synod_of_the_second_engine'), 'identity-faith');
+  const void_ = await bucketsForCivilization(identityCiv('void_communion', 'embassy_at_the_edge'), 'identity-void');
+
+  assert.ok(faith.sceneryCalls.length > bare.sceneryCalls.length, 'a capital plus three institutions must add scenery geometry');
+  // Geometry, not palette: the two capitals must differ in the primitives they emit, which a
+  // trackingContext records without recording colour at all.
+  const shape = calls => calls.map(call => `${call.name}:${Math.round(call.to - call.from)}`).join(',');
+  assert.notEqual(shape(faith.sceneryCalls), shape(void_.sceneryCalls), 'two dominant paths must differ in silhouette, not only in accent colour');
+  assert.equal(faith.staticCalls.length, bare.staticCalls.length, 'identity must not touch the sky/terrain layer');
+});

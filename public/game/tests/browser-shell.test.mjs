@@ -70,7 +70,7 @@ test('dynamic world state is sampled independently from cached structural scener
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
   assert.match(world, /const animationTime\s*=\s*reducedMotion\s*\?\s*0\s*:\s*time/);
-  assert.match(world, /drawPathMotif\([^;]+animationTime/);
+  assert.match(world, /drawPathAmbience\([^;]+animationTime/);
   // The decision impact moved into its own module, so reduced motion is now a parameter world.ts
   // forwards rather than a branch it owns.
   assert.match(world, /drawConsequenceImpact\([^;]+reducedMotion\)/);

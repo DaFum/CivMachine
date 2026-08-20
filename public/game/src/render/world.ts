@@ -14,6 +14,7 @@ import { agentPlan, type AgentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
 import { factionRoster, UNALIGNED_COLOR, type Faction } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
+import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identity.js';
 
 export interface RenderStats { sceneRebuilds: number; staticRedraws: number; sceneryFullRedraws: number; sceneryStripRedraws: number; qualityTier: RenderQualityTier; }
 export interface WorldController { nudge(direction: number): void; destroy(): void; stats(): RenderStats; }
@@ -192,97 +193,13 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
   }
   surface.lineStyle(1, presentation.accent, .12).line(view.from, bankTop, view.to, bankTop);
 
+  // The capital silhouette and institution landmarks are permanent structures, so they belong here
+  // beside the buildings rather than being repainted 30x/s.
+  drawIdentityLandmarks(surface, civ, settlements, ground, presentation.accent, view);
+
   // Saved marks and scars are persistent world geometry, so they belong on this cached layer rather
   // than being repainted every frame. Each is culled by the same band as everything else here.
   drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, presentation.accent, view);
-}
-
-function drawPathMotif(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: WorldBand): void {
-  const path = CivilizationPaths.ensure(civ).dominantPath;
-  if (!path) return;
-  // Every motif scatters a handful of marks across the whole world. Each is small, so one slack
-  // covers them all, and the guard keeps the dominant path from being the one thing still painted
-  // world-wide on the layer that repaints every frame.
-  const shows = (x: number): boolean => x >= view.from - MOTIF_SLACK && x <= view.to + MOTIF_SLACK;
-  switch (path) {
-    case 'machine_faith':
-      for (let i = 0; i < 8; i++) {
-        const x = worldWidth * (.08 + i * .12);
-        if (!shows(x)) continue;
-        surface.lineStyle(2, accent, .32).line(x, ground - 35, x, ground - 90 - (i % 3) * 18);
-        surface.fillStyle(accent, .42).fillCircle(x, ground - 95 - (i % 3) * 18, 4);
-      }
-      break;
-    case 'collective_mind': {
-      const points = Array.from({ length: 12 }, (_, i) => ({ x: worldWidth * (.05 + hash01(civ.seed + i) * .9), y: ground - 40 - hash01(i * 17) * 100 }));
-      surface.lineStyle(1, accent, .22);
-      // A segment survives if either end shows, or the chain would break at the band edge.
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1]!, b = points[i]!;
-        if (!shows(a.x) && !shows(b.x)) continue;
-        surface.line(a.x, a.y, b.x, b.y);
-      }
-      for (const point of points) if (shows(point.x)) surface.fillStyle(accent, .5).fillCircle(point.x, point.y, 3);
-      break;
-    }
-    case 'temporal_dominion':
-      for (let i = 0; i < 7; i++) {
-        const x = worldWidth * (.1 + i * .13); const y = height * .22 + (i % 2) * 30;
-        if (!shows(x)) continue;
-        surface.lineStyle(2, accent, .3).strokeCircle(x, y, 12 + i * 2);
-        surface.lineStyle(1, accent, .45).line(x, y, x + Math.cos(time * .001 + i) * 10, y + Math.sin(time * .001 + i) * 10);
-      }
-      break;
-    case 'reality_engineering':
-      for (let i = 0; i < 9; i++) {
-        const x = worldWidth * (.08 + i * .105); const y = ground - 50 - (i % 3) * 35;
-        if (!shows(x)) continue;
-        surface.lineStyle(2, accent, .3).line(x - 12, y + 12, x, y - 12).line(x, y - 12, x + 12, y + 12).line(x + 12, y + 12, x - 12, y + 12);
-      }
-      break;
-    case 'biological_transcendence':
-      for (let i = 0; i < 18; i++) { const x = worldWidth * hash01(civ.seed + i * 13); if (!shows(x)) continue; surface.fillStyle(accent, .14).fillCircle(x, ground - 10 - hash01(i * 29) * 80, 8 + hash01(i) * 14); }
-      break;
-    case 'cosmic_resistance':
-      for (let i = 0; i < 12; i++) {
-        const x = worldWidth * (.03 + i * .085);
-        if (!shows(x)) continue;
-        surface.fillStyle(accent, .38).fillTriangle(x, ground - 48, x + 16, ground - 43, x, ground - 36);
-        surface.lineStyle(1, 0xe5e5e5, .35).line(x, ground - 48, x, ground - 26);
-      }
-      break;
-    case 'bureaucratic_singularity':
-      for (let i = 0; i < 10; i++) {
-        const x = worldWidth * (.06 + i * .095); const y = ground - 70 - (i % 2) * 28;
-        if (!shows(x)) continue;
-        surface.lineStyle(1, accent, .25).strokeRect(x, y, 28, 20);
-        surface.lineStyle(1, accent, .18).line(x + 4, y + 6, x + 23, y + 6);
-      }
-      break;
-    case 'post_mortal_civilization':
-      for (let i = 0; i < 9; i++) {
-        const x = worldWidth * (.07 + i * .11); const y = ground - 55 - (i % 3) * 20;
-        if (!shows(x)) continue;
-        surface.fillStyle(accent, .11).fillCircle(x, y, 11);
-        surface.lineStyle(1, accent, .34).strokeCircle(x, y, 7);
-      }
-      break;
-    case 'void_communion':
-      for (let i = 0; i < 7; i++) {
-        const x = worldWidth * (.1 + i * .13); const y = height * .18 + (i % 3) * 24;
-        if (!shows(x)) continue;
-        surface.fillStyle(accent, .12).fillCircle(x, y, 26 + Math.sin(time * .001 + i) * 3);
-        surface.lineStyle(2, accent, .28).strokeCircle(x, y, 9);
-      }
-      break;
-    case 'recursive_simulation':
-      for (let i = 0; i < 8; i++) {
-        const x = worldWidth * (.07 + i * .115); const y = ground - 75 - (i % 2) * 35;
-        if (!shows(x)) continue;
-        for (let ring = 0; ring < 3; ring++) surface.lineStyle(1, accent, .18 + .06 * ring).strokeRect(x - ring * 5, y - ring * 5, 22 + ring * 10, 14 + ring * 10);
-      }
-      break;
-  }
 }
 
 /**
@@ -357,7 +274,11 @@ function drawInhabitants(surface: DrawSurface, scene: WorldScene, snapshot: Retu
     const settlement = settlements[pedestrian.settlementIndex];
     if (!settlement) continue;
     const travel = reducedMotion ? pedestrian.offset : (pedestrian.offset + animationTime * .000045 * pedestrian.speed) % 1;
-    const x = settlement.centerX - settlement.radius + travel * settlement.radius * 2;
+    // Sanity's own channel: low Sanity makes the crowd move irregularly rather than merely tinting
+    // the screen. The offset is a deterministic hash stepped every 600 ms, so it is a stagger rather
+    // than jitter, and reduced motion keeps a smaller version instead of losing the signal.
+    const irregular = (hash01(pedestrian.seed + Math.trunc(animationTime / 600)) - .5) * 12 * presentation.signals.motionIrregularity;
+    const x = settlement.centerX - settlement.radius + travel * settlement.radius * 2 + (reducedMotion ? irregular * .35 : irregular);
     if (x < view.from || x > view.to) continue;
     const phase = reducedMotion ? 0 : (animationTime % species.gaitPeriod) / species.gaitPeriod;
     drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
@@ -479,6 +400,20 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   // Lit windows keep flickering across the settlement skyline.
   drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
 
+  // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible
+  // structures so a low-Stability world costs a fixed handful of lines rather than one per building.
+  if (presentation.signals.structuralStrain > .18) {
+    let drawn = 0;
+    for (const structure of scene.structures) {
+      if (drawn >= 12) break;
+      if (structure.x < view.from - 20 || structure.x > view.to + 20) continue;
+      const top = ground - structure.height;
+      surface.lineStyle(1, 0xee6973, .08 + presentation.signals.structuralStrain * .18)
+        .line(structure.x - structure.width * .18, top + structure.height * .25, structure.x + structure.width * .12, top + structure.height * .42);
+      drawn++;
+    }
+  }
+
   // Inhabitants.
   drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction);
 
@@ -491,7 +426,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   // Fractures, beacons, sanity distortion.
   drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
 
-  drawPathMotif(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view);
+  drawPathAmbience(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view, pathIdentity(scene.civ).tier, qualityFactors(tier).ambientLoopFraction);
 
   // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
   drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
