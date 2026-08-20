@@ -25,10 +25,24 @@ this, so run it before claiming a game change works.
 
 ## Saves
 
-`SAVE_KEY` in `game/engine.ts` writes one `localStorage` entry, gated on `SAVE_VERSION` in
-`game/rules.ts`. A mismatch **silently discards the save**. Changing `GameState`'s shape therefore
-means choosing between a version bump, which wipes every player's progress, and a
-backward-compatible optional field. There is no migration path and no offline progression.
+`SAVE_KEY` in `game/engine.ts` writes one `localStorage` entry, versioned by `SAVE_VERSION` in
+`game/rules.ts`. A mismatch is **migrated, not discarded** — `game/save-migration.ts` owns that path
+and `docs/superpowers/specs/2026-08-20-save-migration-design.md` explains it.
+
+Changing `GameState`'s shape means:
+
+- **adding or removing a field** — nothing else to do. The structural pass rebuilds a stored save
+  against `createNewState()` / `createCivilizationTemplate()`, so a new field arrives with its
+  default and a removed one is carried along untouched.
+- **reinterpreting a field** (rename, rescale, split, merge) — bump `SAVE_VERSION` and append the
+  matching step to `SAVE_MIGRATIONS`. The chain must stay contiguous; `save-migration.test.mjs` fails
+  the build otherwise.
+
+`createCivilizationTemplate` in `game/rules.ts` is the one place a run's field defaults are declared —
+the engine builds a new run on top of it and the migrator rebuilds a stored one against it, so a
+field added in only one of the two cannot happen.
+
+Still no offline progression: the save records what was played, nothing more.
 
 ## Releases
 

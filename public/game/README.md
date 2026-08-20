@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.10.0
+# Reality Consumption Engine — App Edition v1.11.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,26 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.11.0 a save that survives the next version
+
+v1.11.0 replaces the version gate that silently discarded a mismatched save with a migration path.
+A stored save is now brought forward in two passes: a declared step per version boundary, and a
+structural pass that rebuilds every field against the current defaults. A field added since the save
+was written gets its default, a field that no longer exists is carried along untouched, and a
+non-finite or wrongly typed value is repaired instead of poisoning the run.
+
+- an older save is migrated and re-written in the current shape, keeping currencies, upgrade levels,
+  Machine Insight, unlocks, milestones, victories and the in-progress civilization
+- a save written by a *newer* build loads in compatibility mode, with its unknown fields preserved
+- a save that cannot be read at all no longer disappears: the original bytes are copied to a backup
+  slot before anything overwrites them, and `RCE.restoreBackup()` puts them back
+- a run that can no longer be simulated (a missing seed) is dropped on its own, so the Machine
+  behind it survives
+- a rejected `localStorage` write reports itself once instead of taking the running game down
+- the loader reports what it did in the Machine record, so a migration is visible rather than silent
+
+Balance, content and rendering are unchanged: `SAVE_VERSION` stays at 4 and no rule module moved.
 
 ## v1.10.0 a civilization that remembers what you did
 
@@ -290,4 +310,6 @@ The production boot uses the built-in deterministic Canvas renderer. Structural 
 
 ## Save data
 
-Version 1.5.0 writes the v3 save format. The `localStorage` key is unchanged, but the version gate discards every v2 payload on load, so existing progress is lost and there is no migration. v1 browser saves and Godot saves remain unsupported. The game has no offline progression.
+Version 1.11.0 writes the v4 save format and migrates what it finds. The `localStorage` key is unchanged, and a v1, v2 or v3 payload is brought forward with its progress intact rather than discarded; a save from a newer build loads in compatibility mode; a payload the loader could not read at all is preserved in a backup entry instead of being overwritten. Godot saves remain unsupported. The game has no offline progression.
+
+Historically — up to v1.10.0 — a version gate discarded every payload whose `saveVersion` did not match, so the v1.5.0 move to the v3 format erased existing v2 progress. That gate is gone.

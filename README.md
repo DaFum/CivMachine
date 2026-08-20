@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.10.0
+# Reality Consumption Engine — App Edition v1.11.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -20,7 +20,27 @@ ending run runs out of unseen ones.
 - state-reactive parallax world with cached scenery and throttled animation
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
-- local browser saves without offline progression
+- local browser saves without offline progression, migrated forward across versions
+
+## v1.11.0 a save that survives the next version
+
+v1.11.0 replaces the version gate that silently discarded a mismatched save with a migration path.
+A stored save is now brought forward in two passes: a declared step per version boundary, and a
+structural pass that rebuilds every field against the current defaults. A field added since the save
+was written gets its default, a field that no longer exists is carried along untouched, and a
+non-finite or wrongly typed value is repaired instead of poisoning the run.
+
+- an older save is migrated and re-written in the current shape, keeping currencies, upgrade levels,
+  Machine Insight, unlocks, milestones, victories and the in-progress civilization
+- a save written by a *newer* build loads in compatibility mode, with its unknown fields preserved
+- a save that cannot be read at all no longer disappears: the original bytes are copied to a backup
+  slot before anything overwrites them, and `RCE.restoreBackup()` puts them back
+- a run that can no longer be simulated (a missing seed) is dropped on its own, so the Machine
+  behind it survives
+- a rejected `localStorage` write reports itself once instead of taking the running game down
+- the loader reports what it did in the Machine record, so a migration is visible rather than silent
+
+Balance, content and rendering are unchanged: `SAVE_VERSION` stays at 4 and no rule module moved.
 
 ## v1.10.0 a civilization that remembers what you did
 
@@ -260,6 +280,10 @@ static content under `public/game/`, so it is served straight from the CDN.
 
 ## Save policy
 
-Version 1.5.0 introduces the v3 browser save. Existing v2 saves are discarded by the
-version gate; there is no migration path, and earlier v1 saves remain ignored. Saves use `localStorage`; no offline progress is
-simulated while the app is closed.
+Version 1.11.0 migrates a stored save forward instead of discarding it. A v1, v2 or v3 payload is
+brought up to the current v4 shape with its progress intact, a save written by a newer build loads in
+compatibility mode, and anything the loader had to change is preserved verbatim in a backup entry
+first. Saves use `localStorage`; no offline progress is simulated while the app is closed.
+
+Historically — up to v1.10.0 — a version gate discarded every payload whose `saveVersion` did not
+match, so the v1.5.0 move to the v3 format erased existing v2 progress. That gate is gone.

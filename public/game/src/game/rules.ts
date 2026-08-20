@@ -1,3 +1,4 @@
+import { CivilizationPaths } from './paths.js';
 import type { Civilization, GameState, ResourceKey, RuntimeBonuses } from './types.js';
 
 export const RESOURCE_KEYS: ResourceKey[] = ['causal_mass', 'cognition', 'paradox', 'existence'];
@@ -38,6 +39,24 @@ export function createNewState(): GameState {
       }
     },
     civilization: null
+  };
+}
+
+// The pristine shape of a run. `engine.startCivilization` overwrites the generated fields on top of
+// it, and `save-migration` uses it as the structural template a stored run is rebuilt against, so
+// every field a `Civilization` must carry is declared exactly once -- here.
+export function createCivilizationTemplate(seed: number): Civilization {
+  return {
+    seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
+    eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0,
+    traits: [], institutions: [], flags: [], scheduledEvents: [], history: [],
+    stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 },
+    harvestBonus: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
+    harvestMult: { causal_mass: 1, cognition: 1, paradox: 1, existence: 1 },
+    stabilityDecayMult: 1, eventDelayBonus: 0, predictionLevel: 0,
+    pathState: CivilizationPaths.newState(),
+    tactical: { entropy: 0, controlCapacity: 3, triggeredCrises: [], probedEventId: '', actionUsage: { stabilize: 0, accelerate: 0, probe: 0, vent: 0 } },
+    directiveId: '', directiveObjective: { id: '', completed: false }, terminal: false, runInterventionUses: {}
   };
 }
 

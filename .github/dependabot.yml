@@ -1,0 +1,12 @@
+# The workflow pins every action to a commit SHA, which is only safe if something keeps the pins
+# moving: an unmaintained pin quietly ages onto a version that no longer gets security fixes.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
