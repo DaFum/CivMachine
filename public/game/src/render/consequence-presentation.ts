@@ -77,3 +77,23 @@ export function drawConsequenceImpact(surface: DrawSurface, feedback: DecisionFe
     surface.lineStyle(2,color,fade).strokeCircle(cx,cy,radius); surface.fillStyle(color,fade*.08).fillCircle(cx,cy,radius*.55);
   }
 }
+
+/**
+ * A Drama Phase change reached by simply surviving deserves the same acknowledgement a decision
+ * gets. Renderer-local by design: it reads the phase the cached scene already resolved and writes
+ * nothing back, so passive progress never touches gameplay state.
+ */
+export function drawPhaseTransitionImpact(surface: DrawSurface, from: number, to: number, startTime: number, time: number, width: number, height: number, accent: number, reducedMotion: boolean): void {
+  if (to === from || startTime <= 0) return;
+  const duration = reducedMotion ? 320 : 1500;
+  const elapsed = time - startTime; if (elapsed < 0 || elapsed >= duration) return;
+  const progress = reducedMotion ? 0 : Math.max(0,Math.min(1,elapsed/duration));
+  const alpha = reducedMotion ? .42 : (1-progress)*.48;
+  const rows = Math.max(2,Math.min(6,to+2));
+  for(let row=0;row<rows;row++){
+    const y=height*(.3+row*.09);
+    const span=width*(.22+.1*to);
+    surface.lineStyle(1.4+(to-from)*.3,accent,alpha).line(width*.5-span*.5,y,width*.5+span*.5,y);
+  }
+  surface.lineStyle(2,accent,alpha).strokeCircle(width*.5,height*.54,Math.min(width,height)*(.14+to*.035+progress*.16));
+}

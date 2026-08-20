@@ -5,7 +5,7 @@ import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
-import { consequenceImpact } from '../dist/render/consequence-presentation.js';
+import { consequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
@@ -1197,4 +1197,27 @@ test('path ambience moved into the identity module and scales with the identity 
   const identity = await readFile(new URL('../src/render/identity.ts', import.meta.url), 'utf8');
   assert.match(identity, /export function drawPathAmbience/);
   assert.match(identity, /export function drawIdentityLandmarks/);
+});
+
+test('the passive phase-transition cue is small, transient and reduced-motion safe', () => {
+  const draw = (from, to, time, reduced) => {
+    const calls = [];
+    drawPhaseTransitionImpact(recordingSurface(calls), from, to, 1000, time, 900, 520, 0x6bdcf6, reduced);
+    return calls;
+  };
+  // A phase change draws a handful of rows plus one ring -- never a full-screen wash.
+  const during = draw(1, 2, 1200, false);
+  assert.ok(during.length > 0, 'a phase change must be acknowledged');
+  const strokes = during.filter(([name]) => name === 'line' || name === 'strokeCircle');
+  assert.ok(strokes.length <= 8, `the cue drew ${strokes.length} strokes`);
+  assert.equal(during.filter(([name]) => name === 'fillRect').length, 0, 'no full-screen wash');
+
+  // Transient: nothing after the 1500 ms window, and nothing at all without a real transition.
+  assert.equal(draw(1, 2, 2600, false).length, 0, 'the cue must expire');
+  assert.equal(draw(2, 2, 1200, false).length, 0, 'an unchanged phase draws nothing');
+  assert.equal(draw(-1, -1, 0, false).length, 0, 'no transition has been seen yet');
+
+  // Reduced motion keeps the cue but freezes it: same shape, shorter window.
+  assert.ok(draw(1, 2, 1200, true).length > 0);
+  assert.equal(draw(1, 2, 1400, true).length, 0, 'reduced motion ends the cue inside 320 ms');
 });

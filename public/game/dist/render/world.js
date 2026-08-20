@@ -1,7 +1,8 @@
+import { civilizationDramaPhase } from '../game/drama.js';
 import { applyQualityToLiveSample, liveWorldSample, worldSnapshot } from './world-model.js';
 import { qualityFactors, RenderQualityController } from './quality.js';
 import { structuralWorldKey, worldPresentation } from './world-presentation.js';
-import { drawConsequenceImpact } from './consequence-presentation.js';
+import { drawConsequenceImpact, drawPhaseTransitionImpact } from './consequence-presentation.js';
 import { hash01, mixColor } from './primitives.js';
 import { canvasSurface } from './draw-surface.js';
 import { settlementLayout } from './settlements.js';
@@ -572,7 +573,7 @@ class WorldRenderer {
             context.restore();
         this.sceneryScroll = scroll;
     }
-    drawDynamic(time, scene, civ, scroll, tracker, engine, tier) {
+    drawDynamic(time, scene, civ, scroll, tracker, engine, tier, phase) {
         const context = this.dynamicContext;
         const surface = this.surface(context);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
@@ -584,6 +585,7 @@ class WorldRenderer {
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
         drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1), tier);
         context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
         const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
             this.feedbackSequence = feedback.sequence;
@@ -610,6 +612,10 @@ class CanvasWorld {
         this.scene = null;
         this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
         this.quality = new RenderQualityController();
+        this.lastDramaPhaseId = -1;
+        this.phaseTransitionFrom = -1;
+        this.phaseTransitionTo = -1;
+        this.phaseTransitionStart = 0;
         this.sceneRebuilds = 0;
         this.loop = (time) => {
             this.raf = requestAnimationFrame(this.loop);
@@ -629,6 +635,16 @@ class CanvasWorld {
             if (key !== this.lastStructuralKey) {
                 this.lastStructuralKey = key;
                 this.scene = buildScene(civ, this.renderer.width, this.renderer.height);
+                // Read off the scene the rebuild just resolved, so the cue and the world it describes belong to
+                // the same frame. Nothing is written back to the engine: a phase reached by surviving is
+                // presented, never recorded.
+                const nextPhase = this.scene.snapshot.stage ?? civilizationDramaPhase(civ).id;
+                if (this.lastDramaPhaseId >= 0 && nextPhase !== this.lastDramaPhaseId) {
+                    this.phaseTransitionFrom = this.lastDramaPhaseId;
+                    this.phaseTransitionTo = nextPhase;
+                    this.phaseTransitionStart = time;
+                }
+                this.lastDramaPhaseId = nextPhase;
                 this.tracker.sync(this.scene.structures, time);
                 this.sceneRebuilds++;
                 this.input.lastStaticScroll = Number.NaN;
@@ -649,7 +665,7 @@ class CanvasWorld {
             // Measured around the dynamic draw only: the cached layers repaint on scroll, not per frame, so
             // folding them in would read a drag as a slow device.
             const drawStart = globalThis.performance?.now?.() ?? time;
-            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine, this.quality.tier);
+            this.renderer.drawDynamic(time, this.scene, civ, scroll, this.tracker, this.engine, this.quality.tier, { from: this.phaseTransitionFrom, to: this.phaseTransitionTo, start: this.phaseTransitionStart });
             const drawEnd = globalThis.performance?.now?.() ?? drawStart;
             this.quality.update(Math.max(0, drawEnd - drawStart), time);
         };
@@ -672,6 +688,10 @@ class CanvasWorld {
         cancelAnimationFrame(this.raf);
         this.tracker.reset();
         this.quality.reset();
+        this.lastDramaPhaseId = -1;
+        this.phaseTransitionFrom = -1;
+        this.phaseTransitionTo = -1;
+        this.phaseTransitionStart = 0;
         this.input.destroy();
         this.renderer.destroy();
     }

@@ -582,3 +582,130 @@ test('a dominant identity and its institutions draw distinct scenery, not just a
   assert.notEqual(shape(faith.sceneryCalls), shape(void_.sceneryCalls), 'two dominant paths must differ in silhouette, not only in accent colour');
   assert.equal(faith.staticCalls.length, bare.staticCalls.length, 'identity must not touch the sky/terrain layer');
 });
+
+test('a Drama Phase reached by surviving draws a bounded cue and writes no gameplay state', async () => {
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext([]), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    // Emergence: nothing but a little Development, no era, no institutions, no choices.
+    const civ = GameEngine.createCivilizationForTest(1010);
+    civ.development = 40;
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { civilizationDramaPhase } = await import('../dist/game/drama.js');
+    const { startWorldRenderer } = await import(`../dist/render/world.js?phase=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    assert.equal(civilizationDramaPhase(civ).name, 'emergence');
+    dynamicCalls.length = 0;
+    frame(200);
+    const baselineDynamicCalls = dynamicCalls.slice();
+
+    // Passive Development only -- no decision, no tactical action, no engine call at all.
+    civ.development = 150;
+    assert.equal(civilizationDramaPhase(civ).name, 'expansion');
+    dynamicCalls.length = 0;
+    frame(300);
+
+    assert.equal(engine.state.civilization.visualMemory, undefined, 'renderer-local phase feedback must not write gameplay state');
+    assert.ok(dynamicCalls.length > baselineDynamicCalls.length, 'phase transition should add a bounded dynamic cue');
+    // Bounded: a transition cue is a handful of lines and one ring, not a new world.
+    const duringTransition = dynamicCalls.length;
+    assert.ok(duringTransition - baselineDynamicCalls.length < 400,
+      `the cue added ${duringTransition - baselineDynamicCalls.length} primitives`);
+
+    // The growth above could come from the larger stage alone, so let the 1500 ms cue expire and
+    // draw the same world again: what disappears is the cue, and only the cue.
+    dynamicCalls.length = 0;
+    frame(2200);
+    // Only directionality is asserted here: ambient agents and particles also differ between the two
+    // frames, so the exact cue size is pinned by the unit test in presentation.test.mjs instead.
+    assert.ok(dynamicCalls.length < duringTransition, 'the cue must be transient, not a permanent overlay');
+
+    controller.destroy();
+  });
+});
+
+// A 1440x760 viewport at DPR 2 -- the reference desktop case -- carrying the full memory budget: six
+// marks, three scars, an entrenched capital and all three institution landmarks. This is the ceiling
+// the whole cache design rests on, so it is pinned as a number rather than only as an equivalence.
+async function referenceStripRedraw(nudgePx) {
+  const calls = [];
+  const listeners = new Map();
+  let frame = null;
+  let full = 0;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext(calls), trackingContext([])];
+    let created = 0;
+    globalThis.devicePixelRatio = 2;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
+        addEventListener: (name, handler) => { if (context === contexts[1]) listeners.set(name, handler); },
+        removeEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 1440, height: 760 }) };
+    const civ = developedCivilization(1212);
+    civ.pathState.completedEvents.push('synod_of_the_second_engine');
+    civ.institutions.push('Lunar Ministry', 'Ministry Of Sanity', 'Consensus Office');
+    civ.visualMemory = {
+      version: 1, sequence: 12,
+      marks: [
+        { domain:'built_environment', motif:'advanced_district', strength:2, sourceEventId:'a', createdAtSequence:1, anchor01:.05, repairable:false },
+        { domain:'identity', motif:'engine_shrine', strength:3, sourceEventId:'b', createdAtSequence:2, anchor01:.12, repairable:false },
+        { domain:'control', motif:'surveillance', strength:2, sourceEventId:'c', createdAtSequence:3, anchor01:.2, repairable:true },
+        { domain:'social', motif:'unrest', strength:3, sourceEventId:'d', createdAtSequence:4, anchor01:.28, repairable:true },
+        { domain:'ecology', motif:'blight', strength:2, sourceEventId:'e', createdAtSequence:5, anchor01:.36, repairable:true },
+        { domain:'reality', motif:'fracture', strength:3, sourceEventId:'f', createdAtSequence:6, anchor01:.44, repairable:true },
+      ],
+      scars: [
+        { domain:'reality', motif:'breach', strength:3, sourceEventId:'g', createdAtSequence:7, anchor01:.08, evolution:3 },
+        { domain:'civilization', motif:'futures_ruins', strength:3, sourceEventId:'h', createdAtSequence:8, anchor01:.16, evolution:1 },
+        { domain:'identity', motif:'replacement_monument', strength:3, sourceEventId:'i', createdAtSequence:9, anchor01:.24, evolution:2 },
+      ],
+    };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?ceiling=${nudgePx}-${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    full = calls.length;
+    calls.length = 0;
+    listeners.get('pointerdown')({ clientX: 700, pointerId: 1 });
+    listeners.get('pointermove')({ clientX: 700 - nudgePx, pointerId: 1 });
+    listeners.get('pointerup')({});
+    frame(200);
+    controller.destroy();
+    delete globalThis.devicePixelRatio;
+  });
+  return { strip: calls, full };
+}
+
+test('memory and identity scenery keep the reference strip redraw under its ceiling', async () => {
+  const { strip, full } = await referenceStripRedraw(12);
+  assert.ok(full > 400, `the reference full paint drew only ${full} primitives`);
+  const stripPrimitiveCount = strip.length;
+  assert.ok(stripPrimitiveCount <= 320, `memory/identity scenery regressed strip redraw to ${stripPrimitiveCount} primitives`);
+
+  // The equivalence that makes the narrow strip legitimate in the first place, re-checked with the
+  // full memory budget in place: reaching the same scroll by a drag too wide to reuse anything gives
+  // the reference painting of the same slice.
+  const viaStrip = await sceneryAfterDrags(1212, [1440, 12], 'ceiling-strip');
+  const viaFull = await sceneryAfterDrags(1212, [1452], 'ceiling-reference');
+  const exposed = calls => calls
+    .filter(call => call.to >= 888 && call.from <= 900)
+    .map(call => ({ name: call.name, from: Math.max(888, call.from), to: Math.min(900, call.to) }));
+  assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the strip');
+  assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
+});
