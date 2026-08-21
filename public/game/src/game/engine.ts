@@ -178,9 +178,13 @@ export class GameEngine {
   private mutations: any[] = C.mutations;
   private traitsMap: Map<string, any>;
   private mutationsMap: Map<string, any>;
+  private directivesMap: Map<string, any>;
+  private matricesMap: Map<string, any>;
   constructor(options: EngineOptions = {}) {
     this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
     this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
+    this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
+    this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
     this.storage = options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave = options.autosave ?? true;
     this.state = this.load() ?? createNewState();
@@ -473,7 +477,7 @@ export class GameEngine {
       !r.directiveOfferIds.includes(id)
     )
       return false;
-    const d = this.directives.find((x: any) => x.id === id);
+    const d = this.directivesMap.get(id);
     if (!d) return false;
     r.selectedDirective = id;
     r.directiveLocked = true;
@@ -490,7 +494,7 @@ export class GameEngine {
       !this.state.meta.progression.knownBreedingMatrices.includes(id)
     )
       return false;
-    const d = this.matrices.find((x: any) => x.id === id);
+    const d = this.matricesMap.get(id);
     if (!d) return false;
     r.selectedBreedingMatrix = id;
     r.matrixLocked = true;
@@ -601,8 +605,8 @@ export class GameEngine {
     for (const id of selected) {
       if (!id) continue;
       const def =
-        this.directives.find((x: any) => x.id === id) ??
-        this.matrices.find((x: any) => x.id === id);
+        this.directivesMap.get(id) ??
+        this.matricesMap.get(id);
       for (const [key, val] of Object.entries(def?.effects ?? {})) {
         if (key === "trait_bias") continue;
         const map: Record<string, keyof RuntimeBonuses> = {
@@ -632,7 +636,7 @@ export class GameEngine {
     }
     const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
     if (!matrixId) return 1;
-    const matrix = this.matrices.find((x: any) => x.id === matrixId);
+    const matrix = this.matricesMap.get(matrixId);
     return (matrix?.effects?.trait_bias ?? []).includes(id) ? 3 : 1;
   }
   startCivilization(requestedSeed = 0, terminal = false) {
@@ -1521,7 +1525,7 @@ export class GameEngine {
     let biasSet: Set<string> | undefined = undefined;
     const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
     if (matrixId) {
-      const matrix = this.matrices.find((x: any) => x.id === matrixId);
+      const matrix = this.matricesMap.get(matrixId);
       if (matrix?.effects?.trait_bias) {
         biasSet = new Set(matrix.effects.trait_bias);
       }
