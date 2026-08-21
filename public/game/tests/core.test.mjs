@@ -1959,6 +1959,16 @@ test('each milestone completes exactly once and pays its award once', () => {
   assert.equal(second.insightAwarded, 0);
 });
 
+test('completedMilestoneCount ignores obsolete and false entries', () => {
+  const state = createNewState();
+  state.meta.progression.milestones = {
+    development_70: true,
+    era_expansion: false, // Valid ID, but false
+    obsolete_milestone: true, // Obsolete ID
+  };
+  assert.equal(completedMilestoneCount(state), 1);
+});
+
 test('milestone progress reports current and target for open entries', () => {
   const state = createNewState();
   state.meta.progression.controlledHarvestsTotal = 4;
