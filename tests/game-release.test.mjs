@@ -138,11 +138,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.11.0', async () => {
+test('release metadata identifies browser app v1.12.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.11.0');
+  assert.equal(rootPackage.version, '1.12.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 
@@ -167,10 +167,14 @@ test('release metadata identifies browser app v1.11.0', async () => {
   assert.match(gameReadme, new RegExp(`^## v${escaped} `, 'm'));
 
   // The Civilization Drama Arc modules are useless to a returning player unless the hand-maintained
-  // precache list carries them, and the cache is never revalidated.
+  // precache list carries them, and the cache is never revalidated. The onboarding modules are in the
+  // same position: a missing one leaves a returning player with no guided run, no report and no
+  // manual, and the failure would only surface in a browser.
   for (const compiled of [
     'game/drama.js','game/consequence-profiles.js','game/decision-consequences.js','game/world-memory.js',
     'render/identity.js','render/world-memory.js','render/consequence-presentation.js','render/quality.js',
+    'game/tutorial.js','game/run-report.js','game/guidance.js','data/help-topics.js',
+    'ui/format.js','ui/guide-view.js','ui/tutorial-view.js','ui/report-view.js',
   ]) assert.match(worker, new RegExp(`['"]\\/game\\/dist\\/${compiled.replaceAll('.', '\\.')}['"]`));
 });
 

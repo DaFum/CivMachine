@@ -21,6 +21,8 @@
   <link rel="modulepreload" href="./dist/ui/view-model.js">
   <link rel="modulepreload" href="./dist/data/intervention-copy.js">
   <link rel="modulepreload" href="./dist/data/apotheosis-events.js">
+  <link rel="modulepreload" href="./dist/game/guidance.js">
+  <link rel="modulepreload" href="./dist/ui/format.js">
 </head>
 <body>
   <div class="background-noise"></div>
@@ -28,6 +30,7 @@
     <header class="topbar">
       <div class="brand"><span class="brand-mark">RCE</span><div><b>REALITY CONSUMPTION ENGINE</b><small>BROWSER CULTIVATION NODE</small></div></div>
       <div id="resource-bar" class="resource-bar"></div>
+      <button id="explain-toggle" class="icon-button" data-action="explain" aria-pressed="false" title="Explain mode: annotate every panel with what it is for and what it decides." aria-label="Toggle explain mode: annotate every panel with what it is, where it is and why it matters">?</button>
       <button id="reset-save" class="icon-button" title="Reset browser save" aria-label="Reset browser save">⌫</button>
     </header>
     <div id="meta-bar" class="meta-bar"></div>
@@ -43,7 +46,10 @@
       <section id="victory-view" class="phase-view is-hidden"></section>
       <section class="machine-log panel"><div class="panel-kicker">MACHINE RECORD</div><ul id="machine-log"></ul></section>
     </main>
-    <footer><span>Reality Consumption Engine Browser v1.11.0</span><span>v4 save · migrating loader · localStorage · No offline progression</span></footer>
+    <!-- The guided run's coach card. It lives outside the phase views so a step can point at either
+         of them, and it is never a modal: ignoring it entirely still plays a normal game. -->
+    <div id="tutorial-layer" class="tutorial-layer is-hidden"></div>
+    <footer><span>Reality Consumption Engine Browser v1.12.0</span><span>v4 save · migrating loader · localStorage · No offline progression</span></footer>
   </div>
   <script type="module" src="./dist/main.js"></script>
 </body>

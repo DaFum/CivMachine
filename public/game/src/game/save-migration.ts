@@ -1,5 +1,7 @@
 import { clampStats } from './effects.js';
 import { SAVE_VERSION, createCivilizationTemplate, createNewState, eraForYears } from './rules.js';
+import { validRunTrace } from './run-report.js';
+import { normalizeTutorialState } from './tutorial.js';
 import type { Civilization, GameState, Phase, WorldMemoryState } from './types.js';
 
 // The save loader. A stored payload is brought forward in two passes:
@@ -240,6 +242,11 @@ export function normalizeCivilization(raw: unknown, log: RepairLog): Civilizatio
   if ('visualMemory' in civ) {
     if (!validVisualMemory(civ.visualMemory)) { delete civ.visualMemory; if ('visualMemory' in raw) log.repair('civilization.visualMemory', null); }
   }
+  // Same contract for the run trace: the post-run report is its only reader, so a malformed curve is
+  // dropped rather than repaired into a shape that never happened.
+  if ('trace' in civ) {
+    if (!validRunTrace(civ.trace)) { delete civ.trace; if ('trace' in raw) log.repair('civilization.trace', null); }
+  }
   return civ;
 }
 
@@ -258,6 +265,10 @@ export function normalizeState(raw: RawSave, log: RepairLog): { state: GameState
   // A phase with nothing to show would leave the player on an empty screen with no way back.
   if (state.phase === 'civilization' && !state.civilization) state.phase = log.repair('state.phase', 'machine');
   state.simulationSpeed = Math.max(1, Math.min(8, Math.trunc(state.simulationSpeed) || 1));
+  // Onboarding state is rebuilt against this build's step list: an unknown status or a step id this
+  // version no longer has would otherwise point the tutorial at nothing.
+  state.tutorial = normalizeTutorialState(state.tutorial);
+  state.help = { version: 1, explain: Boolean(state.help?.explain) };
   state.saveVersion = SAVE_VERSION;
   return { state, runDropped };
 }

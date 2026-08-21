@@ -17,7 +17,7 @@ export function createNewState() {
         machine: {
             currencies: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
             upgradeLevels: {}, activeMutations: [], civilizationsTotal: 0, civilizationsThisUniverse: 0,
-            cultivationCreditsThisUniverse: 0, lastHarvest: {},
+            cultivationCreditsThisUniverse: 0, lastHarvest: {}, lastRunReport: null,
             runBuild: {
                 selectedDirective: '', selectedBreedingMatrix: '', directiveLocked: false, matrixLocked: false,
                 directiveOfferIds: [], nextCivilizationSeed: 0, previewTraitIds: []
@@ -36,7 +36,12 @@ export function createNewState() {
                 objectivesCompleted: 0, longestRunSeconds: 0, maxEndgamesInRun: 0
             }
         },
-        civilization: null
+        civilization: null,
+        // A fresh Machine starts the guided run. `engine` promotes 'pending' to 'active' on first use
+        // and to 'skipped' for a save that already has harvests behind it, so a returning player is
+        // never dropped into an onboarding they finished a version ago.
+        tutorial: { version: 1, status: 'pending', stepId: '', acknowledged: [], observed: [], collapsed: false },
+        help: { version: 1, explain: false }
     };
 }
 // The pristine shape of a run. `engine.startCivilization` overwrites the generated fields on top of

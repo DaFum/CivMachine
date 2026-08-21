@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.11.0
+# Reality Consumption Engine — App Edition v1.12.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,50 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.12.0 a game that explains itself
+
+v1.12.0 answers the one complaint the mechanics could not: players could not tell where, what or why
+anything was happening. Nothing about balance, content or rendering moved -- `SAVE_VERSION` stays at
+4 and no rule module changed its numbers. What changed is that the game now says what it is doing.
+
+**An interactive first run.** A new Machine opens on a twelve-step guided run that walks one
+civilization from `START CIVILIZATION` to its harvest and then to its report. Every step answers the
+same three questions -- what this is, where it is on screen, why it decides anything -- and a step
+that teaches a move is cleared by *making* the move, not by clicking past it. The card is a coach
+mark, never a modal: ignoring it entirely still plays a normal game, it collapses to one line, and
+SKIP is one click. A save that has already harvested never sees it, and `REPLAY GUIDED RUN` in the
+Machine view brings it back at any time.
+
+**A run report after every run.** Ending a civilization -- controlled, forced, collapsed, abandoned,
+or a Convergence attempt -- now produces a report at the top of the Machine view: how the run
+developed as an inline Development/Entropy/Stability curve plus its era and phase transitions with
+the second each happened at, why it ended in the words of the numbers that ended it, exactly which
+resources it farmed and each one's share of the yield, and a set of lessons derived from that run's
+own figures rather than from a table of tips. An abandoned run reports zeros, because zero is what it
+paid.
+
+**A live situation line.** Every run carries one sentence saying what is happening, one saying why,
+and one naming the single move it suggests -- recomputed from the live run through a priority ladder,
+so it stays true outside the tutorial too. Cascade, imminent collapse, an open decision, critical
+Entropy, the harvest window, Attention, Awareness, Sanity, a Premature run, the credit cap, a closing
+window and an open Directive objective each resolve to their own reading. The Machine view has its
+own version for what to do between runs.
+
+**A permanent explanation layer.** `FIELD MANUAL` in the Machine view explains all six systems and
+every term in them -- what it is, where it is on screen, why it matters -- and is readable from the
+first second with nothing to unlock. The `?` button next to the resource bar toggles EXPLAIN, which
+annotates every panel in both views with what it is for, and expands the world strip's abbreviations
+inline for touch devices that have no pointer to reveal a title with. Each strip column also carries
+its full name as a title.
+
+The per-frame contract is unchanged. The run trace samples on an interval and self-downsamples to a
+fixed budget, so a long run keeps its whole shape at a coarser resolution instead of losing its
+beginning. The guided step and the EXPLAIN toggle are discrete bands in the structural render keys.
+The situation stays out of them: it is selected in part by the harvest call, whose two sides both move
+continuously, so its severity and its sentences ride the live refresh instead — exactly like the
+harvest call itself, and for the same reason. The guided run's highlight is rendered into the panel's own class list rather than added
+to the DOM afterwards, so it cannot read as a diff and rebuild the column on every pass.
 
 ## v1.11.0 a save that survives the next version
 
