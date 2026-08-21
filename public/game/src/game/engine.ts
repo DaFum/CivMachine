@@ -176,7 +176,15 @@ export class GameEngine {
   private directives: any[] = C.directives;
   private matrices: any[] = C.breeding_matrices;
   private mutations: any[] = C.mutations;
+  private traitsMap: Map<string, any>;
+  private mutationsMap: Map<string, any>;
+  private directivesMap: Map<string, any>;
+  private matricesMap: Map<string, any>;
   constructor(options: EngineOptions = {}) {
+    this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
+    this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
+    this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
+    this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
     this.storage = options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave = options.autosave ?? true;
     this.state = this.load() ?? createNewState();
@@ -366,7 +374,7 @@ export class GameEngine {
     return this.events.find((e) => e.id === id) ?? null;
   }
   traitById(id: string) {
-    return this.traits.find((t) => t.id === id) ?? null;
+    return this.traitsMap.get(id) ?? null;
   }
   upgradeById(layer: Layer, id: string) {
     return this.catalog(layer).find((u: any) => u.id === id) ?? null;
@@ -454,14 +462,12 @@ export class GameEngine {
     return Progression.machineInsight(this.state);
   }
   availableDirectives() {
-    return this.directives.filter((d: any) =>
-      this.state.machine.runBuild.directiveOfferIds.includes(d.id),
-    );
+    const offerIds = new Set(this.state.machine.runBuild.directiveOfferIds);
+    return this.directives.filter((d: any) => offerIds.has(d.id));
   }
   availableMatrices() {
-    return this.matrices.filter((d: any) =>
-      this.state.meta.progression.knownBreedingMatrices.includes(d.id),
-    );
+    const knownIds = new Set(this.state.meta.progression.knownBreedingMatrices);
+    return this.matrices.filter((d: any) => knownIds.has(d.id));
   }
   selectDirective(id: string) {
     const r = this.state.machine.runBuild;
@@ -471,7 +477,7 @@ export class GameEngine {
       !r.directiveOfferIds.includes(id)
     )
       return false;
-    const d = this.directives.find((x: any) => x.id === id);
+    const d = this.directivesMap.get(id);
     if (!d) return false;
     r.selectedDirective = id;
     r.directiveLocked = true;
@@ -488,7 +494,7 @@ export class GameEngine {
       !this.state.meta.progression.knownBreedingMatrices.includes(id)
     )
       return false;
-    const d = this.matrices.find((x: any) => x.id === id);
+    const d = this.matricesMap.get(id);
     if (!d) return false;
     r.selectedBreedingMatrix = id;
     r.matrixLocked = true;
@@ -599,8 +605,8 @@ export class GameEngine {
     for (const id of selected) {
       if (!id) continue;
       const def =
-        this.directives.find((x: any) => x.id === id) ??
-        this.matrices.find((x: any) => x.id === id);
+        this.directivesMap.get(id) ??
+        this.matricesMap.get(id);
       for (const [key, val] of Object.entries(def?.effects ?? {})) {
         if (key === "trait_bias") continue;
         const map: Record<string, keyof RuntimeBonuses> = {
@@ -624,10 +630,13 @@ export class GameEngine {
     b.containmentRating += convergence.containment;
     return b;
   }
-  traitWeight(id: string) {
+  traitWeight(id: string, precomputedBiasSet?: Set<string>) {
+    if (precomputedBiasSet) {
+      return precomputedBiasSet.has(id) ? 3 : 1;
+    }
     const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
     if (!matrixId) return 1;
-    const matrix = this.matrices.find((x: any) => x.id === matrixId);
+    const matrix = this.matricesMap.get(matrixId);
     return (matrix?.effects?.trait_bias ?? []).includes(id) ? 3 : 1;
   }
   startCivilization(requestedSeed = 0, terminal = false) {
@@ -687,7 +696,7 @@ export class GameEngine {
       applyEffects(civ, trait.effects, false, bonuses);
     }
     for (const id of this.state.machine.activeMutations) {
-      const m = this.mutations.find((x: any) => x.id === id);
+      const m = this.mutationsMap.get(id);
       if (m) applyEffects(civ, m.effects, false, bonuses);
     }
     this.state.machine.activeMutations = [];
@@ -1149,7 +1158,7 @@ export class GameEngine {
     );
     if (mutationId)
       this.post(
-        `Machine mutation acquired: ${this.mutations.find((x: any) => x.id === mutationId)?.name ?? mutationId}.`,
+        `Machine mutation acquired: ${this.mutationsMap.get(mutationId)?.name ?? mutationId}.`,
       );
     this.save();
     this.emit();
@@ -1512,16 +1521,26 @@ export class GameEngine {
       .slice();
     const count = Math.min(allowed.length, 2 + Math.trunc(bonuses.extraTraits));
     const ids: string[] = [];
+
+    let biasSet: Set<string> | undefined = undefined;
+    const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
+    if (matrixId) {
+      const matrix = this.matricesMap.get(matrixId);
+      if (matrix?.effects?.trait_bias) {
+        biasSet = new Set(matrix.effects.trait_bias);
+      }
+    }
+
     for (let i = 0; i < count; i++) {
       const total = allowed.reduce(
-        (sum: number, trait: any) => sum + this.traitWeight(trait.id),
+        (sum: number, trait: any) => sum + this.traitWeight(trait.id, biasSet),
         0,
       );
       const roll = rng.range(0, total);
       let cursor = 0,
         pick = allowed.length - 1;
       for (let j = 0; j < allowed.length; j++) {
-        cursor += this.traitWeight(allowed[j].id);
+        cursor += this.traitWeight(allowed[j].id, biasSet);
         if (roll <= cursor) {
           pick = j;
           break;
