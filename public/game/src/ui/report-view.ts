@@ -48,7 +48,9 @@ function figure(label: string, value: string, hint = ''): string {
   return `<article><span>${esc(label)}</span><b>${esc(value)}</b>${hint ? `<small>${esc(hint)}</small>` : ''}</article>`;
 }
 
-export function runReportPanel(report: RunReport | null, explain = false): string {
+// `focus` is the guided run's highlight, rendered into the panel's own class list like every other
+// anchored surface -- a class added to the DOM afterwards would read as a diff to `replaceIfChanged`.
+export function runReportPanel(report: RunReport | null, explain = false, focus = ''): string {
   if (!report) return '';
   const paid = report.resourceTotal > 0;
   const resources = report.resources.map(entry => `
@@ -72,7 +74,7 @@ export function runReportPanel(report: RunReport | null, explain = false): strin
   const objective = report.objectiveTitle
     ? `<p class="report-objective ${report.objectiveCompleted ? 'met' : 'missed'}">DIRECTIVE OBJECTIVE // ${esc(report.objectiveTitle)} — ${report.objectiveCompleted ? 'MET, ×1.15 and +1 Cultivation Credit' : 'NOT MET'}</p>`
     : '';
-  return `<section class="panel run-report reason-${esc(report.reason)}">
+  return `<section class="panel run-report reason-${esc(report.reason)}${focus}">
     <!-- The seed is an identifier, not a magnitude: abbreviating it to 885.18M makes it unusable
          for the one thing a player wants it for, which is recognising the run again. -->
     <div class="panel-kicker">RUN REPORT // CIVILIZATION ${esc(report.seed)}${report.terminal ? ' // TERMINAL' : ''}</div>

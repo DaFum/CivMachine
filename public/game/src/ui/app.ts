@@ -62,8 +62,8 @@ const metricTone=(item:any)=>((item.key==='awareness'||item.key==='attention'||i
 const focusClass=(vm:any,anchor:string)=>vm.tutorial.step?.anchor===anchor?' tutorial-focus':'';
 
 // One line, always on screen during a run: what is happening, why, and the single move it suggests.
-// The id is a band in the render key; the three sentences carry live numbers and ride the live
-// refresh, so a ticking second cannot rebuild the panel column.
+// Neither the id nor the severity is a band in the render key -- both follow the harvest call, which
+// moves continuously -- so the sentences and the severity class ride the live refresh instead.
 const situationBanner=(vm:any)=>`<section class="situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm,'.situation-banner')}" role="status" aria-live="polite"><div class="panel-kicker">SITUATION // WHAT IS HAPPENING</div><b data-live="situation-headline">${esc(vm.situation.headline)}</b><p class="situation-cause"><span>WHY</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>DO</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p>${explainNote('situation',vm.explain)}</section>`;
 
 function decisionFeedback(feedback:any,focus='',explain=false){
@@ -136,7 +136,7 @@ export function createGameUI(engine:GameEngine,world:WorldController){
     const directiveDraft=vm.systems.directives?(vm.directives.length?`<div class="option-grid directive-draft">${optionCards(vm.directives,'directive',vm.runBuild.selectedDirective,vm.runBuild.directiveLocked)}</div>`:'<p>No Directive offers are currently stable.</p>'):'';
     const lastHarvest=vm.lastHarvest.grade?`<div class="last-harvest"><span>LAST HARVEST</span><b>${esc(String(vm.lastHarvest.grade).toUpperCase())}</b><small>+${fmt(Number(vm.lastHarvest.credits??0))} Cultivation Credits · ×${Number(vm.lastHarvest.reward_multiplier??1).toFixed(2)} yield</small></div>`:'';
     replaceIfChanged(machine,`
-      ${runReportPanel(vm.runReport,vm.explain)}
+      ${runReportPanel(vm.runReport,vm.explain,focusClass(vm,'.run-report'))}
       <section class="machine-hero${focusClass(vm,'.machine-hero')}"><div><p class="eyebrow">REALITY CONSUMPTION ENGINE // BROWSER NODE</p><h2>Machine Control</h2><p>Cultivate civilizations, shape their histories, and harvest reality without allowing the crop to understand the farm.</p>${explainNote('machine_hero',vm.explain)}</div>${lastHarvest}</section>
       ${situationBanner(vm)}
       ${card('NEXT CIVILIZATION',`<div class="run-preview">${explainNote('run_preparation',vm.explain)}<div><span class="panel-kicker">STARTING TRAITS // DETERMINISTIC PREVIEW</span><div class="tag-row preview-traits">${previewTraits||'<span>Trait archive unavailable</span>'}</div></div>${directiveDraft}<button class="primary big start-run" data-action="start" ${vm.canStartCivilization?'':'disabled'}>START CIVILIZATION</button>${vm.startReason?`<p class="start-reason" role="status">${esc(vm.startReason)}</p>`:''}${tutorialReplay(vm.tutorial)}</div>`,`run-preparation${focusClass(vm,'.run-preparation')}`)}
@@ -257,11 +257,14 @@ export function createGameUI(engine:GameEngine,world:WorldController){
     const entropyMeter=civPanels.querySelector<HTMLElement>('[data-live="entropy-meter"]');if(entropyMeter)entropyMeter.style.width=pct(vm.tactical.entropy);
     const harvestMeter=civPanels.querySelector<HTMLElement>('[data-live="harvest-meter"]');if(harvestMeter)harvestMeter.style.width=pct(vm.harvest.bandProgress);
     setText('[data-live="harvest-call"]',urgencyText(vm.harvest));
-    // The situation id is a band in the render key, but its sentences quote live seconds and metric
-    // values, so the text itself is rewritten here rather than rebuilding the column for a second.
+    // The situation is selected in part by the harvest call, whose two sides move continuously, so
+    // neither its id nor its severity may enter the structural key. Sentences and severity band are
+    // both rewritten here instead, exactly like the readout below.
     setText('[data-live="situation-headline"]',vm.situation.headline);
     setText('[data-live="situation-cause"]',vm.situation.cause);
     setText('[data-live="situation-advice"]',vm.situation.advice);
+    const banner=civPanels.querySelector<HTMLElement>('.situation-banner');
+    if(banner)for(const severity of ['calm','watch','urgent','critical'])banner.classList.toggle(`severity-${severity}`,vm.situation.severity===severity);
     // Both sides of the urgency threshold -- development rate and seconds to cascade -- move
     // continuously, so the state must never enter civilizationRenderKey or a run near a boundary
     // would rebuild the panel frame after frame. It rides the live refresh instead.

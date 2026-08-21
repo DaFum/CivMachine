@@ -27,7 +27,11 @@ export function newRunTrace(): RunTraceState {
 export function validRunTrace(value: unknown): value is RunTraceState {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const raw = value as Partial<RunTraceState>;
+  // The interval has to be positive, not merely finite: a stored 0 makes every tick due for a sample
+  // and doubling it cannot recover, which turns the trace into exactly the per-frame work the engine
+  // is not allowed to do.
   return raw.version === 1 && typeof raw.intervalSeconds === 'number' && Number.isFinite(raw.intervalSeconds)
+    && raw.intervalSeconds > 0
     && typeof raw.nextSampleAt === 'number' && Number.isFinite(raw.nextSampleAt) && Array.isArray(raw.samples);
 }
 

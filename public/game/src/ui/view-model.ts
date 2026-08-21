@@ -362,12 +362,13 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     vm.directiveObjective?.completed ? 'objective-complete' : 'objective-open',
     vm.harvest?.controlled?.grade ?? '',
     vm.harvest?.depthBand ?? '',
-    // Bands and interventions only: the tutorial step, the explain toggle and the situation id are
-    // all discrete states, so none of them can rebuild the panel on a ticking number.
+    // Bands and interventions only: the tutorial step and the explain toggle are discrete states, so
+    // neither can rebuild the panel on a ticking number. The situation id deliberately stays out --
+    // it is selected in part by the harvest call, whose two sides both move continuously, so banding
+    // on it would rebuild the column while a run sat on that boundary. It rides the live refresh.
     vm.tutorial.step?.id ?? '',
     vm.tutorial.collapsed ? 'coach-collapsed' : 'coach-open',
     vm.explain ? 'explain' : 'plain',
-    vm.situation.id,
     vm.machineReserve.map(entry => (entry.enabled ? '1' : '0')).join(''),
     vm.lastActionFailure,
   ].join('|');

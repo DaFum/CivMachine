@@ -15,10 +15,13 @@ export function tutorialOverlay(view: TutorialView): string {
   }
   const progress = `<div class="tutorial-progress" aria-hidden="true">${Array.from({ length: step.total }, (_unused, index) => `<i class="${index < step.index ? 'done' : ''}"></i>`).join('')}</div>`;
   // A step gated on an action gets a waiting hint instead of a CONTINUE button: clicking past the
-  // only part that teaches would leave the player exactly where they started.
+  // only part that teaches would leave the player exactly where they started. A reading step keeps
+  // its CONTINUE, but an off-phase one still has to say where to go -- otherwise its WHERE points at
+  // a panel that is not on screen and nothing on the card admits it.
+  const hint = (text: string) => `<p class="tutorial-waiting" role="status">${esc(text)}</p>`;
   const foot = step.canAcknowledge
-    ? `<button class="primary" data-action="tutorial-next">CONTINUE</button>`
-    : `<p class="tutorial-waiting" role="status">${esc(step.offPhaseHint || step.action)}</p>`;
+    ? `${step.offPhaseHint ? hint(step.offPhaseHint) : ''}<button class="primary" data-action="tutorial-next">CONTINUE</button>`
+    : hint(step.offPhaseHint || step.action);
   const action = step.canAcknowledge || !step.action ? '' : `<p class="tutorial-action"><b>DO</b>${esc(step.action)}</p>`;
   return `<div class="tutorial-card" role="region" aria-label="Guided run">
     <div class="tutorial-head">

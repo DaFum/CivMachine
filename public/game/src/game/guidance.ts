@@ -54,15 +54,6 @@ const one = (value: number): string => (Number.isFinite(value) ? value : 0).toFi
 const seconds = (value: number): string => (Number.isFinite(value) ? `${Math.max(0, Math.round(value))}s` : 'no limit');
 
 export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
-  if (input.pendingEventTitle) {
-    return {
-      id: 'decision_pending',
-      severity: 'watch',
-      headline: `A decision is open: ${input.pendingEventTitle}.`,
-      cause: 'The simulation is paused while an intervention is unresolved — years, Development and Entropy are all frozen.',
-      advice: 'Read the predictions and choose. Probe (3) reveals the risk directions first, for 1 Control.',
-    };
-  }
   if (input.entropy >= 100) {
     return {
       id: 'cascade',
@@ -81,6 +72,18 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       advice: input.controlCapacity >= 2
         ? 'Stabilize (1) buys +14 Stability for 2 Control. Otherwise harvest before the collapse chooses for you.'
         : 'There is not enough Control left to stabilize. Harvest before the collapse chooses for you.',
+    };
+  }
+  // Below the two branches that end the run and above everything else: an open decision freezes the
+  // clock, so it can wait, but a cascade or a collapse that is already underway may not be hidden
+  // behind it -- the highest severity that holds has to win.
+  if (input.pendingEventTitle) {
+    return {
+      id: 'decision_pending',
+      severity: 'watch',
+      headline: `A decision is open: ${input.pendingEventTitle}.`,
+      cause: 'The simulation is paused while an intervention is unresolved — years, Development and Entropy are all frozen.',
+      advice: 'Read the predictions and choose. Probe (3) reveals the risk directions first, for 1 Control.',
     };
   }
   if (input.terminal) {

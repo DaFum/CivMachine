@@ -635,7 +635,7 @@ test('the guided run highlight is rendered into the panel, never bolted on after
   const anchors = new Set(TUTORIAL_STEPS.map(step => step.anchor).filter(Boolean));
   for (const anchor of anchors) {
     assert.ok(
-      app.includes(`focusClass(vm,'${anchor}')`) || anchor === '.run-report',
+      app.includes(`focusClass(vm,'${anchor}')`),
       `no panel renders the highlight for ${anchor}`,
     );
   }

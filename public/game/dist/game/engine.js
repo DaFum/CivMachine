@@ -1060,7 +1060,10 @@ export class GameEngine {
         this.recordRunStatistics(civ, details);
         this.state.machine.civilizationsTotal++;
         const outcome = evaluateConvergence(details.depth, chaotic, this.state.meta.convergences);
-        this.publishRunReport(civ, outcome === "won" ? "convergence_won" : "convergence_failed", chaotic, details);
+        // A terminal run pays no yield: `lastHarvest` records zeros and nothing reaches
+        // `machine.currencies`. The report has to say the same, on the same rule the abandoned exit
+        // follows -- printing the projection would be the one place the game lied about a number.
+        this.publishRunReport(civ, outcome === "won" ? "convergence_won" : "convergence_failed", chaotic, { ...details, credits: 0, rewardMultiplier: 0, rewards: { ...zero } });
         this.state.machine.lastHarvest = {
             chaotic,
             rewards: { ...zero },
