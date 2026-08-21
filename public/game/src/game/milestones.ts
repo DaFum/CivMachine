@@ -102,5 +102,5 @@ export function milestoneProgress(state:GameState,convergenceUnlocked:boolean):M
 
 export function completedMilestoneCount(state:GameState):number{
   const done=state.meta.progression.milestones;
-  return Object.keys(done).length;
+  return MILESTONE_CATALOG.filter(m => done[m.id]).length;
 }

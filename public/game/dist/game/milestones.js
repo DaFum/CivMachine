@@ -84,6 +84,6 @@ export function milestoneProgress(state, convergenceUnlocked) {
 }
 export function completedMilestoneCount(state) {
     const done = state.meta.progression.milestones;
-    return Object.keys(done).length;
+    return MILESTONE_CATALOG.filter(m => done[m.id]).length;
 }
 //# sourceMappingURL=milestones.js.map
