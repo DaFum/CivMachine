@@ -22,6 +22,10 @@ this, so run it before claiming a game change works.
   interventions, never on continuously ticking numbers — otherwise the game rebuilds itself 60×/s.
 - **Per-frame work must stay cheap.** Ticking must not write `localStorage` or rebuild interactive
   controls every frame.
+- **Explanation is presentation, and presentation is one-directional.** `state.tutorial`, `state.help`,
+  `machine.lastRunReport` and `Civilization.trace` exist so the player can see what happened and why.
+  No progression, pressure, harvest or scheduler rule may read any of them —
+  `docs/superpowers/specs/2026-08-21-onboarding-and-run-report-design.md` has the whole contract.
 
 ## Saves
 
@@ -64,3 +68,7 @@ A release is three edits — the version in `package.json`, the version in `publ
   breaks the bundled `eslint-plugin-react`). `@types/node` tracks the Node major in use, not latest.
 - Read the matching document in `docs/superpowers/specs/` before changing balance or progression —
   the numbers the tests pin come from there.
+- Player-facing explanation lives in `data/help-topics.ts` and `game/tutorial.ts`, and both are pinned
+  by `public/game/tests/onboarding.test.mjs` against the surfaces they describe: a new world-strip
+  column, a new `EXPLAIN_NOTES` entry or a tutorial step with no anchor fails the build rather than
+  shipping unexplained.

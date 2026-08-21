@@ -157,6 +157,10 @@ export interface Civilization {
   // Presentation-only narrative memory. Optional so v4 saves load unchanged, and deliberately never
   // read by progression, pressure, harvest, or scheduler rules -- only the renderer consumes it.
   visualMemory?: WorldMemoryState;
+  // Presentation-only run trace: a bounded, self-downsampling curve of the run so the post-run
+  // report can show how it developed rather than only how it ended. Same contract as visualMemory --
+  // optional so v4 saves load unchanged, and no rule module may read it.
+  trace?: RunTraceState;
   stats: Stats;
   harvestBonus: Record<ResourceKey, number>;
   harvestMult: Record<ResourceKey, number>;
@@ -215,6 +219,9 @@ export interface GameState {
     civilizationsThisUniverse: number;
     cultivationCreditsThisUniverse: number;
     lastHarvest: Record<string, unknown>;
+    // The report shown after a run ends. Null when there is nothing to report yet or the player
+    // dismissed it. Presentation-only, like `lastHarvest`, which stays the machine-readable record.
+    lastRunReport: RunReport | null;
     runBuild: {
       selectedDirective: string;
       selectedBreedingMatrix: string;
@@ -238,6 +245,8 @@ export interface GameState {
     progression: ProgressionState;
   };
   civilization: Civilization | null;
+  tutorial: TutorialState;
+  help: HelpState;
 }
 
 export interface RuntimeBonuses {
@@ -269,4 +278,109 @@ export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+}
+
+// --- Onboarding, guidance and run reporting -------------------------------------------------
+// Everything below is presentation state: it exists so the player can see what happened, where it
+// happened and why. No progression, pressure, harvest or scheduler rule may read any of it.
+
+export type TutorialStatus = 'pending' | 'active' | 'completed' | 'skipped';
+
+// Monotonic facts the tutorial waits on. They are recorded when the player actually performs the
+// action, so a step cannot strand the tutorial when the run that produced it is already over.
+export type TutorialFact =
+  | 'run_started' | 'intervention_resolved' | 'feedback_seen' | 'tactical_used' | 'harvest_completed';
+
+export interface TutorialState {
+  version: 1;
+  status: TutorialStatus;
+  stepId: string;
+  acknowledged: string[];
+  observed: TutorialFact[];
+  collapsed: boolean;
+}
+
+export interface HelpState {
+  version: 1;
+  // Explain mode adds a "what / where / why" note to every panel that has one. It is a state band,
+  // never a live value, so it may enter the structural render keys.
+  explain: boolean;
+}
+
+export interface RunTraceSample {
+  second: number;
+  years: number;
+  era: number;
+  development: number;
+  depth: number;
+  entropy: number;
+  stability: number;
+  sanity: number;
+  awareness: number;
+  attention: number;
+  choices: number;
+  dramaPhase: DramaPhaseId;
+}
+
+export interface RunTraceState {
+  version: 1;
+  intervalSeconds: number;
+  nextSampleAt: number;
+  samples: RunTraceSample[];
+}
+
+export type RunEndReason =
+  | 'controlled_harvest' | 'forced_chaotic_harvest' | 'stability_collapse'
+  | 'abandoned' | 'convergence_won' | 'convergence_failed';
+
+export interface RunReportResource {
+  key: ResourceKey;
+  label: string;
+  amount: number;
+  share: number;
+}
+
+export interface RunReportArcEntry {
+  second: number;
+  label: string;
+  detail: string;
+}
+
+export interface RunReport {
+  version: 1;
+  seed: number;
+  reason: RunEndReason;
+  reasonTitle: string;
+  reasonDetail: string;
+  chaotic: boolean;
+  terminal: boolean;
+  elapsedSeconds: number;
+  years: number;
+  era: number;
+  eraName: string;
+  development: number;
+  depth: number;
+  grade: HarvestGrade;
+  gradeLabel: string;
+  credits: number;
+  rewardMultiplier: number;
+  objectiveTitle: string;
+  objectiveCompleted: boolean;
+  interventions: number;
+  traits: string[];
+  institutions: string[];
+  dominantPath: string;
+  endgameStates: string[];
+  dramaPhase: string;
+  entropy: number;
+  stats: Stats;
+  peakDevelopment: number;
+  peakDepth: number;
+  peakEntropy: number;
+  resources: RunReportResource[];
+  resourceTotal: number;
+  arc: RunReportArcEntry[];
+  timeline: string[];
+  lessons: string[];
+  trace: RunTraceSample[];
 }

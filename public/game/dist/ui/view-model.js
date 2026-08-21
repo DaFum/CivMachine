@@ -5,6 +5,8 @@ import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
 import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
 import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalRisk } from '../game/tactical-actions.js';
+import { civilizationSituation, machineSituation } from '../game/guidance.js';
+import { ERA_NAMES } from '../game/engine.js';
 const RESOURCE_NAMES = {
     causal_mass: 'Causal Mass', cognition: 'Cognition', paradox: 'Paradox', existence: 'Existence', universal_residue: 'Universal Residue', axioms: 'Axioms'
 };
@@ -155,6 +157,39 @@ function buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, b
         convergenceReady: Boolean(civ.terminal) && cultivationDepth(civ) >= convergenceTargetDepth,
     };
 }
+// The live "what is happening and why" line. Everything it needs was already computed for the rails
+// above, so building it costs a function call rather than a second pass over the run.
+function buildSituation(engine, civ, tactical, harvest, event, objective, convergenceTargetDepth, machine) {
+    if (!civ || !tactical || !harvest)
+        return machineSituation(machine);
+    return civilizationSituation({
+        pendingEventTitle: event?.title ?? '',
+        entropy: tactical.entropy,
+        secondsToCascade: tactical.secondsToCascade,
+        entropyRate: tactical.entropyRate,
+        stability: civ.stats.stability,
+        stabilityMax: civ.stats.stabilityMax,
+        sanity: civ.stats.sanity,
+        awareness: civ.stats.awareness,
+        attention: civ.stats.attention,
+        grade: harvest.controlled?.grade ?? 'premature',
+        depth: harvest.depth,
+        credits: harvest.controlled?.credits ?? 0,
+        urgency: harvest.urgency.state,
+        secondsToNextCredit: harvest.urgency.secondsToNextCredit,
+        secondsOfRunLeft: harvest.urgency.secondsOfRunLeft,
+        controlCapacity: tactical.controlCapacity,
+        eventChoices: civ.eventChoices,
+        era: civ.era,
+        eraName: ERA_NAMES[civ.era] ?? `Era ${civ.era}`,
+        development: civ.development,
+        terminal: Boolean(civ.terminal),
+        convergenceReady: Boolean(harvest.convergenceReady),
+        convergenceTargetDepth,
+        objectiveTitle: objective?.title ?? '',
+        objectiveCompleted: Boolean(objective?.completed),
+    });
+}
 function buildCivilizationViewModel(engine, civ) {
     if (!civ)
         return null;
@@ -190,6 +225,26 @@ export function buildViewModel(engine) {
     const convergenceIsUnlocked = engine.convergenceUnlocked();
     const convergenceTargetDepth = engine.convergenceTargetDepth();
     const milestoneEntries = milestoneProgress(state, convergenceIsUnlocked);
+    const machineUpgradeEntries = engine.visibleUpgradeEntries('machine');
+    const directiveRequiredNow = directiveRequired && !state.machine.runBuild.selectedDirective;
+    const openMilestone = milestoneEntries.find(entry => !entry.completed);
+    // Built once and shared with the return below: the situation line reads the same two view models
+    // the rails render, so neither can drift from the other and neither is computed twice.
+    const tactical = buildTacticalViewModel(engine, civ, bonuses);
+    const harvest = buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth);
+    const situation = buildSituation(engine, civ, tactical, harvest, event, activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null, convergenceTargetDepth, {
+        hasReport: Boolean(state.machine.lastRunReport),
+        needsDirective: directiveRequiredNow,
+        canStart: !directiveRequiredNow,
+        affordableUpgrades: machineUpgradeEntries.filter((entry) => entry.status !== 'locked' && engine.canPurchaseUpgrade('machine', entry.definition.id)).length,
+        credits: state.machine.cultivationCreditsThisUniverse,
+        creditsRequired: 18,
+        canConsumeUniverse: engine.canConsumeUniverse(),
+        canConsumeMultiverse: engine.canConsumeMultiverse(),
+        convergenceUnlocked: convergenceIsUnlocked,
+        openMilestone: openMilestone?.title ?? '',
+        runsTotal: state.machine.civilizationsTotal,
+    });
     return {
         phase: state.phase,
         machineInsight: engine.machineInsight(),
@@ -215,7 +270,7 @@ export function buildViewModel(engine) {
         previewTraits: state.machine.runBuild.previewTraitIds.map((id) => ({ id, name: engine.traitById(id)?.name ?? id })),
         canStartCivilization: !directiveRequired || Boolean(state.machine.runBuild.selectedDirective),
         startReason: directiveRequired && !state.machine.runBuild.selectedDirective ? 'Select one offered Directive for this Civilization.' : '',
-        machineUpgrades: engine.visibleUpgradeEntries('machine'),
+        machineUpgrades: machineUpgradeEntries,
         universeUpgrades: engine.visibleUpgradeEntries('universe'),
         axiomUpgrades: engine.visibleUpgradeEntries('axiom'),
         canConsumeUniverse: engine.canConsumeUniverse(),
@@ -231,8 +286,8 @@ export function buildViewModel(engine) {
         event: buildEventViewModel(engine, civ, event, probed, predictionsUnlocked),
         feedback: engine.decisionFeedback ? structuredClone(engine.decisionFeedback) : null,
         lastActionFailure: engine.lastActionFailure,
-        tactical: buildTacticalViewModel(engine, civ, bonuses),
-        harvest: buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth),
+        tactical,
+        harvest,
         machineReserve: civ ? engine.runInterventions() : [],
         directiveObjective: activeObjective ? {
             id: activeObjective.id,
@@ -241,6 +296,12 @@ export function buildViewModel(engine) {
             completed: Boolean(controlledHarvest?.objectiveCompleted),
         } : null,
         lastHarvest: { ...state.machine.lastHarvest },
+        // The post-run account, the guided run and the explain layer. All three are presentation state,
+        // and all three are read straight from the engine so a reload resumes exactly where it stopped.
+        runReport: state.machine.lastRunReport,
+        tutorial: engine.tutorialView(),
+        explain: engine.explainMode(),
+        situation,
         civilization: buildCivilizationViewModel(engine, civ),
         messages: engine.messages.slice(0, 30),
     };
@@ -275,6 +336,12 @@ export function civilizationRenderKey(vm) {
         vm.directiveObjective?.completed ? 'objective-complete' : 'objective-open',
         vm.harvest?.controlled?.grade ?? '',
         vm.harvest?.depthBand ?? '',
+        // Bands and interventions only: the tutorial step, the explain toggle and the situation id are
+        // all discrete states, so none of them can rebuild the panel on a ticking number.
+        vm.tutorial.step?.id ?? '',
+        vm.tutorial.collapsed ? 'coach-collapsed' : 'coach-open',
+        vm.explain ? 'explain' : 'plain',
+        vm.situation.id,
         vm.machineReserve.map(entry => (entry.enabled ? '1' : '0')).join(''),
         vm.lastActionFailure,
     ].join('|');

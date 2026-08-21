@@ -22,6 +22,8 @@ import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterv
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective, } from "./run-directives.js";
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, } from "./convergence.js";
 import { MILESTONE_CATALOG, completedMilestoneCount } from "./milestones.js";
+import { buildRunReport, recordRunTrace } from "./run-report.js";
+import { acknowledgeStep, advanceTutorial, liveTutorialFacts, newTutorialState, normalizeTutorialState, recordTutorialFact, tutorialView, } from "./tutorial.js";
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades, } from "./upgrade-balance.js";
 export const ERA_NAMES = [
     "EMERGENCE",
@@ -29,6 +31,19 @@ export const ERA_NAMES = [
     "TRANSCENDENCE",
     "APOTHEOSIS",
 ];
+export const DRAMA_PHASE_LABELS = [
+    "Emergence",
+    "Expansion",
+    "Division",
+    "Transformation",
+    "Crisis",
+];
+export const RESOURCE_DISPLAY_NAMES = {
+    causal_mass: "Causal Mass",
+    cognition: "Cognition",
+    paradox: "Paradox",
+    existence: "Existence",
+};
 const SAVE_KEY = "reality_consumption_engine_browser_save_v2";
 // A save that had to be migrated, repaired or refused is copied here verbatim before anything
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
@@ -92,6 +107,14 @@ export class GameEngine {
         this.storage = options.storage ?? globalThis.localStorage;
         this.autosave = options.autosave ?? true;
         this.state = this.load() ?? createNewState();
+        this.state.tutorial = normalizeTutorialState(this.state.tutorial);
+        this.state.help = { version: 1, explain: Boolean(this.state.help?.explain) };
+        // The guided run is offered exactly once, and only to a Machine that has never harvested: a
+        // returning player's save gains the field through the structural migration pass, and being
+        // dropped into an onboarding they finished a version ago would be the opposite of clarity.
+        if (this.state.tutorial.status === "pending")
+            this.state.tutorial.status =
+                this.state.machine.civilizationsTotal > 0 ? "skipped" : "active";
         if (this.state.civilization)
             recentEventIds(this.state.civilization);
         Progression.refresh(this.state, this.messages);
@@ -109,8 +132,19 @@ export class GameEngine {
         return () => this.listeners.delete(fn);
     }
     emit() {
+        // The cursor is walked here rather than at every call site: a step is cleared by a *fact*, and
+        // any mutation that could have recorded one ends in an emit. Advancing is a pure array walk, and
+        // it only persists on the rare frame where the step actually changed -- a step change happens a
+        // dozen times per playthrough, not sixty times a second.
+        if (advanceTutorial(this.state.tutorial))
+            this.save();
         for (const fn of this.listeners)
             fn();
+    }
+    observe(fact) {
+        if (this.state.tutorial.status !== "active")
+            return;
+        recordTutorialFact(this.state.tutorial, fact);
     }
     post(msg) {
         this.messages.unshift(msg);
@@ -122,6 +156,7 @@ export class GameEngine {
     publishCompletedDecision(civ, feedback, repair = false) {
         this.decisionFeedback = feedback;
         this.worldImpulse = feedback;
+        this.observe("feedback_seen");
         civ.visualMemory = applyWorldMemory(civ.seed, civ.visualMemory, feedback, {
             repair,
         });
@@ -590,6 +625,10 @@ export class GameEngine {
         this.state.civilization = civ;
         this.state.phase = "civilization";
         this.state.simulationSpeed = 1;
+        // The first trace sample is the run's own starting line. Without it the report's curve begins
+        // wherever the first periodic sample happened to land.
+        recordRunTrace(civ);
+        this.observe("run_started");
         this.post(`Cultivation link established for civilization seed ${seed}.`);
         this.save();
         this.emit();
@@ -633,8 +672,10 @@ export class GameEngine {
             this.post(m);
         if (civ.terminal)
             this.refreshConvergenceMilestones();
+        // One comparison per tick, one push every few seconds. The report reads it; nothing else may.
+        recordRunTrace(civ);
         if (s.stability <= 0) {
-            this.harvest(true);
+            this.harvest(true, "collapse");
             return;
         }
         civ.eventTimer -= dt;
@@ -711,8 +752,22 @@ export class GameEngine {
         return this.previewHarvestDetails(chaotic).rewards;
     }
     returnToMachineWithoutReward() {
-        const priorSeed = this.state.civilization?.seed ??
-            this.state.machine.runBuild.nextCivilizationSeed;
+        const civ = this.state.civilization;
+        const priorSeed = civ?.seed ?? this.state.machine.runBuild.nextCivilizationSeed;
+        // An abandoned run is still a run the player is owed an account of -- and the report is where
+        // they find out that collapsing it would have paid something instead of nothing.
+        if (civ) {
+            // The projection is what the run *would* have paid. An abandoned run pays none of it, and a
+            // report that printed the projection anyway would be the one place the game lied about a
+            // number. The grade is kept, because it is what makes the lesson checkable.
+            const forfeited = this.previewHarvestDetails(false);
+            this.publishRunReport(civ, "abandoned", false, {
+                ...forfeited,
+                credits: 0,
+                rewardMultiplier: 0,
+                rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
+            });
+        }
         this.state.civilization = null;
         this.state.phase = "machine";
         this.state.simulationSpeed = 1;
@@ -830,9 +885,10 @@ export class GameEngine {
         this.lastActionFailure = "";
         const feedback = buildDecisionFeedback(++this.feedbackSequence, { id: `tactical:${id}`, title: outcome.title }, { label: outcome.label }, before, captureDecisionSnapshot(civ));
         this.publishCompletedDecision(civ, feedback, id === "stabilize");
+        this.observe("tactical_used");
         this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Tactical action -> ${outcome.label}`);
         if (civ.stats.stability <= 0) {
-            this.harvest(true);
+            this.harvest(true, "collapse");
             return true;
         }
         this.save();
@@ -863,6 +919,7 @@ export class GameEngine {
             this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: Civilization reached path end-state ${pr.endgameState.replace("endgame_", "").replaceAll("_", " ")}.`);
         civ.eventCounts[event.id] = (civ.eventCounts[event.id] ?? 0) + 1;
         civ.eventChoices++;
+        this.observe("intervention_resolved");
         civ.lastEvent = event.id;
         if (choice.follow_up)
             civ.scheduledEvents.push(choice.follow_up);
@@ -876,7 +933,7 @@ export class GameEngine {
         const feedback = buildDecisionFeedback(++this.feedbackSequence, event, choice, before, captureDecisionSnapshot(civ));
         this.publishCompletedDecision(civ, feedback);
         if (civ.stats.stability <= 0) {
-            this.harvest(true);
+            this.harvest(true, "collapse");
             return true;
         }
         this.save();
@@ -912,13 +969,40 @@ export class GameEngine {
         if (details.objectiveCompleted)
             p.objectivesCompleted++;
     }
-    harvest(chaotic = false) {
+    // The one place a finished run becomes a report. It is built from the same `details` the payout
+    // used, so the report can never disagree with what was actually banked.
+    publishRunReport(civ, reason, chaotic, details) {
+        const context = {
+            reason,
+            chaotic,
+            details,
+            eraNames: ERA_NAMES,
+            dramaLabels: DRAMA_PHASE_LABELS,
+            resourceLabels: RESOURCE_DISPLAY_NAMES,
+            traitNames: civ.traits.map((id) => this.traitById(id)?.name ?? id),
+            pathName: civ.pathState.dominantPath
+                ? CivilizationPaths.displayName(civ.pathState.dominantPath)
+                : "",
+            objectiveTitle: objectiveForDirective(civ.directiveId)?.title ?? "",
+        };
+        const report = buildRunReport(civ, context);
+        this.state.machine.lastRunReport = report;
+        if (reason !== "abandoned")
+            this.observe("harvest_completed");
+        return report;
+    }
+    harvest(chaotic = false, cause = "player") {
         const civ = this.state.civilization;
         if (!civ)
             return { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 };
         const details = this.previewHarvestDetails(chaotic);
         if (civ.terminal)
             return this.finishTerminalRun(civ, chaotic, details);
+        this.publishRunReport(civ, cause === "collapse"
+            ? "stability_collapse"
+            : chaotic
+                ? "forced_chaotic_harvest"
+                : "controlled_harvest", chaotic, details);
         civ.directiveObjective.completed = details.objectiveCompleted;
         this.recordRunStatistics(civ, details);
         const rewards = details.rewards;
@@ -976,6 +1060,7 @@ export class GameEngine {
         this.recordRunStatistics(civ, details);
         this.state.machine.civilizationsTotal++;
         const outcome = evaluateConvergence(details.depth, chaotic, this.state.meta.convergences);
+        this.publishRunReport(civ, outcome === "won" ? "convergence_won" : "convergence_failed", chaotic, details);
         this.state.machine.lastHarvest = {
             chaotic,
             rewards: { ...zero },
@@ -1121,6 +1206,70 @@ export class GameEngine {
         this.emit();
         return true;
     }
+    // --- Onboarding and explanation surfaces ------------------------------------------------------
+    // All of these are presentation state. They persist because a player who reloads mid-onboarding
+    // should not start over, not because any rule reads them.
+    tutorialView() {
+        return tutorialView(this.state.tutorial, this.state.phase);
+    }
+    acknowledgeTutorialStep() {
+        if (!acknowledgeStep(this.state.tutorial))
+            return false;
+        this.save();
+        this.emit();
+        return true;
+    }
+    setTutorialCollapsed(collapsed) {
+        this.state.tutorial.collapsed = Boolean(collapsed);
+        this.save();
+        this.emit();
+        return true;
+    }
+    skipTutorial() {
+        if (this.state.tutorial.status !== "active")
+            return false;
+        this.state.tutorial.status = "skipped";
+        this.state.tutorial.stepId = "";
+        this.post("Guided run dismissed. FIELD MANUAL and EXPLAIN stay available; REPLAY GUIDED RUN restores it.");
+        this.save();
+        this.emit();
+        return true;
+    }
+    // A restart replays from the top -- the player asked to be walked through it again -- except for
+    // what the civilization on screen right now already proves, so no step can ask for something the
+    // current phase cannot deliver.
+    restartTutorial() {
+        this.state.tutorial = newTutorialState("active");
+        this.state.tutorial.observed = liveTutorialFacts(this.state.civilization);
+        advanceTutorial(this.state.tutorial);
+        this.post("Guided run restarted.");
+        this.save();
+        this.emit();
+        return true;
+    }
+    lastRunReport() {
+        return this.state.machine.lastRunReport;
+    }
+    dismissRunReport() {
+        if (!this.state.machine.lastRunReport)
+            return false;
+        this.state.machine.lastRunReport = null;
+        this.save();
+        this.emit();
+        return true;
+    }
+    explainMode() {
+        return Boolean(this.state.help.explain);
+    }
+    setExplainMode(on) {
+        this.state.help = { version: 1, explain: Boolean(on) };
+        this.save();
+        this.emit();
+        return true;
+    }
+    toggleExplainMode() {
+        return this.setExplainMode(!this.state.help.explain);
+    }
     maxSimulationSpeed() {
         const x = this.upgradeLevel("machine", "temporal_injector");
         return x >= 3 ? 4 : x >= 1 ? 2 : 1;
@@ -1144,6 +1293,7 @@ export class GameEngine {
         this.state.machine.civilizationsThisUniverse = 0;
         this.state.machine.cultivationCreditsThisUniverse = 0;
         this.state.machine.lastHarvest = {};
+        this.state.machine.lastRunReport = null;
         this.state.machine.runBuild = {
             selectedDirective: "",
             selectedBreedingMatrix: "",

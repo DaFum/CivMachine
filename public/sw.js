@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.11.0';
+const CACHE_NAME = 'rce-app-v1.12.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -9,6 +9,10 @@ const APP_ASSETS = [
   '/game/dist/main.js',
   '/game/dist/ui/app.js',
   '/game/dist/ui/view-model.js',
+  '/game/dist/ui/format.js',
+  '/game/dist/ui/guide-view.js',
+  '/game/dist/ui/tutorial-view.js',
+  '/game/dist/ui/report-view.js',
   '/game/dist/render/world.js',
   '/game/dist/render/world-model.js',
   '/game/dist/render/world-memory.js',
@@ -25,6 +29,7 @@ const APP_ASSETS = [
   '/game/dist/render/construction.js',
   '/game/dist/render/consequence-presentation.js',
   '/game/dist/data/content.generated.js',
+  '/game/dist/data/help-topics.js',
   '/game/dist/data/entropy-crises.js',
   '/game/dist/data/intervention-copy.js',
   '/game/dist/data/apotheosis-events.js',
@@ -38,6 +43,7 @@ const APP_ASSETS = [
   '/game/dist/game/development.js',
   '/game/dist/game/engine.js',
   '/game/dist/game/effects.js',
+  '/game/dist/game/guidance.js',
   '/game/dist/game/harvest-quality.js',
   '/game/dist/game/intervention-scheduler.js',
   '/game/dist/game/convergence.js',
@@ -51,6 +57,8 @@ const APP_ASSETS = [
   '/game/dist/game/save-migration.js',
   '/game/dist/game/run-directives.js',
   '/game/dist/game/run-interventions.js',
+  '/game/dist/game/run-report.js',
+  '/game/dist/game/tutorial.js',
   '/game/dist/game/tactical-actions.js',
   '/game/dist/game/types.js',
   '/game/dist/game/upgrade-balance.js',

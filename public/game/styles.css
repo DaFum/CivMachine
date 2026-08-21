@@ -260,3 +260,137 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 .victory-endgames{display:flex;flex-wrap:wrap;gap:.4rem}
 .victory-endgames span{padding:.2rem .5rem;border-radius:.3rem;background:rgba(140,180,255,.14);font-size:.82em}
 .victory-bonus{margin:0;opacity:.8}
+
+/* --- Onboarding, explanation and the post-run report -------------------------------------------- */
+/* Explain mode annotation. One rule for every panel, so a new note needs no new CSS. */
+.explain-note{display:flex;gap:.5rem;align-items:flex-start;margin:.35rem 0 .8rem;padding:.5rem .6rem;border-left:2px solid var(--cyan);background:#08151c;color:#9fbecb!important;font-size:.74rem;line-height:1.45}
+.explain-note b{flex:0 0 auto;display:grid;place-items:center;width:16px;height:16px;border:1px solid #3c6b7d;border-radius:50%;color:var(--cyan);font-size:.62rem}
+.icon-button.is-active{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 0 1px #6bdcf633 inset}
+.abbreviation-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.3rem;margin-bottom:1rem;padding:.6rem;border:1px dashed #2c4653;background:#080f14;font-size:.68rem;color:#8ea6b2}
+.abbreviation-legend b{color:var(--cyan);margin-right:.35rem}
+
+/* The situation line. Severity is the only thing that colours it, and it is derived, not authored. */
+.situation-banner{display:grid;gap:.3rem;margin:0 0 1rem;padding:.8rem 1rem;border:1px solid var(--situation-color,#2f4d5b);border-left-width:3px;background:linear-gradient(120deg,#0b1720ef,#090e14f5);box-shadow:0 10px 26px #0004}
+.situation-banner .panel-kicker{color:var(--situation-color,var(--cyan))}
+.situation-banner>b{font-size:.98rem;color:#e2f2f8;line-height:1.4}
+.situation-banner p{display:flex;gap:.5rem;margin:0;font-size:.78rem;line-height:1.45;color:#93a8b4}
+.situation-banner p span{flex:0 0 2.4rem;color:var(--situation-color,var(--muted));font-size:.62rem;letter-spacing:.1em;padding-top:.15rem}
+.situation-banner p em{font-style:normal}
+.situation-banner.severity-calm{--situation-color:var(--mint)}
+.situation-banner.severity-watch{--situation-color:var(--cyan)}
+.situation-banner.severity-urgent{--situation-color:var(--amber)}
+.situation-banner.severity-critical{--situation-color:var(--danger)}
+
+/* The guided run's coach card. Pinned, dismissible, never modal -- it must not be able to sit on
+   top of the button the step is asking the player to press. */
+.tutorial-layer{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:center;padding:0 .75rem calc(.75rem + env(safe-area-inset-bottom));pointer-events:none}
+/* The card is fixed to the bottom edge, so without extra scroll room the last panel on the page can
+   never be brought out from under it. Progressive enhancement: browsers without :has() keep the
+   existing padding, and the card is collapsible and skippable in either case. */
+body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:clamp(14rem,32dvh,22rem)}
+.tutorial-card{pointer-events:auto;display:grid;gap:.4rem;width:min(560px,100%);padding:.85rem 1rem;border:1px solid #4a7d92;border-radius:8px;background:#071219f2;box-shadow:0 20px 50px #000a;backdrop-filter:blur(10px)}
+.tutorial-card.is-collapsed{padding:0;border-color:#33566380;background:transparent;box-shadow:none;backdrop-filter:none}
+.tutorial-expand{width:100%;text-align:left;font-size:.72rem;letter-spacing:.04em;background:#071219f2;border-color:#4a7d92}
+.tutorial-expand b{float:right;color:var(--cyan)}
+.tutorial-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.tutorial-head-buttons{display:flex;gap:.35rem}
+.tutorial-head-buttons button{padding:.3rem .5rem;font-size:.62rem;letter-spacing:.08em}
+.tutorial-progress{display:flex;gap:3px}
+.tutorial-progress i{display:block;flex:1 1 0;height:3px;background:#1d3340}
+.tutorial-progress i.done{background:var(--cyan);box-shadow:0 0 8px #6bdcf655}
+.tutorial-card h4{margin:.15rem 0 .1rem;font-size:1rem;color:#e6f6fc}
+.tutorial-card p{display:flex;gap:.5rem;margin:0;font-size:.78rem;line-height:1.45;color:#9cb2bd}
+.tutorial-card p b{flex:0 0 2.9rem;color:var(--cyan);font-size:.6rem;letter-spacing:.1em;padding-top:.2rem}
+.tutorial-card .tutorial-action{padding:.4rem .5rem;border-left:2px solid var(--amber);background:#171208;color:#e6d5a8}
+.tutorial-card .tutorial-action b{color:var(--amber)}
+.tutorial-foot{display:flex;justify-content:flex-end;align-items:center;gap:.6rem;margin-top:.2rem}
+.tutorial-waiting{margin:0;color:var(--amber);font-size:.72rem;letter-spacing:.04em}
+.tutorial-replay{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin-top:.4rem;padding-top:.7rem;border-top:1px solid #1b2c35}
+.tutorial-replay span{color:var(--muted);font-size:.72rem;line-height:1.4}
+/* The highlight is rendered into the panel's own class list, so it can never fight the DOM diff. */
+.tutorial-focus{position:relative;border-color:var(--cyan)!important;box-shadow:0 0 0 1px #6bdcf655,0 0 34px #6bdcf61f!important}
+.world-state-strip.tutorial-focus{border-color:var(--cyan)!important}
+
+/* The field manual: always available, never unlocked. */
+.field-manual .manual-section{background:#070d12;border-color:#1c2d38}
+.field-manual .manual-summary{margin:0;padding:0 1rem .6rem;color:#8ba0ac;font-size:.78rem;line-height:1.5}
+.manual-topics{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.6rem;padding:0 1rem 1rem}
+.manual-topic{padding:.7rem;border:1px solid #1d3340;background:#0a121880}
+.manual-topic h5{margin:0 0 .4rem;font-size:.82rem;color:var(--cyan);letter-spacing:.03em}
+.manual-topic p{display:flex;gap:.5rem;margin:.22rem 0;font-size:.74rem;line-height:1.45;color:#93a8b4}
+.manual-topic p span{flex:0 0 3.1rem;color:var(--muted);font-size:.58rem;letter-spacing:.1em;padding-top:.18rem}
+.manual-topic .manual-why{color:#a9bfc9}
+
+/* The post-run report. Ordered the way the questions get asked: why it stopped, how it developed,
+   what it paid, what to change. */
+.run-report{border-color:#4a6d7e;background:linear-gradient(140deg,#0c1a22f2,#090e15f7)}
+.run-report.reason-stability_collapse,.run-report.reason-forced_chaotic_harvest{border-color:#8b4450}
+.run-report.reason-abandoned{border-color:#4a5361}
+.run-report.reason-convergence_won{border-color:#5aa88a}
+.report-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1.2rem;flex-wrap:wrap}
+.report-reason h2{margin:.2rem 0 .35rem;font-size:clamp(1.15rem,2.6vw,1.7rem)}
+.report-reason p{margin:0;max-width:70ch;line-height:1.55}
+.report-grade{display:grid;gap:.2rem;min-width:230px;padding:.7rem .85rem;border:1px solid #2c4654;background:#081218}
+.report-grade span{color:var(--muted);font-size:.64rem;letter-spacing:.08em}
+.report-grade b{color:var(--amber);font-size:1.15rem}
+.report-grade small{color:#8fa6b1;font-size:.68rem;line-height:1.4}
+.report-objective{margin:.8rem 0 0;padding:.45rem .6rem;border-left:2px solid var(--violet);background:#120f1c;font-size:.72rem;letter-spacing:.03em;color:#cdbfe4!important}
+.report-objective.met{border-color:var(--mint);color:#bfe8d8!important}
+.report-figures{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin:1rem 0}
+.report-figures article{display:grid;gap:.15rem;padding:.55rem .7rem;border:1px solid #223844;background:#08111780}
+.report-figures span{color:var(--muted);font-size:.6rem;letter-spacing:.08em}
+.report-figures b{color:#e2f2f8;font-size:.98rem}
+.report-figures small{color:#7d929e;font-size:.64rem}
+.report-curve{display:grid;gap:.4rem;margin:0 0 1rem;padding:.7rem;border:1px solid #223844;background:#070d12}
+.report-curve svg{display:block;width:100%;height:120px}
+.report-curve polyline{stroke-width:1.6px}
+.report-curve .curve-development{stroke:var(--cyan)}
+.report-curve .curve-entropy{stroke:var(--danger)}
+.report-curve .curve-stability{stroke:var(--mint)}
+.curve-legend{display:flex;gap:.9rem;flex-wrap:wrap;align-items:center;font-size:.66rem;color:var(--muted)}
+.curve-key::before{content:"";display:inline-block;width:14px;height:2px;margin-right:.35rem;vertical-align:middle;background:currentColor}
+.curve-legend .curve-development{color:var(--cyan)}
+.curve-legend .curve-entropy{color:var(--danger)}
+.curve-legend .curve-stability{color:var(--mint)}
+.curve-legend small{margin-left:auto}
+.report-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.8rem}
+.report-block{display:grid;gap:.5rem;align-content:start;padding:.75rem;border:1px solid #223844;background:#08111780}
+.report-resources{display:grid;gap:.55rem}
+.report-resource{display:grid;grid-template-columns:1fr auto;gap:.15rem .6rem}
+.report-resource span{color:#9cafb9;font-size:.72rem}
+.report-resource b{color:var(--amber);font-size:.85rem;text-align:right}
+.report-resource .meter{grid-column:1/-1}
+.report-resource small{grid-column:1/-1;color:var(--muted);font-size:.62rem}
+.report-total{color:var(--muted);font-size:.68rem}
+.report-empty{margin:0;padding:.6rem;border:1px dashed #4a5361;font-size:.76rem}
+.report-arc{list-style:none;margin:0;padding:0;display:grid;gap:.4rem}
+.report-arc li{display:grid;grid-template-columns:1fr auto;gap:.1rem .6rem;padding:.45rem .55rem;border-left:2px solid #2f4d5b;background:#0a1218}
+.report-arc b{color:#dceaf1;font-size:.76rem}
+.report-arc span{color:var(--cyan);font-size:.66rem;text-align:right}
+.report-arc small{grid-column:1/-1;color:var(--muted);font-size:.63rem}
+.report-lessons{margin-top:1rem;padding:.75rem .85rem;border:1px solid #4a5f3c;background:#0c1309}
+.report-lessons .panel-kicker{color:var(--mint)}
+.report-lessons ul{margin:.5rem 0 0;padding-left:1.2rem;display:grid;gap:.4rem}
+.report-lessons li{color:#bfd3c6;font-size:.78rem;line-height:1.5}
+.report-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.9rem}
+.report-chips span{padding:.25rem .45rem;border:1px solid #28404e;background:#12202a;font-size:.66rem;color:#b9cbd4}
+.report-chips .chip-endgame{border-color:#5b4b7a;background:#171129;color:#d9c9ff}
+.report-chips .chip-institution{border-color:#3f5d43;background:#0f1a11;color:#c6dfc9}
+.report-record{margin-top:.9rem}
+.run-report>button[data-action="dismiss-report"]{justify-self:start;margin-top:.9rem}
+
+@media(max-width:760px){
+  .situation-banner{padding:.7rem .75rem}
+  .situation-banner p{flex-direction:column;gap:.1rem}
+  .situation-banner p span{flex:none}
+  .tutorial-card p{flex-direction:column;gap:.1rem}
+  .tutorial-card p b{flex:none}
+  .report-head{flex-direction:column}
+  .report-grade{min-width:0;width:100%}
+  .report-curve svg{height:96px}
+  .manual-topics{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  .tutorial-focus{box-shadow:0 0 0 1px #6bdcf699!important}
+  .tutorial-progress i.done{box-shadow:none}
+}

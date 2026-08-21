@@ -1,5 +1,7 @@
 import { clampStats } from './effects.js';
 import { SAVE_VERSION, createCivilizationTemplate, createNewState, eraForYears } from './rules.js';
+import { validRunTrace } from './run-report.js';
+import { normalizeTutorialState } from './tutorial.js';
 // One entry per version boundary, contiguous from the oldest supported save up to SAVE_VERSION --
 // `save-migration.test.mjs` fails the build if the chain has a gap. v1 through v3 predate this
 // repository's history, so no field reinterpretation for them can be reconstructed; their steps are
@@ -226,6 +228,15 @@ export function normalizeCivilization(raw, log) {
                 log.repair('civilization.visualMemory', null);
         }
     }
+    // Same contract for the run trace: the post-run report is its only reader, so a malformed curve is
+    // dropped rather than repaired into a shape that never happened.
+    if ('trace' in civ) {
+        if (!validRunTrace(civ.trace)) {
+            delete civ.trace;
+            if ('trace' in raw)
+                log.repair('civilization.trace', null);
+        }
+    }
     return civ;
 }
 export function normalizeState(raw, log) {
@@ -245,6 +256,10 @@ export function normalizeState(raw, log) {
     if (state.phase === 'civilization' && !state.civilization)
         state.phase = log.repair('state.phase', 'machine');
     state.simulationSpeed = Math.max(1, Math.min(8, Math.trunc(state.simulationSpeed) || 1));
+    // Onboarding state is rebuilt against this build's step list: an unknown status or a step id this
+    // version no longer has would otherwise point the tutorial at nothing.
+    state.tutorial = normalizeTutorialState(state.tutorial);
+    state.help = { version: 1, explain: Boolean(state.help?.explain) };
     state.saveVersion = SAVE_VERSION;
     return { state, runDropped };
 }

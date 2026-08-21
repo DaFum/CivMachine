@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.11.0
+# Reality Consumption Engine — App Edition v1.12.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -21,6 +21,52 @@ ending run runs out of unseen ones.
 - touch-safe portrait and landscape layouts
 - PWA installation, offline cache, and user-triggered fullscreen
 - local browser saves without offline progression, migrated forward across versions
+- an interactive twelve-step guided first run, skippable and replayable
+- a post-run report: the run's curve, why it ended, what it farmed, and what to change
+- a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.12.0 a game that explains itself
+
+v1.12.0 answers the one complaint the mechanics could not: players could not tell where, what or why
+anything was happening. Nothing about balance, content or rendering moved -- `SAVE_VERSION` stays at
+4 and no rule module changed its numbers. What changed is that the game now says what it is doing.
+
+**An interactive first run.** A new Machine opens on a twelve-step guided run that walks one
+civilization from `START CIVILIZATION` to its harvest and then to its report. Every step answers the
+same three questions -- what this is, where it is on screen, why it decides anything -- and a step
+that teaches a move is cleared by *making* the move, not by clicking past it. The card is a coach
+mark, never a modal: ignoring it entirely still plays a normal game, it collapses to one line, and
+SKIP is one click. A save that has already harvested never sees it, and `REPLAY GUIDED RUN` in the
+Machine view brings it back at any time.
+
+**A run report after every run.** Ending a civilization -- controlled, forced, collapsed, abandoned,
+or a Convergence attempt -- now produces a report at the top of the Machine view: how the run
+developed as an inline Development/Entropy/Stability curve plus its era and phase transitions with
+the second each happened at, why it ended in the words of the numbers that ended it, exactly which
+resources it farmed and each one's share of the yield, and a set of lessons derived from that run's
+own figures rather than from a table of tips. An abandoned run reports zeros, because zero is what it
+paid.
+
+**A live situation line.** Every run carries one sentence saying what is happening, one saying why,
+and one naming the single move it suggests -- recomputed from the live run through a priority ladder,
+so it stays true outside the tutorial too. Cascade, imminent collapse, an open decision, critical
+Entropy, the harvest window, Attention, Awareness, Sanity, a Premature run, the credit cap, a closing
+window and an open Directive objective each resolve to their own reading. The Machine view has its
+own version for what to do between runs.
+
+**A permanent explanation layer.** `FIELD MANUAL` in the Machine view explains all six systems and
+every term in them -- what it is, where it is on screen, why it matters -- and is readable from the
+first second with nothing to unlock. The `?` button next to the resource bar toggles EXPLAIN, which
+annotates every panel in both views with what it is for, and expands the world strip's abbreviations
+inline for touch devices that have no pointer to reveal a title with. Each strip column also carries
+its full name as a title.
+
+The per-frame contract is unchanged. The run trace samples on an interval and self-downsamples to a
+fixed budget, so a long run keeps its whole shape at a coarser resolution instead of losing its
+beginning. The guided step, the EXPLAIN toggle and the situation id are all discrete bands in the
+structural render keys; the sentences that quote live seconds ride the live refresh, exactly like the
+harvest call. The guided run's highlight is rendered into the panel's own class list rather than added
+to the DOM afterwards, so it cannot read as a diff and rebuild the column on every pass.
 
 ## v1.11.0 a save that survives the next version
 
