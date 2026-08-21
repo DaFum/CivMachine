@@ -371,10 +371,12 @@ export class GameEngine {
         return Progression.machineInsight(this.state);
     }
     availableDirectives() {
-        return this.directives.filter((d) => this.state.machine.runBuild.directiveOfferIds.includes(d.id));
+        const offerIds = new Set(this.state.machine.runBuild.directiveOfferIds);
+        return this.directives.filter((d) => offerIds.has(d.id));
     }
     availableMatrices() {
-        return this.matrices.filter((d) => this.state.meta.progression.knownBreedingMatrices.includes(d.id));
+        const knownIds = new Set(this.state.meta.progression.knownBreedingMatrices);
+        return this.matrices.filter((d) => knownIds.has(d.id));
     }
     selectDirective(id) {
         const r = this.state.machine.runBuild;
