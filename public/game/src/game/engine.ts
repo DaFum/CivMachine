@@ -624,7 +624,10 @@ export class GameEngine {
     b.containmentRating += convergence.containment;
     return b;
   }
-  traitWeight(id: string) {
+  traitWeight(id: string, precomputedBiasSet?: Set<string>) {
+    if (precomputedBiasSet) {
+      return precomputedBiasSet.has(id) ? 3 : 1;
+    }
     const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
     if (!matrixId) return 1;
     const matrix = this.matrices.find((x: any) => x.id === matrixId);
@@ -1512,16 +1515,26 @@ export class GameEngine {
       .slice();
     const count = Math.min(allowed.length, 2 + Math.trunc(bonuses.extraTraits));
     const ids: string[] = [];
+
+    let biasSet: Set<string> | undefined = undefined;
+    const matrixId = this.state.machine.runBuild.selectedBreedingMatrix;
+    if (matrixId) {
+      const matrix = this.matrices.find((x: any) => x.id === matrixId);
+      if (matrix?.effects?.trait_bias) {
+        biasSet = new Set(matrix.effects.trait_bias);
+      }
+    }
+
     for (let i = 0; i < count; i++) {
       const total = allowed.reduce(
-        (sum: number, trait: any) => sum + this.traitWeight(trait.id),
+        (sum: number, trait: any) => sum + this.traitWeight(trait.id, biasSet),
         0,
       );
       const roll = rng.range(0, total);
       let cursor = 0,
         pick = allowed.length - 1;
       for (let j = 0; j < allowed.length; j++) {
-        cursor += this.traitWeight(allowed[j].id);
+        cursor += this.traitWeight(allowed[j].id, biasSet);
         if (roll <= cursor) {
           pick = j;
           break;
