@@ -87,9 +87,12 @@ It answers four questions in the order they get asked:
    missed, whether Stability or Entropy ended it, Control left unspent, an unmet Directive objective
    priced in credits, the distance to the next depth band, the credit cap.
 
-An **abandoned run reports zeros.** The projection is what the run *would* have paid; printing it
-anyway would be the one place the game lied about a number. The grade is kept, because it is what
-makes the lesson ("a chaotic harvest would have paid something") checkable.
+An **abandoned run reports zeros**, and so does a **terminal one**. The projection is what the run
+*would* have paid; printing it anyway would be the one place the game lied about a number. An
+abandoned run pays none of it, and a Convergence attempt pays no yield at all — `lastHarvest` records
+zeros for both — so the report that every exit publishes has to say the same. The grade is kept in
+both cases, because it is what makes the lesson ("a chaotic harvest would have paid something")
+checkable.
 
 ### 4. A permanent explanation layer — `data/help-topics.ts`
 
@@ -104,11 +107,13 @@ describe, so a new strip column or an unrendered note fails the build.
 
 The root instructions forbid two things, and this design respects both by construction:
 
-- **Structural keys may not move on ticking numbers.** The guided step id, the collapsed flag, the
-  EXPLAIN toggle and the situation *id* are all discrete bands, and they enter
-  `civilizationRenderKey`. The situation *sentences* quote live seconds and metric values, so they
-  ride the live refresh through `data-live` hooks — exactly like the v1.7.0 harvest call, and for the
-  same reason.
+- **Structural keys may not move on ticking numbers.** The guided step id, the collapsed flag and the
+  EXPLAIN toggle are discrete bands, and they enter `civilizationRenderKey`. The situation does not,
+  in any form: the ladder is selected in part by `harvestUrgency`, whose two sides — the seconds to
+  the next credit and the seconds the run can still reach — both move continuously, so banding on the
+  situation *id* would carry a ticking number into the key transitively and rebuild the column while a
+  run sat on that boundary. Its *severity* band and its *sentences* both ride the live refresh through
+  `data-live` hooks and a class toggle — exactly like the v1.7.0 harvest call, and for the same reason.
 - **Ticking may not write `localStorage` or rebuild controls.** `advanceTutorial` runs in `emit()`
   because every mutation that could record a fact ends in an emit; it is a pure array walk and it
   persists only on the rare pass where the step actually changed, which happens a dozen times per

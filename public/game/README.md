@@ -91,9 +91,10 @@ its full name as a title.
 
 The per-frame contract is unchanged. The run trace samples on an interval and self-downsamples to a
 fixed budget, so a long run keeps its whole shape at a coarser resolution instead of losing its
-beginning. The guided step, the EXPLAIN toggle and the situation id are all discrete bands in the
-structural render keys; the sentences that quote live seconds ride the live refresh, exactly like the
-harvest call. The guided run's highlight is rendered into the panel's own class list rather than added
+beginning. The guided step and the EXPLAIN toggle are discrete bands in the structural render keys.
+The situation stays out of them: it is selected in part by the harvest call, whose two sides both move
+continuously, so its severity and its sentences ride the live refresh instead — exactly like the
+harvest call itself, and for the same reason. The guided run's highlight is rendered into the panel's own class list rather than added
 to the DOM afterwards, so it cannot read as a diff and rebuild the column on every pass.
 
 ## v1.11.0 a save that survives the next version
