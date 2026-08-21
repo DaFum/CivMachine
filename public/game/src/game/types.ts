@@ -288,8 +288,12 @@ export type TutorialStatus = 'pending' | 'active' | 'completed' | 'skipped';
 
 // Monotonic facts the tutorial waits on. They are recorded when the player actually performs the
 // action, so a step cannot strand the tutorial when the run that produced it is already over.
+// Deliberately no fact for the decision feedback panel. `publishCompletedDecision` fires for a
+// tactical action as well as for an intervention, so a step gated on it would be cleared by the wrong
+// move -- and any step placed after the intervention step would already be satisfied when the cursor
+// arrived, so it would never be shown at all. Reading that panel is an acknowledged step.
 export type TutorialFact =
-  | 'run_started' | 'intervention_resolved' | 'feedback_seen' | 'tactical_used' | 'harvest_completed';
+  | 'run_started' | 'intervention_resolved' | 'tactical_used' | 'harvest_completed';
 
 export interface TutorialState {
   version: 1;

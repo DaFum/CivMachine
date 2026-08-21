@@ -7,6 +7,9 @@ import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, 
 import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalRisk } from '../game/tactical-actions.js';
 import { civilizationSituation, machineSituation } from '../game/guidance.js';
 import { ERA_NAMES } from '../game/engine.js';
+// The prestige threshold, in one place: the meta bar prints it, the situation line quotes it, and a
+// player comparing the two must not be shown two different numbers.
+const UNIVERSE_CREDIT_REQUIREMENT = 18;
 const RESOURCE_NAMES = {
     causal_mass: 'Causal Mass', cognition: 'Cognition', paradox: 'Paradox', existence: 'Existence', universal_residue: 'Universal Residue', axioms: 'Axioms'
 };
@@ -238,7 +241,7 @@ export function buildViewModel(engine) {
         canStart: !directiveRequiredNow,
         affordableUpgrades: machineUpgradeEntries.filter((entry) => entry.status !== 'locked' && engine.canPurchaseUpgrade('machine', entry.definition.id)).length,
         credits: state.machine.cultivationCreditsThisUniverse,
-        creditsRequired: 18,
+        creditsRequired: UNIVERSE_CREDIT_REQUIREMENT,
         canConsumeUniverse: engine.canConsumeUniverse(),
         canConsumeMultiverse: engine.canConsumeMultiverse(),
         convergenceUnlocked: convergenceIsUnlocked,
@@ -253,7 +256,7 @@ export function buildViewModel(engine) {
         maxSimulationSpeed: engine.maxSimulationSpeed(),
         civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
         cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
-        universeRequirement: 18,
+        universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
         universesThisMultiverse: state.meta.universesThisMultiverse,
         multiverseRequirement: 4,
         previews: engine.nextPreviews(),

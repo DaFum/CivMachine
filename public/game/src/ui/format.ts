@@ -7,7 +7,13 @@ export const esc = (v: unknown): string =>
 export const fmt = (n: number): string =>
   Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : Math.round(n).toLocaleString('en-US');
 
-export const pct = (v: number, max = 100): string => `${Math.max(0, Math.min(100, v / max * 100)).toFixed(0)}%`;
+// A meter width, so it has to stay a length whatever it is handed. The clamp already turns an
+// infinite share into a full meter and a negative one into an empty one; only NaN -- `0 / 0`, a stat
+// whose ceiling has not been set yet -- survives it, and `NaN%` is not a width.
+export const pct = (v: number, max = 100): string => {
+  const share = Math.max(0, Math.min(100, v / max * 100));
+  return `${Number.isNaN(share) ? 0 : share.toFixed(0)}%`;
+};
 
 // Seconds as a player reads them: a run is minutes long, so 214s is worse than 3m34s.
 export const duration = (seconds: number): string => {

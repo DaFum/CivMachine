@@ -16,10 +16,14 @@ export function tutorialOverlay(view) {
     // only part that teaches would leave the player exactly where they started. A reading step keeps
     // its CONTINUE, but an off-phase one still has to say where to go -- otherwise its WHERE points at
     // a panel that is not on screen and nothing on the card admits it.
+    // The DO paragraph below is the only place `action` is printed. The foot says what is being waited
+    // *on* -- where to go when the step belongs to the other phase, and otherwise just that the card is
+    // waiting -- because repeating the action verbatim under it printed the same sentence twice.
     const hint = (text) => `<p class="tutorial-waiting" role="status">${esc(text)}</p>`;
+    const waiting = step.offPhaseHint || 'Waiting for you to make the move above.';
     const foot = step.canAcknowledge
         ? `${step.offPhaseHint ? hint(step.offPhaseHint) : ''}<button class="primary" data-action="tutorial-next">CONTINUE</button>`
-        : hint(step.offPhaseHint || step.action);
+        : hint(waiting);
     const action = step.canAcknowledge || !step.action ? '' : `<p class="tutorial-action"><b>DO</b>${esc(step.action)}</p>`;
     return `<div class="tutorial-card" role="region" aria-label="Guided run">
     <div class="tutorial-head">

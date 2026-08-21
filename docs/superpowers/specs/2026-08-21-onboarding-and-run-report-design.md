@@ -26,9 +26,12 @@ Twelve ordered steps covering one civilization from `START CIVILIZATION` to its 
 carries `what`, `where`, `why` and, when it teaches a move, the `action` that clears it.
 
 The step list is **declarative data, not a script**: a step is cleared either by acknowledgement or
-by one monotonic `TutorialFact` — `run_started`, `intervention_resolved`, `feedback_seen`,
-`tactical_used`, `harvest_completed` — recorded when the player performs the action. Two properties
-follow from that, and both matter more than they look:
+by one monotonic `TutorialFact` — `run_started`, `intervention_resolved`, `tactical_used`,
+`harvest_completed` — recorded when the player performs the action. There is deliberately no fact for
+the decision-feedback panel: `publishCompletedDecision` fires for a tactical action as well as for an
+intervention, so a step gated on it would be cleared by the wrong move, and a step placed after the
+intervention step would already be satisfied when the cursor arrived. Reading it is an acknowledged
+step. Two properties follow from the gating, and both matter more than they look:
 
 - **A gated step cannot be clicked past.** No CONTINUE button is rendered for one, and
   `acknowledgeStep` refuses it. Clicking through the only part that teaches would leave the player

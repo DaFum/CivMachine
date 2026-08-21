@@ -24,6 +24,20 @@ export function newRunTrace(): RunTraceState {
   return { version: 1, intervalSeconds: TRACE_BASE_INTERVAL_SECONDS, nextSampleAt: 0, samples: [] };
 }
 
+const SAMPLE_NUMBERS = [
+  'second', 'years', 'era', 'development', 'depth', 'entropy',
+  'stability', 'sanity', 'awareness', 'attention', 'choices', 'dramaPhase',
+] as const;
+
+// Every sample is read positionally by the report -- `runArc` reaches into `sample.era`, the curve
+// maps `sample.development` -- so a single null or half-written entry is a crash at the moment a run
+// ends, which is the worst possible moment for one. Checked here rather than at each reader.
+function validRunTraceSample(value: unknown): value is RunTraceSample {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const raw = value as Record<string, unknown>;
+  return SAMPLE_NUMBERS.every(key => typeof raw[key] === 'number' && Number.isFinite(raw[key] as number));
+}
+
 export function validRunTrace(value: unknown): value is RunTraceState {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const raw = value as Partial<RunTraceState>;
@@ -32,7 +46,11 @@ export function validRunTrace(value: unknown): value is RunTraceState {
   // is not allowed to do.
   return raw.version === 1 && typeof raw.intervalSeconds === 'number' && Number.isFinite(raw.intervalSeconds)
     && raw.intervalSeconds > 0
-    && typeof raw.nextSampleAt === 'number' && Number.isFinite(raw.nextSampleAt) && Array.isArray(raw.samples);
+    && typeof raw.nextSampleAt === 'number' && Number.isFinite(raw.nextSampleAt)
+    // A malformed sample invalidates the whole trace rather than being filtered out of it. Dropping
+    // entries would leave a curve with a hole in it presented as the run's shape, and the rule this
+    // module already states is that a trace that cannot be read is discarded, never repaired.
+    && Array.isArray(raw.samples) && raw.samples.every(validRunTraceSample);
 }
 
 export function traceSample(civ: Civilization): RunTraceSample {

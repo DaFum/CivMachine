@@ -3,14 +3,18 @@ import { explainNote } from './guide-view.js';
 // Three normalized polylines over the same box: Development against its own peak (the run's growth),
 // Entropy against 100 (the clock), Stability against its maximum (what pays for the clock). Inline
 // SVG, no library, no external asset -- the service worker precaches nothing extra for it.
-export function runCurve(samples) {
+//
+// Stability is scaled by the run's declared maximum, not by the highest value the samples happened to
+// reach: normalizing to the observed peak drew a run that never rose above 60 as though 60 were full,
+// next to an Entropy line already drawn against a fixed 100.
+export function runCurve(samples, stabilityMax = 100) {
     if (samples.length < 2)
         return '';
     const width = 100;
     const height = 34;
     const span = Math.max(1e-6, samples[samples.length - 1].second - samples[0].second);
     const peakDevelopment = Math.max(1, ...samples.map(sample => sample.development));
-    const peakStability = Math.max(1, ...samples.map(sample => sample.stability));
+    const stabilityScale = Math.max(1, stabilityMax);
     const project = (pick, max) => samples
         .map(sample => {
         const x = (sample.second - samples[0].second) / span * width;
@@ -21,7 +25,7 @@ export function runCurve(samples) {
     const series = [
         { id: 'development', label: 'Development', points: project(sample => sample.development, peakDevelopment) },
         { id: 'entropy', label: 'Entropy', points: project(sample => sample.entropy, 100) },
-        { id: 'stability', label: 'Stability', points: project(sample => sample.stability, peakStability) },
+        { id: 'stability', label: 'Stability', points: project(sample => sample.stability, stabilityScale) },
     ];
     const lines = series.map(entry => `<polyline class="curve-${entry.id}" points="${entry.points}" fill="none" vector-effect="non-scaling-stroke"></polyline>`).join('');
     const legend = series.map(entry => `<span class="curve-key curve-${entry.id}">${esc(entry.label)}</span>`).join('');
@@ -80,7 +84,7 @@ export function runReportPanel(report, explain = false, focus = '') {
       ${figure('STABILITY AT END', report.stats.stability.toFixed(0), `of ${report.stats.stabilityMax.toFixed(0)}`)}
       ${figure('SANITY / AWARENESS / ATTENTION', `${report.stats.sanity.toFixed(0)} / ${report.stats.awareness.toFixed(0)} / ${report.stats.attention.toFixed(0)}`)}
     </div>
-    ${runCurve(report.trace)}
+    ${runCurve(report.trace, report.stats.stabilityMax)}
     <div class="report-columns">
       <div class="report-block">
         <span class="panel-kicker">RESOURCES FARMED</span>

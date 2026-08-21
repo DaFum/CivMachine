@@ -9,6 +9,11 @@ import type { GameState, TutorialFact, TutorialState, TutorialStatus } from './t
 // Presentation-only, like `visualMemory`: no progression, pressure, harvest or scheduler rule reads
 // `state.tutorial`.
 
+// The facts a step may be gated on, as data, so a stored save can be filtered against the set this
+// build actually declares.
+export const TUTORIAL_FACTS: ReadonlyArray<TutorialFact> =
+  ['run_started', 'intervention_resolved', 'tactical_used', 'harvest_completed'];
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -186,7 +191,9 @@ export function normalizeTutorialState(state: TutorialState | null | undefined):
     status,
     stepId,
     acknowledged: Array.isArray(raw.acknowledged) ? raw.acknowledged.filter(id => Boolean(tutorialStepById(id))) : [],
-    observed: Array.isArray(raw.observed) ? [...new Set(raw.observed)] : [],
+    // Facts are filtered the same way step ids are: a fact this build no longer declares would ride
+    // along in the save forever, and a step gated on a renamed one would never clear.
+    observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS.includes(fact)))] : [],
     collapsed: Boolean(raw.collapsed),
   };
 }

@@ -11,6 +11,10 @@ import type { GameEngine } from '../game/engine.js';
 import type { SituationReport } from '../game/guidance.js';
 import type { Civilization, RuntimeBonuses } from '../game/types.js';
 
+// The prestige threshold, in one place: the meta bar prints it, the situation line quotes it, and a
+// player comparing the two must not be shown two different numbers.
+const UNIVERSE_CREDIT_REQUIREMENT = 18;
+
 const RESOURCE_NAMES: Record<string,string> = {
   causal_mass:'Causal Mass', cognition:'Cognition', paradox:'Paradox', existence:'Existence', universal_residue:'Universal Residue', axioms:'Axioms'
 };
@@ -261,7 +265,7 @@ export function buildViewModel(engine: GameEngine) {
       affordableUpgrades: machineUpgradeEntries.filter((entry:any) =>
         entry.status !== 'locked' && engine.canPurchaseUpgrade('machine', entry.definition.id)).length,
       credits: state.machine.cultivationCreditsThisUniverse,
-      creditsRequired: 18,
+      creditsRequired: UNIVERSE_CREDIT_REQUIREMENT,
       canConsumeUniverse: engine.canConsumeUniverse(),
       canConsumeMultiverse: engine.canConsumeMultiverse(),
       convergenceUnlocked: convergenceIsUnlocked,
@@ -278,7 +282,7 @@ export function buildViewModel(engine: GameEngine) {
     maxSimulationSpeed: engine.maxSimulationSpeed(),
     civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
     cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
-    universeRequirement: 18,
+    universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
     universesThisMultiverse: state.meta.universesThisMultiverse,
     multiverseRequirement: 4,
     previews: engine.nextPreviews(),

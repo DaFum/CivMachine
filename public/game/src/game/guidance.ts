@@ -49,9 +49,16 @@ export interface CivilizationSituationInput {
   objectiveCompleted: boolean;
 }
 
+// Every number that reaches a sentence goes through one of these. The ladder is documented as total,
+// which has to include the formatting: a single raw interpolation is all it takes to print `NaN` at
+// the player, and these sentences are the surface that is supposed to make the panels checkable.
 const round = (value: number): string => `${Math.round(Number.isFinite(value) ? value : 0)}`;
 const one = (value: number): string => (Number.isFinite(value) ? value : 0).toFixed(1);
+const two = (value: number): string => (Number.isFinite(value) ? value : 0).toFixed(2);
 const seconds = (value: number): string => (Number.isFinite(value) ? `${Math.max(0, Math.round(value))}s` : 'no limit');
+// Credits are counted, so the plural has to agree with the number that was printed, not with a raw
+// input that may not be one.
+const count = (value: number): number => (Number.isFinite(value) ? Math.round(value) : 0);
 
 export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
   if (input.entropy >= 100) {
@@ -108,7 +115,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       id: 'entropy_critical',
       severity: 'urgent',
       headline: `Entropy at ${one(input.entropy)} — the cascade is ${seconds(input.secondsToCascade)} away.`,
-      cause: `Entropy rises at ${input.entropyRate.toFixed(2)}/s, and the rate grows with every year the civilization lives.`,
+      cause: `Entropy rises at ${two(input.entropyRate)}/s, and the rate grows with every year the civilization lives.`,
       advice: 'Entropy Vent (4) removes 18 for 1 Control and 10 Stability. Otherwise this is the run’s last window.',
     };
   }
@@ -116,9 +123,9 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
     return {
       id: 'harvest_window',
       severity: 'urgent',
-      headline: `Harvest now — Cultivation Credit ${input.credits + 1} no longer fits in the run.`,
+      headline: `Harvest now — Cultivation Credit ${count(input.credits) + 1} no longer fits in the run.`,
       cause: `The next credit needs ${seconds(input.secondsToNextCredit)} of Development and the run can only reach ${seconds(input.secondsOfRunLeft)}.`,
-      advice: `A controlled harvest banks ${input.credits} credit${input.credits === 1 ? '' : 's'} at ${input.grade}. Staying trades that for nothing.`,
+      advice: `A controlled harvest banks ${count(input.credits)} credit${count(input.credits) === 1 ? '' : 's'} at ${input.grade}. Staying trades that for nothing.`,
     };
   }
   if (input.attention > 65) {
@@ -150,7 +157,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
   }
   if (input.grade === 'premature') {
     const missing = input.eventChoices < 3
-      ? `it has resolved ${input.eventChoices} of the 3 interventions a payout needs`
+      ? `it has resolved ${count(input.eventChoices)} of the 3 interventions a payout needs`
       : input.era <= 0
         ? `it is still in ${input.eraName}, and a payout needs Expansion or later`
         : `Depth is ${one(input.depth)} and Established starts at 1.5`;
@@ -166,7 +173,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
     return {
       id: 'credit_cap',
       severity: 'watch',
-      headline: `Cultivation Credits are capped at ${input.credits}.`,
+      headline: `Cultivation Credits are capped at ${count(input.credits)}.`,
       cause: 'The credit formula stops at 20 regardless of Depth.',
       advice: 'Only raw resource yield still grows. Harvest unless a Directive objective is still within reach.',
     };
@@ -175,7 +182,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
     return {
       id: 'closing',
       severity: 'watch',
-      headline: `Closing — credit ${input.credits + 1} in ${seconds(input.secondsToNextCredit)}, run reaches ${seconds(input.secondsOfRunLeft)}.`,
+      headline: `Closing — credit ${count(input.credits) + 1} in ${seconds(input.secondsToNextCredit)}, run reaches ${seconds(input.secondsOfRunLeft)}.`,
       cause: 'The next credit still fits, but only inside the last 30% of the run the current course allows.',
       advice: 'One Entropy Vent (4) buys the margin back. Without it, plan to harvest at the credit.',
     };
@@ -192,9 +199,9 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
   return {
     id: 'building',
     severity: 'calm',
-    headline: `Building — Depth ${one(input.depth)} at ${input.grade}, ${round(input.credits)} credit${input.credits === 1 ? '' : 's'} banked.`,
+    headline: `Building — Depth ${one(input.depth)} at ${input.grade}, ${round(input.credits)} credit${count(input.credits) === 1 ? '' : 's'} banked.`,
     cause: `Development is compounding and Entropy is at ${one(input.entropy)}, ${seconds(input.secondsToCascade)} from the cascade.`,
-    advice: `Credit ${input.credits + 1} lands in ${seconds(input.secondsToNextCredit)}. Nothing needs spending yet.`,
+    advice: `Credit ${count(input.credits) + 1} lands in ${seconds(input.secondsToNextCredit)}. Nothing needs spending yet.`,
   };
 }
 
@@ -235,8 +242,8 @@ export function machineSituation(input: MachineSituationInput): SituationReport 
     return {
       id: 'consume_universe',
       severity: 'watch',
-      headline: `The Universe can be consumed at ${input.credits} Cultivation Credits.`,
-      cause: `${input.creditsRequired} credits is the prestige threshold, and it has been met.`,
+      headline: `The Universe can be consumed at ${round(input.credits)} Cultivation Credits.`,
+      cause: `${round(input.creditsRequired)} credits is the prestige threshold, and it has been met.`,
       advice: 'It resets resources and Machine upgrades and pays Universal Residue. Spend anything you were saving first.',
     };
   }
@@ -253,7 +260,7 @@ export function machineSituation(input: MachineSituationInput): SituationReport 
     return {
       id: 'spend_bank',
       severity: 'calm',
-      headline: `${input.affordableUpgrades} upgrade${input.affordableUpgrades === 1 ? '' : 's'} affordable right now.`,
+      headline: `${count(input.affordableUpgrades)} upgrade${count(input.affordableUpgrades) === 1 ? '' : 's'} affordable right now.`,
       cause: 'Resources do nothing while banked, and a prestige will take them.',
       advice: 'Containment buys longer runs; the harvest modules buy more out of the same run.',
     };

@@ -1,3 +1,14 @@
+// The guided first run. It is a cursor over an ordered, declarative step list -- no timers, no
+// scripted state, no branching. A step is cleared either because the player acknowledged it or
+// because a monotonic *fact* about their play was recorded, which is what keeps it honest: the
+// tutorial can only ever be ahead of the player by one step, and it cannot strand itself on a step
+// whose run has already ended.
+//
+// Presentation-only, like `visualMemory`: no progression, pressure, harvest or scheduler rule reads
+// `state.tutorial`.
+// The facts a step may be gated on, as data, so a stored save can be filtered against the set this
+// build actually declares.
+export const TUTORIAL_FACTS = ['run_started', 'intervention_resolved', 'tactical_used', 'harvest_completed'];
 export const TUTORIAL_STEPS = [
     {
         id: 'overview',
@@ -152,7 +163,9 @@ export function normalizeTutorialState(state) {
         status,
         stepId,
         acknowledged: Array.isArray(raw.acknowledged) ? raw.acknowledged.filter(id => Boolean(tutorialStepById(id))) : [],
-        observed: Array.isArray(raw.observed) ? [...new Set(raw.observed)] : [],
+        // Facts are filtered the same way step ids are: a fact this build no longer declares would ride
+        // along in the save forever, and a step gated on a renamed one would never clear.
+        observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS.includes(fact)))] : [],
         collapsed: Boolean(raw.collapsed),
     };
 }

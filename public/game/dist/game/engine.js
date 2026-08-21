@@ -156,7 +156,6 @@ export class GameEngine {
     publishCompletedDecision(civ, feedback, repair = false) {
         this.decisionFeedback = feedback;
         this.worldImpulse = feedback;
-        this.observe("feedback_seen");
         civ.visualMemory = applyWorldMemory(civ.seed, civ.visualMemory, feedback, {
             repair,
         });
