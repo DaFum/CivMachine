@@ -176,7 +176,11 @@ export class GameEngine {
   private directives: any[] = C.directives;
   private matrices: any[] = C.breeding_matrices;
   private mutations: any[] = C.mutations;
+  private traitsMap: Map<string, any>;
+  private mutationsMap: Map<string, any>;
   constructor(options: EngineOptions = {}) {
+    this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
+    this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
     this.storage = options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave = options.autosave ?? true;
     this.state = this.load() ?? createNewState();
@@ -366,7 +370,7 @@ export class GameEngine {
     return this.events.find((e) => e.id === id) ?? null;
   }
   traitById(id: string) {
-    return this.traits.find((t) => t.id === id) ?? null;
+    return this.traitsMap.get(id) ?? null;
   }
   upgradeById(layer: Layer, id: string) {
     return this.catalog(layer).find((u: any) => u.id === id) ?? null;
@@ -688,7 +692,7 @@ export class GameEngine {
       applyEffects(civ, trait.effects, false, bonuses);
     }
     for (const id of this.state.machine.activeMutations) {
-      const m = this.mutations.find((x: any) => x.id === id);
+      const m = this.mutationsMap.get(id);
       if (m) applyEffects(civ, m.effects, false, bonuses);
     }
     this.state.machine.activeMutations = [];
@@ -1150,7 +1154,7 @@ export class GameEngine {
     );
     if (mutationId)
       this.post(
-        `Machine mutation acquired: ${this.mutations.find((x: any) => x.id === mutationId)?.name ?? mutationId}.`,
+        `Machine mutation acquired: ${this.mutationsMap.get(mutationId)?.name ?? mutationId}.`,
       );
     this.save();
     this.emit();
