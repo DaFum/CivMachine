@@ -14,8 +14,44 @@ const reserveCostText = (entry) => `COST ${fmt(entry.cost)} ${entry.currency.rep
 const harvestSummaryText = (details) => `×${details.rewardMultiplier.toFixed(2)} yield · +${details.credits} Cultivation Credit${details.credits === 1 ? '' : 's'}${details.objectiveCompleted ? ' · OBJECTIVE BONUS ACTIVE' : ''}`;
 function statBar(name, value, max = 100, kind = '') { return `<div class="stat-row" data-stat="${esc(kind)}"><div><span>${esc(name)}</span><b>${value.toFixed(1)}${max !== 100 ? ` / ${max.toFixed(0)}` : ''}</b></div><div class="meter ${kind}"><i style="width:${pct(value, max)}"></i></div></div>`; }
 function card(title, body, cls = '') { return `<section class="panel ${cls}"><h3>${title}</h3>${body}</section>`; }
-function replaceIfChanged(element, html) { if (element.innerHTML === html)
-    return false; element.innerHTML = html; return true; }
+function sanitizeHTML(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+    let node = walker.nextNode();
+    const toRemove = [];
+    while (node) {
+        if (node.tagName === 'SCRIPT' || node.tagName === 'IFRAME' || node.tagName === 'OBJECT' || node.tagName === 'EMBED') {
+            toRemove.push(node);
+        }
+        else {
+            for (const attr of Array.from(node.attributes)) {
+                if (attr.name.toLowerCase().startsWith('on')) {
+                    node.removeAttribute(attr.name);
+                    continue;
+                }
+                // Check for javascript: using anchor parsing to resolve protocols
+                if (attr.value) {
+                    const tempAnchor = document.createElement('a');
+                    tempAnchor.href = attr.value;
+                    if (tempAnchor.protocol === 'javascript:') {
+                        node.removeAttribute(attr.name);
+                    }
+                }
+            }
+        }
+        node = walker.nextNode();
+    }
+    for (const el of toRemove)
+        el.remove();
+    return doc.body.innerHTML;
+}
+function replaceIfChanged(element, html) {
+    const sanitized = sanitizeHTML(html);
+    if (element.innerHTML === sanitized)
+        return false;
+    element.innerHTML = sanitized;
+    return true;
+}
 const signed = (value) => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
 const metricTone = (item) => ((item.key === 'awareness' || item.key === 'attention' || item.key === 'entropy' || item.key === 'eventTimer') ? item.delta < 0 : item.delta > 0) ? 'gain' : 'loss';
 function decisionFeedback(feedback) {
