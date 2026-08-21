@@ -85,6 +85,8 @@ export class GameEngine {
         this.directives = C.directives;
         this.matrices = C.breeding_matrices;
         this.mutations = C.mutations;
+        this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
+        this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
         this.storage = options.storage ?? globalThis.localStorage;
         this.autosave = options.autosave ?? true;
         this.state = this.load() ?? createNewState();
@@ -286,7 +288,7 @@ export class GameEngine {
         return this.events.find((e) => e.id === id) ?? null;
     }
     traitById(id) {
-        return this.traits.find((t) => t.id === id) ?? null;
+        return this.traitsMap.get(id) ?? null;
     }
     upgradeById(layer, id) {
         return this.catalog(layer).find((u) => u.id === id) ?? null;
@@ -577,7 +579,7 @@ export class GameEngine {
             applyEffects(civ, trait.effects, false, bonuses);
         }
         for (const id of this.state.machine.activeMutations) {
-            const m = this.mutations.find((x) => x.id === id);
+            const m = this.mutationsMap.get(id);
             if (m)
                 applyEffects(civ, m.effects, false, bonuses);
         }
@@ -962,7 +964,7 @@ export class GameEngine {
             this.post("DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.");
         this.post(`Yield: Causal ${rewards.causal_mass}, Cognition ${rewards.cognition}, Paradox ${rewards.paradox}, Existence ${rewards.existence}.`);
         if (mutationId)
-            this.post(`Machine mutation acquired: ${this.mutations.find((x) => x.id === mutationId)?.name ?? mutationId}.`);
+            this.post(`Machine mutation acquired: ${this.mutationsMap.get(mutationId)?.name ?? mutationId}.`);
         this.save();
         this.emit();
         return rewards;
