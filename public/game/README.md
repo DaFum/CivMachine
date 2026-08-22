@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.12.0
+# Reality Consumption Engine — App Edition v1.13.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,40 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.13.0 a shell that reads as built
+
+v1.13.0 is presentation only. No rule module, balance number or content entry moved, `SAVE_VERSION`
+stays at 4, and the renderer draws exactly what it drew before -- every change is in the two
+stylesheets and the shell's own CSS.
+
+The shell had accumulated seven different literal corner radii, thirty distinct hard-coded font
+sizes, and no radius at all on its panels while its cards were rounded. That mismatch, not any single
+missing effect, is what made a dense instrument UI read as unfinished.
+
+- **One `--radius` drives every corner.** `--radius-xs/sm/md/lg` derive from it by `calc`, so
+  re-rounding the entire UI is now a one-line edit. Panels, rails and the world viewport are rounded
+  for the first time; the accordion clips itself so its edge-to-edge summary follows the corner.
+- **Every font size is fluid.** A ten-step `clamp()` scale replaces the thirty literals. Desktop
+  sizes land within a hair of the old ones, a phone gets a readable floor instead of `0.55rem`
+  labels, and a large display stops looking sparse. The two `em` sizes stay relative on purpose --
+  their parents are fluid, so they are too.
+- **Panels reveal as they scroll into view**, driven by an `animation-timeline: view()` timeline
+  rather than a clock. That distinction is load-bearing: `replaceIfChanged` rebuilds a panel whenever
+  one of its numbers moves, so a time-based entrance would restart on every rebuild and flicker for
+  the whole run. A layout-derived timeline renders a rebuilt panel at its correct progress instead.
+  Where the timeline is unsupported, or the page does not scroll, the keyframes never apply and the
+  panels simply render.
+- **Ambient depth behind the shell.** The noise overlay keeps its grid and gains three blurred blobs
+  that drift on a fixed, composited layer. Desktop only, and off under reduced motion: a phone is
+  already spending its frame budget on the world canvas.
+- **Hover and focus became one system.** One lift, one ring, one glow across every card type, a light
+  sweep across the buttons that commit a decision, and themed thin scrollbars on all five scroll
+  surfaces. None of it costs anything at rest -- nothing here animates unless a pointer is on it.
+
+Reduced motion silences the drift, the sweep and the reveals. Four new tests pin the invariants
+rather than the values: a literal radius, a literal font size, a time-based reveal, or a reveal that
+reaches the canvas host all fail the build.
 
 ## v1.12.0 a game that explains itself
 
