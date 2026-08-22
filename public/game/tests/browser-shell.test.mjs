@@ -261,3 +261,73 @@ test('save reset never depends on a native modal dialog', async () => {
   assert.match(main, /deleteSave\(\)/);
   assert.match(main, /armed/i, 'reset must require a second, explicit in-page confirmation');
 });
+
+// --- The design system ---------------------------------------------------------------------------
+// Radius and type are the two scales that make a dozen unrelated panel types read as one UI. Both
+// collapsed to a single source in v1.13.0, and both are trivial to un-collapse by hand later, so
+// each one is pinned as an invariant rather than as a list of expected values.
+
+test('one --radius drives every corner in the shell', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /--radius:\s*\d/, 'the scale must have a single numeric root');
+  for (const step of ['xs', 'sm', 'md', 'lg']) {
+    assert.match(
+      styles,
+      new RegExp(`--radius-${step}:[^;]*(var\\(--radius\\)|calc\\()`),
+      `--radius-${step} must derive from --radius rather than restate a literal`,
+    );
+  }
+  // Any literal corner is a step that escaped the scale. 50% is a circle, not a radius step, and
+  // `inherit` is how a meter fill follows its track.
+  const literals = [...styles.matchAll(/border-radius:\s*([^;}!]+)/g)]
+    .map(match => match[1].trim())
+    .filter(value => !value.startsWith('var(') && value !== '50%' && value !== 'inherit');
+  assert.deepEqual(literals, [], 'every corner must come from the --radius scale');
+});
+
+test('every font size in the shell is fluid', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const scale = [...styles.matchAll(/--text-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
+  assert.ok(scale.length >= 9, `the type scale has only ${scale.length} steps`);
+  for (const step of scale) {
+    assert.ok(step.startsWith('clamp('), `type step "${step}" is not a clamp`);
+  }
+  // A literal rem size is a step that bypassed the scale and will not grow with the viewport. An em
+  // is allowed: its parent is already fluid, so the computed size is too.
+  const literals = [...styles.matchAll(/font-size:\s*([^;}!]+)/g)]
+    .map(match => match[1].trim())
+    .filter(value => !value.startsWith('var(') && !/^[\d.]+em$/.test(value));
+  assert.deepEqual(literals, [], 'every font size must come from the fluid type scale');
+});
+
+test('panel reveals are driven by scroll position, never by a clock', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  // This is the whole reason the reveal is safe here. `replaceIfChanged` rebuilds a panel's HTML
+  // whenever one of its numbers moves, so a time-based entrance would restart on every rebuild and
+  // the panel would flicker for the entire run. A view() timeline reads its progress from layout, so
+  // a replaced panel that is already on screen renders at 100% with no flash.
+  assert.match(styles, /@supports \(animation-timeline:view\(\)\)/, 'the reveal must be a progressive enhancement');
+  const supports = styles.slice(styles.indexOf('@supports (animation-timeline:view())'));
+  assert.match(supports, /animation-timeline:view\(\)/);
+  assert.match(supports, /animation-range:/, 'the reveal must declare the range it plays over');
+  assert.match(styles, /@keyframes silk-reveal\{/);
+  // The world host must never be revealed: it holds three canvases, and a transform on it would move
+  // and resample them.
+  const reveal = supports.slice(0, supports.indexOf('}\n}'));
+  assert.ok(!reveal.includes('.world-shell'), 'the world host must not animate');
+});
+
+test('reduced motion silences every decorative animation the shell adds', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const reduced = styles.slice(styles.lastIndexOf('@media(prefers-reduced-motion:reduce)'));
+  for (const surface of ['.background-noise::after', '.primary::after']) {
+    assert.ok(reduced.includes(surface), `${surface} must be silenced under reduced motion`);
+  }
+  assert.match(reduced, /animation:none/, 'the reveal and the drift must both stop');
+  // And the drift never runs on a phone at all: the world canvas already owns that frame budget.
+  assert.match(
+    styles,
+    /@media\(prefers-reduced-motion:no-preference\) and \(min-width:761px\)\{\s*\.background-noise::after\{animation:silk-aurora/,
+    'the ambient drift must be gated to pointer-width viewports',
+  );
+});
