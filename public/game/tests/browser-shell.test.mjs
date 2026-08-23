@@ -286,18 +286,40 @@ test('one --radius drives every corner in the shell', async () => {
 });
 
 test('every font size in the shell is fluid', async () => {
-  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
-  const scale = [...styles.matchAll(/--text-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
+  const sheets = Object.fromEntries(await Promise.all(
+    ['styles.css', 'mobile.css'].map(async name =>
+      [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
+  ));
+  const scale = [...sheets['styles.css'].matchAll(/--text-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
   assert.ok(scale.length >= 9, `the type scale has only ${scale.length} steps`);
   for (const step of scale) {
     assert.ok(step.startsWith('clamp('), `type step "${step}" is not a clamp`);
   }
-  // A literal rem size is a step that bypassed the scale and will not grow with the viewport. An em
-  // is allowed: its parent is already fluid, so the computed size is too.
-  const literals = [...styles.matchAll(/font-size:\s*([^;}!]+)/g)]
-    .map(match => match[1].trim())
-    .filter(value => !value.startsWith('var(') && !/^[\d.]+em$/.test(value));
-  assert.deepEqual(literals, [], 'every font size must come from the fluid type scale');
+  // Both stylesheets, because mobile.css overrides sizes at exactly the widths where the fluid floor
+  // matters most -- three literals hid there while this test read only styles.css.
+  const LENGTH = /[\d.]+(?:rem|em|px|pt|ch|ex|vw|vh)/;
+  for (const [name, css] of Object.entries(sheets)) {
+    // An em is not a free pass. Nothing between these rules and the root sets a font-size, so an em
+    // resolves against the browser default and is every bit as fixed as a px.
+    const sizes = [...css.matchAll(/font-size:\s*([^;}!]+)/g)]
+      .map(match => match[1].trim())
+      .filter(value => !value.startsWith('var('));
+    assert.deepEqual(sizes, [], `${name}: every font size must come from the fluid type scale`);
+    // The `font:` shorthand carries a size too, and grepping for `font-size:` never saw it.
+    const shorthands = [...css.matchAll(/(?<![-\w])font:\s*([^;}!]+)/g)]
+      .map(match => match[1].trim())
+      .filter(value => LENGTH.test(value));
+    assert.deepEqual(shorthands, [], `${name}: a font shorthand must not carry a literal size`);
+    // And a shorthand may not end in `inherit`: a CSS-wide keyword is not a legal <family-name>, so
+    // the browser drops the whole declaration and the rule silently styles nothing. That is exactly
+    // how `font:700 .72rem inherit` sat here doing nothing at all.
+    for (const value of [...css.matchAll(/(?<![-\w])font:\s*([^;}!]+)/g)].map(match => match[1].trim())) {
+      assert.ok(
+        value === 'inherit' || !/\b(inherit|initial|unset|revert)\b/.test(value),
+        `${name}: "font: ${value}" is dropped as invalid -- use longhands`,
+      );
+    }
+  }
 });
 
 test('panel reveals are driven by scroll position, never by a clock', async () => {

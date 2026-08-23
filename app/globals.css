@@ -80,6 +80,17 @@ iframe {
   animation: ambient-drift-two 46s var(--ease) infinite alternate;
 }
 
+/* The blanket rule at the end of this file already collapses these to 0.01ms, so no motion escapes
+   it -- but a single 0.01ms iteration still lands the blobs on their end keyframe. Stopping the
+   animation outright keeps them where they were authored, and says the same thing the game
+   stylesheet says about its own drift. */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-one,
+  .ambient-two {
+    animation: none;
+  }
+}
+
 .ambient-one {
   top: -20rem;
   right: -10rem;

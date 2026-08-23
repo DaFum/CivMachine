@@ -38,10 +38,15 @@ missing effect, is what made a dense instrument UI read as unfinished.
 - **One `--radius` drives every corner.** `--radius-xs/sm/md/lg` derive from it by `calc`, so
   re-rounding the entire UI is now a one-line edit. Panels, rails and the world viewport are rounded
   for the first time; the accordion clips itself so its edge-to-edge summary follows the corner.
-- **Every font size is fluid.** A ten-step `clamp()` scale replaces the thirty literals. Desktop
-  sizes land within a hair of the old ones, a phone gets a readable floor instead of `0.55rem`
-  labels, and a large display stops looking sparse. The two `em` sizes stay relative on purpose --
-  their parents are fluid, so they are too.
+- **Every font size is fluid.** A ten-step `clamp()` scale replaces the thirty literals, across both
+  stylesheets. Desktop sizes land within a hair of the old ones, a phone gets a readable floor
+  instead of `0.55rem` labels, and a large display stops looking sparse. Three places needed more
+  than a swap: `mobile.css` was overriding three sizes with literals at exactly the widths where the
+  floor matters most; the two `em` sizes looked relative but were not, because nothing between them
+  and the root sets a font-size, so they resolved against the browser default and were as fixed as a
+  px; and `.tactical-action-wrap kbd` carried `font:700 .72rem inherit`, which the browser drops
+  whole -- a CSS-wide keyword is not a legal family name -- so that keycap had never been styled by
+  it at all. It is longhands now, and the shortcut caps finally use the app's own mono face.
 - **Panels reveal as they scroll into view**, driven by an `animation-timeline: view()` timeline
   rather than a clock. That distinction is load-bearing: `replaceIfChanged` rebuilds a panel whenever
   one of its numbers moves, so a time-based entrance would restart on every rebuild and flicker for
@@ -55,9 +60,11 @@ missing effect, is what made a dense instrument UI read as unfinished.
   sweep across the buttons that commit a decision, and themed thin scrollbars on all five scroll
   surfaces. None of it costs anything at rest -- nothing here animates unless a pointer is on it.
 
-Reduced motion silences the drift, the sweep and the reveals. Four new tests pin the invariants
-rather than the values: a literal radius, a literal font size, a time-based reveal, or a reveal that
-reaches the canvas host all fail the build.
+Reduced motion silences the drift, the sweep and the reveals; the shell's ambient blobs stop
+outright rather than resting on their end keyframe. Four new tests pin the invariants rather than the
+values: a literal radius, a literal font size in either stylesheet, a literal size or a dropped
+`inherit` inside a `font:` shorthand, a time-based reveal, or a reveal that reaches the canvas host
+all fail the build.
 
 ## v1.12.0 a game that explains itself
 

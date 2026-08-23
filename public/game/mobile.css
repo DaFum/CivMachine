@@ -66,11 +66,11 @@ summary:focus-visible {
 
   .tactical-action-wrap button > span {
     gap: 0.35rem;
-    font-size: 0.82rem;
+    font-size: var(--text-md);
   }
 
   .tactical-action-wrap button > small {
-    font-size: 0.62rem;
+    font-size: var(--text-3xs);
   }
 
   /* The cascade clock and the harvest call belong on top of the world, not below the fold. The HUD
@@ -131,7 +131,7 @@ summary:focus-visible {
   }
 
   .tutorial-card h4 {
-    font-size: 0.92rem;
+    font-size: var(--text-lg);
   }
 
   .report-figures {

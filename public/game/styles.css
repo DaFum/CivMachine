@@ -170,7 +170,7 @@ main{padding:1rem}
 .tactical-action-wrap button>span{display:flex;align-items:center;gap:.5rem;font-weight:800;color:#e4f5fb}
 .tactical-action-wrap button>b{color:var(--mint);font-size:var(--text-sm)}
 .tactical-action-wrap button>small{color:#b8a7a4;line-height:1.35}
-.tactical-action-wrap kbd{display:grid;place-items:center;min-width:24px;height:24px;border:1px solid #537484;border-bottom-width:2px;border-radius:var(--radius-xs);background:#071117;color:var(--cyan);font:700 .72rem inherit}
+.tactical-action-wrap kbd{display:grid;place-items:center;min-width:24px;height:24px;border:1px solid #537484;border-bottom-width:2px;border-radius:var(--radius-xs);background:#071117;color:var(--cyan);font-weight:700;font-size:var(--text-xs);font-family:inherit}
 .tactical-reason{min-height:1.05rem;margin:.25rem .15rem 0;color:var(--amber);font-size:var(--text-3xs);line-height:1.35}
 .tactical-failure{min-height:1rem;margin:.45rem 0 0;color:var(--danger);font-size:var(--text-xs)}
 .directive-objective{border-color:#55456b}
@@ -281,7 +281,7 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 .register-summary{opacity:.75;margin:0}
 .milestone-group{display:flex;flex-direction:column;gap:.35rem}
 .milestone{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:.5rem .7rem;border:1px solid rgba(140,180,255,.18);border-radius:var(--radius-sm)}
-.milestone p{margin:.15rem 0 0;opacity:.7;font-size:.82em}
+.milestone p{margin:.15rem 0 0;opacity:.7;font-size:var(--text-md)}
 .milestone-progress{min-width:11rem;text-align:right}
 .milestone.complete{opacity:.55;border-style:dashed}
 .convergence-card{display:flex;flex-direction:column;gap:.7rem}
@@ -294,7 +294,7 @@ footer{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;paddin
 .victory-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:.6rem;width:100%}
 .victory-stats article{display:flex;flex-direction:column;padding:.5rem .7rem;border:1px solid rgba(140,180,255,.2);border-radius:var(--radius-sm)}
 .victory-endgames{display:flex;flex-wrap:wrap;gap:.4rem}
-.victory-endgames span{padding:.2rem .5rem;border-radius:var(--radius-xs);background:rgba(140,180,255,.14);font-size:.82em}
+.victory-endgames span{padding:.2rem .5rem;border-radius:var(--radius-xs);background:rgba(140,180,255,.14);font-size:var(--text-md)}
 .victory-bonus{margin:0;opacity:.8}
 
 /* --- Onboarding, explanation and the post-run report -------------------------------------------- */
