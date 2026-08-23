@@ -30,7 +30,7 @@
   --ease:cubic-bezier(.22,.61,.36,1);--dur:.18s;--dur-slow:.42s
 }
 *{box-sizing:border-box}
-html{background:var(--bg);color:var(--text);font-family:"IBM Plex Mono","JetBrains Mono","SFMono-Regular",Consolas,monospace}
+html{background:var(--bg);color:var(--text);font-family:"IBM Plex Mono","JetBrains Mono",SFMono-Regular,Consolas,monospace}
 body{margin:0;min-height:100vh;background:radial-gradient(circle at 25% -10%,#102532 0,#05070b 38%),#05070b}
 /* Ambient depth behind the whole shell. The grid keeps its old weight on ::before; ::after carries
    three blurred blobs that drift. Both are on a fixed, pointer-events-free layer, so the drift is a
