@@ -339,6 +339,46 @@ test('panel reveals are driven by scroll position, never by a clock', async () =
   assert.ok(!reveal.includes('.world-shell'), 'the world host must not animate');
 });
 
+test('one --space scale drives every gap in the shell', async () => {
+  const sheets = Object.fromEntries(await Promise.all(
+    ['styles.css', 'mobile.css'].map(async name =>
+      [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
+  ));
+  const scale = [...sheets['styles.css'].matchAll(/--space-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
+  assert.ok(scale.length >= 8, `the spacing scale has only ${scale.length} steps`);
+
+  // Padding, margin and gap only. A rem inside `height`, `min-width` or `flex-basis` is a container
+  // decision, not a spacing step, and must keep its own value.
+  const PROP = /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block))?|(?:row-|column-)?gap)\s*:\s*([^;}!]+)/g;
+  const LENGTH = /(?<![\w.])\d*\.?\d+rem/;
+  for (const [name, css] of Object.entries(sheets)) {
+    const literals = [...css.matchAll(PROP)]
+      .map(match => `${match[1]}:${match[2].trim()}`)
+      // A clamp is a layout allowance -- the same exemption the world viewport's height already has.
+      .filter(value => !value.includes('clamp(') && LENGTH.test(value));
+    assert.deepEqual(literals, [], `${name}: every gap must come from the --space scale`);
+  }
+});
+
+test('every dark surface in the shell comes from a declared tier', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const root = styles.slice(0, styles.indexOf('}'));
+  for (const tier of ['surface-sunken', 'surface-inset', 'surface-1', 'surface-translucent', 'surface-raised']) {
+    assert.match(root, new RegExp(`--${tier}:`), `--${tier} must be declared`);
+    assert.ok(
+      styles.slice(root.length).includes(`var(--${tier})`),
+      `--${tier} is declared but never used -- that is how ten near-identical darks accumulated`,
+    );
+  }
+  // The specific darks that were doing the tiers' jobs by hand. Any of them reappearing means a new
+  // surface invented its own hex instead of taking the tier one step above or below it.
+  const body = styles.slice(root.length);
+  for (const literal of ['#0b141b', '#0b141a', '#0b151b', '#0a1218', '#0c151c', '#081218',
+    '#070d12', '#080e13', '#080f14', '#12202a', '#13202a']) {
+    assert.ok(!body.toLowerCase().includes(literal), `${literal} must come from a --surface tier`);
+  }
+});
+
 test('reduced motion silences every decorative animation the shell adds', async () => {
   const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
   const reduced = styles.slice(styles.lastIndexOf('@media(prefers-reduced-motion:reduce)'));
