@@ -7,6 +7,22 @@
   --signal: #8cecff;
   --signal-hot: #f3bf63;
   --text: #eefaff;
+
+  /* Eine Radius-Variable treibt die ganze Skala, wie im Spiel selbst. */
+  --radius: 8px;
+  --radius-sm: calc(var(--radius) * 0.625);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.75);
+  --radius-pill: 999px;
+
+  /* Fluide Typografie: jede Groesse waechst mit dem Viewport statt an einem Breakpoint zu springen. */
+  --text-2xs: clamp(0.6rem, 0.577rem + 0.1vw, 0.67rem);
+  --text-xs: clamp(0.66rem, 0.636rem + 0.1vw, 0.73rem);
+  --text-sm: clamp(0.78rem, 0.753rem + 0.114vw, 0.86rem);
+  --text-lg: clamp(1rem, 0.949rem + 0.214vw, 1.15rem);
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur: 0.18s;
 }
 
 * {
@@ -49,10 +65,30 @@ iframe {
   z-index: -1;
   width: 36rem;
   height: 36rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   filter: blur(96px);
   opacity: 0.16;
   pointer-events: none;
+  will-change: transform;
+}
+
+.ambient-one {
+  animation: ambient-drift-one 38s var(--ease) infinite alternate;
+}
+
+.ambient-two {
+  animation: ambient-drift-two 46s var(--ease) infinite alternate;
+}
+
+/* The blanket rule at the end of this file already collapses these to 0.01ms, so no motion escapes
+   it -- but a single 0.01ms iteration still lands the blobs on their end keyframe. Stopping the
+   animation outright keeps them where they were authored, and says the same thing the game
+   stylesheet says about its own drift. */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-one,
+  .ambient-two {
+    animation: none;
+  }
 }
 
 .ambient-one {
@@ -104,12 +140,12 @@ iframe {
   border-radius: 50%;
   box-shadow: 0 0 42px rgba(140, 236, 255, 0.18), inset 0 0 24px rgba(140, 236, 255, 0.08);
   font-weight: 900;
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
 }
 
 .boot-screen p {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: var(--text-xs);
 }
 
 .boot-screen i {
@@ -146,7 +182,7 @@ iframe {
   gap: 0.45rem;
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 0.55rem;
+  border-radius: var(--radius-md);
   color: var(--text);
   background: var(--panel);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
@@ -155,9 +191,20 @@ iframe {
   pointer-events: auto;
 }
 
+.app-controls button {
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
 .app-controls button:hover {
   border-color: var(--signal);
   color: var(--signal);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42), 0 0 24px rgba(140, 236, 255, 0.22);
+  transform: translateY(-2px);
+}
+
+.app-controls button:active {
+  transform: translateY(0);
 }
 
 .app-controls button:focus-visible {
@@ -166,17 +213,27 @@ iframe {
 }
 
 .app-controls span {
-  font-size: 1rem;
+  font-size: var(--text-lg);
 }
 
 .app-controls b {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.12em;
 }
 
 @keyframes boot-scan {
   from { transform: translateX(-15%); }
   to { transform: translateX(155%); }
+}
+
+@keyframes ambient-drift-one {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-3rem, 2.5rem, 0) scale(1.12); }
+}
+
+@keyframes ambient-drift-two {
+  from { transform: translate3d(0, 0, 0) scale(1.08); }
+  to { transform: translate3d(3.5rem, -2rem, 0) scale(1); }
 }
 
 @media (max-width: 560px) {
