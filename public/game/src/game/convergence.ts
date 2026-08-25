@@ -1,4 +1,5 @@
 import { ERA_YEAR_THRESHOLDS } from './rules.js';
+import { fill, text } from '../data/i18n.js';
 
 export const CONVERGENCE_BASE_MILESTONES=21;
 export const CONVERGENCE_MILESTONE_STEP=3;
@@ -37,11 +38,12 @@ export function convergenceRequirements(input:ConvergenceInput):ConvergenceRequi
   const targets=convergenceTargets(input.convergences);
   const milestoneTarget=Math.min(input.milestonesTotal,targets.milestones);
   const axiomsMet=input.axioms.filter(a=>a.level>=Math.min(a.maxLevel,targets.axiomLevel)).length;
+  const requirements=text().reports.convergence.requirements;
   const entries:ConvergenceRequirement[]=[
-    {id:'milestones',label:'Milestones completed',current:count(input.milestonesCompleted),target:milestoneTarget,met:false},
-    {id:'multiverses',label:'Multiverses collapsed',current:count(input.multiverses),target:targets.multiverses,met:false},
-    {id:'axioms',label:`Axiom upgrades at level ${targets.axiomLevel}`,current:axiomsMet,target:input.axioms.length,met:false},
-    {id:'grade',label:'Ascendant harvest recorded',current:Math.max(0,input.bestGradeIndex+1),target:CONVERGENCE_ASCENDANT_INDEX+1,met:false},
+    {id:'milestones',label:requirements.milestones,current:count(input.milestonesCompleted),target:milestoneTarget,met:false},
+    {id:'multiverses',label:requirements.multiverses,current:count(input.multiverses),target:targets.multiverses,met:false},
+    {id:'axioms',label:fill(requirements.axioms,{level:targets.axiomLevel}),current:axiomsMet,target:input.axioms.length,met:false},
+    {id:'grade',label:requirements.grade,current:Math.max(0,input.bestGradeIndex+1),target:CONVERGENCE_ASCENDANT_INDEX+1,met:false},
   ];
   for(const entry of entries)entry.met=entry.current>=entry.target;
   return entries;

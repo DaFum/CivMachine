@@ -1,4 +1,5 @@
 import { CONTENT } from '../data/content.generated.js';
+import { pathName, text } from '../data/i18n.js';
 import type { Civilization, PathState } from './types.js';
 
 export const PATH_IDS = [
@@ -27,7 +28,7 @@ export class CivilizationPaths {
     if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
     return ps;
   }
-  static displayName(id: string): string { return DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
+  static displayName(id: string): string { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
   static affinity(civ: Civilization, id: string): number { return PATH_IDS.includes(id as any) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
   static ranked(civ: Civilization, limit = 10, excludeDominant = false): string[] {
     const dominant = this.ensure(civ).dominantPath;
@@ -58,7 +59,8 @@ export class CivilizationPaths {
     const ids = ps.dominantPath ? this.secondaryPaths(civ,3) : this.ranked(civ,3);
     return ids.map(id => {
       const score = this.affinity(civ,id); const delta = ps.recentDeltas[id] ?? 0;
-      const label = delta < 0 ? 'declining' : score >= 4 ? 'strong' : score >= 2 ? 'rising' : score >= 1 ? 'emerging' : 'faint';
+      const words = text().reports.lore.tendencies;
+      const label = delta < 0 ? words.declining : score >= 4 ? words.strong : score >= 2 ? words.rising : score >= 1 ? words.emerging : words.faint;
       return { id, name: this.displayName(id), label };
     });
   }

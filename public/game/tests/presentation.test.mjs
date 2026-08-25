@@ -7,6 +7,7 @@ import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot 
 import { structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
 import { consequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
+import { LOCALIZATION } from '../dist/data/localization.js';
 import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
@@ -929,7 +930,9 @@ test('the armed reset announces itself through a live region, not a relabelled b
   assert.match(main, /aria-live['"],\s*['"]assertive['"]/, 'the announcer must be an assertive live region');
   assert.match(main, /role['"],\s*['"]status['"]/, 'the announcer must carry a status role');
   assert.match(main, /className = 'visually-hidden'/, 'the announcer must be visually hidden');
-  assert.match(main, /resetAnnouncer\.textContent = `Erase save armed\./, 'arming must write the warning');
+  // The warning itself is catalog copy now; arming must fill it, and the catalog must still say it.
+  assert.match(main, /resetAnnouncer\.textContent = fill\(copy\.armedAnnouncement/, 'arming must write the warning');
+  assert.match(LOCALIZATION.en.ui.resetSave.armedAnnouncement, /^Erase save armed\./);
   assert.match(main, /resetAnnouncer\.textContent = '';/, 'disarming must clear the warning');
 
   const disarm = main.slice(main.indexOf('function disarmReset()'), main.indexOf('resetButton.addEventListener(\'click\''));
@@ -1028,11 +1031,17 @@ test('index.html hosts the victory view and the machine cards render', async () 
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('id="victory-view"'));
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
-  assert.ok(app.includes('MILESTONE REGISTER'));
-  assert.ok(app.includes('GREAT CONVERGENCE'));
+  // The card titles are catalog keys now, so the panel is identified by the key it reads and the
+  // catalog is what pins the words.
+  const APP = LOCALIZATION.en.ui.app;
+  assert.ok(app.includes('t.milestoneRegister'));
+  assert.equal(APP.milestoneRegister, 'MILESTONE REGISTER');
+  assert.ok(app.includes('t.greatConvergence'));
+  assert.equal(APP.greatConvergence, 'GREAT CONVERGENCE');
   assert.ok(app.includes('data-action="convergence"'));
   assert.ok(app.includes('data-action="acknowledge-victory"'));
-  assert.ok(app.includes('TERMINAL CULTIVATION'));
+  assert.ok(app.includes('t.terminalCultivation'));
+  assert.equal(APP.terminalCultivation, 'TERMINAL CULTIVATION');
   // Every interpolated player value stays escaped.
   assert.ok(!app.includes('${vm.convergence.reason}'));
   assert.ok(app.includes('esc(vm.convergence.reason)'));

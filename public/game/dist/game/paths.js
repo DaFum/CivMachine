@@ -1,4 +1,5 @@
 import { CONTENT } from '../data/content.generated.js';
+import { pathName, text } from '../data/i18n.js';
 export const PATH_IDS = [
     'machine_faith', 'collective_mind', 'temporal_dominion', 'reality_engineering', 'biological_transcendence',
     'cosmic_resistance', 'bureaucratic_singularity', 'post_mortal_civilization', 'void_communion', 'recursive_simulation'
@@ -30,7 +31,7 @@ export class CivilizationPaths {
             ps.successionAtChoice = 0;
         return ps;
     }
-    static displayName(id) { return DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
+    static displayName(id) { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
     static affinity(civ, id) { return PATH_IDS.includes(id) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
     static ranked(civ, limit = 10, excludeDominant = false) {
         const dominant = this.ensure(civ).dominantPath;
@@ -71,7 +72,8 @@ export class CivilizationPaths {
         return ids.map(id => {
             const score = this.affinity(civ, id);
             const delta = ps.recentDeltas[id] ?? 0;
-            const label = delta < 0 ? 'declining' : score >= 4 ? 'strong' : score >= 2 ? 'rising' : score >= 1 ? 'emerging' : 'faint';
+            const words = text().reports.lore.tendencies;
+            const label = delta < 0 ? words.declining : score >= 4 ? words.strong : score >= 2 ? words.rising : score >= 1 ? words.emerging : words.faint;
             return { id, name: this.displayName(id), label };
         });
     }

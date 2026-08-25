@@ -1,4 +1,5 @@
 import { clampStats } from './effects.js';
+import { fill, text as catalog } from '../data/i18n.js';
 import { SAVE_VERSION, createCivilizationTemplate, createNewState, eraForYears } from './rules.js';
 import { validRunTrace } from './run-report.js';
 import { normalizeTutorialState } from './tutorial.js';
@@ -273,7 +274,7 @@ export function migrateSaveState(input) {
     if (input === null || input === undefined)
         return { state: null, report: emptyReport('empty', 0, '') };
     if (!isPlainObject(input) || !(isPlainObject(input.machine) || isPlainObject(input.meta))) {
-        return { state: null, report: emptyReport('unreadable', 0, 'Save could not be read. The original was kept as a backup and a new Machine was started.') };
+        return { state: null, report: emptyReport('unreadable', 0, catalog().reports.saveMigration.unreadable) };
     }
     const declared = typeof input.saveVersion === 'number' && Number.isFinite(input.saveVersion) ? Math.trunc(input.saveVersion) : 0;
     // A payload that looks like a state but declares no version is treated as the oldest supported
@@ -307,13 +308,14 @@ export function migrateSaveState(input) {
         : fromVersion !== SAVE_VERSION || declared < 1
             ? 'migrated'
             : log.count > 0 || runDropped ? 'repaired' : 'current';
-    const runNote = runDropped ? ' The in-progress civilization could not be restored.' : '';
+    const copy = catalog().reports.saveMigration;
+    const runNote = runDropped ? copy.runDroppedSuffix : '';
     const notice = status === 'ahead'
-        ? `Save was written by a newer build (v${fromVersion}). Loaded in compatibility mode; the original is kept as a backup.${runNote}`
+        ? fill(copy.newerBuild, { fromVersion, runNote })
         : status === 'migrated'
-            ? `Save migrated from v${fromVersion} to v${SAVE_VERSION}. Progress preserved.${runNote}`
+            ? fill(copy.migrated, { fromVersion, toVersion: SAVE_VERSION, runNote })
             : status === 'repaired'
-                ? `Save repaired: ${log.count} field${log.count === 1 ? '' : 's'} restored to defaults.${runNote}`
+                ? fill(log.count === 1 ? copy.repairedOne : copy.repairedMany, { count: log.count, runNote })
                 : '';
     return {
         state,
@@ -334,7 +336,7 @@ export function parseSaveText(text) {
         parsed = JSON.parse(text);
     }
     catch {
-        return { state: null, report: emptyReport('unreadable', 0, 'Save could not be read. The original was kept as a backup and a new Machine was started.') };
+        return { state: null, report: emptyReport('unreadable', 0, catalog().reports.saveMigration.unreadable) };
     }
     return migrateSaveState(parsed);
 }

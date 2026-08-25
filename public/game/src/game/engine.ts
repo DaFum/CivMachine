@@ -1,6 +1,27 @@
 import { applyEffects, clampStats } from "./effects.js";
 import { CONTENT } from "../data/content.generated.js";
 import {
+  activeLocale,
+  directiveCopy,
+  endgameStateLabel,
+  eraName,
+  eventCopy,
+  fill,
+  harvestGradeLabel,
+  interventionCopy,
+  matrixCopy,
+  mutationCopy,
+  resourceName,
+  objectiveCopy,
+  isLocale,
+  setActiveLocale,
+  text,
+  traitCopy,
+  upgradeCopy,
+  type Locale,
+  type LocalizedEvent,
+} from "../data/i18n.js";
+import {
   applyEraCeiling,
   applyInterventionCopy,
 } from "../data/intervention-copy.js";
@@ -117,26 +138,48 @@ import type {
   VictoryRecord,
 } from "./types.js";
 
+// The era identifiers, in era order. They double as the catalog keys (lowercased) and as the label
+// of last resort, which is why they stay a plain constant while everything read on screen goes
+// through `eraLabel` -- a constant filled at import time would keep the language the page booted in.
 export const ERA_NAMES = [
   "EMERGENCE",
   "EXPANSION",
   "TRANSCENDENCE",
   "APOTHEOSIS",
 ];
-export const DRAMA_PHASE_LABELS = [
-  "Emergence",
-  "Expansion",
-  "Division",
-  "Transformation",
-  "Crisis",
-];
-export const RESOURCE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
-  causal_mass: "Causal Mass",
-  cognition: "Cognition",
-  paradox: "Paradox",
-  existence: "Existence",
+const DRAMA_PHASE_IDS = [
+  "emergence",
+  "expansion",
+  "division",
+  "transformation",
+  "crisis",
+] as const;
+// A currency is a resource key, and a resource has a name in the catalog. The humanized key is the
+// fallback only -- it is a structural id, and an id is not something to print at a player.
+export const currencyName = (currency: string): string =>
+  resourceName(currency) ?? String(currency).replaceAll("_", " ");
+export const eraLabel = (era: number): string => {
+  const id = ERA_NAMES[era];
+  return id ? (eraName(id.toLowerCase()) ?? id).toUpperCase() : "";
+};
+const dramaPhaseLabels = (): string[] => {
+  const phases = text().reports.runReport.dramaPhases;
+  return DRAMA_PHASE_IDS.map((id) => phases[id]);
+};
+const resourceLabels = (): Readonly<Record<string, string>> => {
+  const names = text().ui.viewModel.resources;
+  return {
+    causal_mass: names.causal_mass,
+    cognition: names.cognition,
+    paradox: names.paradox,
+    existence: names.existence,
+  };
 };
 const SAVE_KEY = "reality_consumption_engine_browser_save_v2";
+// The chosen language is a device preference, not run state, so it gets its own key: it has to be
+// readable *before* the save is parsed -- otherwise the migration notice comes out in the wrong
+// language -- and erasing a save must not also erase the language the player reads the game in.
+const LOCALE_KEY = "reality_consumption_engine_locale";
 // A save that had to be migrated, repaired or refused is copied here verbatim before anything
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
@@ -215,6 +258,7 @@ export class GameEngine {
     this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
     this.storage = options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave = options.autosave ?? true;
+    this.restoreLocale();
     this.state = this.load() ?? createNewState();
     this.state.tutorial = normalizeTutorialState(this.state.tutorial);
     this.state.help = { version: 1, explain: Boolean(this.state.help?.explain) };
@@ -235,6 +279,36 @@ export class GameEngine {
     // migration -- and the backup taken above is what the old bytes are preserved in anyway.
     const migration = this.saveMigration;
     if (migration && migration.status !== "current" && migration.status !== "empty") this.save();
+  }
+  // --- Language ---------------------------------------------------------------------------------
+  // The catalog itself is stateless; `data/i18n.ts` holds the one mutable thing about it. The engine
+  // owns the preference because it owns the storage and the change notification, and because a
+  // switch has to reach every surface at once -- which is one `emit()`.
+  private restoreLocale() {
+    let stored: string | null = null;
+    try {
+      stored = this.storage?.getItem(LOCALE_KEY) ?? null;
+    } catch {
+      return;
+    }
+    if (isLocale(stored)) setActiveLocale(stored);
+  }
+  locale(): Locale {
+    return activeLocale();
+  }
+  setLocale(next: string): boolean {
+    if (!isLocale(next) || !setActiveLocale(next)) return false;
+    // A rejected preference write is not worth failing the switch over: the language is already
+    // applied in memory and the player sees it, it just will not survive a reload.
+    if (this.autosave) {
+      try {
+        this.storage.setItem(LOCALE_KEY, next);
+      } catch {
+        // Private-mode storage, or a full quota. The switch still holds for this session.
+      }
+    }
+    this.emit();
+    return true;
   }
   onChange(fn: () => void) {
     this.listeners.add(fn);
@@ -281,7 +355,7 @@ export class GameEngine {
       this.storage.setItem(SAVE_KEY, JSON.stringify(this.state));
       this.saveFailed = false;
     } catch {
-      if (!this.saveFailed) this.post("Save failed: browser storage rejected the write. Progress is only in memory.");
+      if (!this.saveFailed) this.post(text().reports.engine.saveFailed);
       this.saveFailed = true;
     }
   }
@@ -330,7 +404,7 @@ export class GameEngine {
     Progression.refresh(this.state, this.messages);
     if (this.state.phase === "machine" && this.state.machine.runBuild.nextCivilizationSeed === 0)
       this.prepareNextRun(0, false);
-    this.post("Backup save restored.");
+    this.post(text().reports.engine.backupSaveRestored);
     // The backup gets the same account of what the loader had to do as the live slot does: it can
     // itself be an older or damaged payload, and `messages` was just cleared.
     if (report.notice) this.post(report.notice);
@@ -356,7 +430,7 @@ export class GameEngine {
     this.prepareNextRun(0, false);
     // After the reset, not inside the catch: the reset clears `messages`, so a notice posted earlier
     // would be erased along with the log it was meant to appear in.
-    if (eraseFailed) this.post("Erase failed: browser storage rejected the removal. The old save may return on reload.");
+    if (eraseFailed) this.post(text().reports.engine.eraseFailed);
     this.save();
     this.emit();
   }
@@ -411,15 +485,54 @@ export class GameEngine {
       ? tacticalAvailability(civ, id)
       : {
           enabled: false,
-          reason: "Start a civilization first.",
+          reason: text().reports.engine.startCivilizationFirst,
           cost: TACTICAL_ACTIONS[id].cost,
         };
   }
+  // Every consumer of an intervention -- the history line, the view model, the world renderer --
+  // goes through here, so localizing the copy once at the lookup is what makes an intervention read
+  // in the player's language everywhere it is shown. Only `title`, `body` and the per-choice copy are
+  // swapped: effects, flags, follow-ups and era ceilings are rules, and rules are not translated.
   eventById(id: string) {
-    return this.events.find((e) => e.id === id) ?? null;
+    const event = this.events.find((e) => e.id === id) ?? null;
+    return event ? this.localizeEvent(event) : null;
+  }
+  private localizeEvent(event: any) {
+    const copy: LocalizedEvent | undefined = eventCopy(String(event.id));
+    if (!copy) return event;
+    return {
+      ...event,
+      title: copy.title,
+      body: copy.body,
+      choices: (event.choices ?? []).map((choice: any, index: number) => {
+        const localized = copy.choices[index];
+        if (!localized) return choice;
+        return {
+          ...choice,
+          label: localized.label,
+          prediction: localized.prediction,
+          // A choice without path history in the source must not gain one: `history` is only ever
+          // present in the catalog where the source already had a `path_history` to translate.
+          ...(choice.path_history && localized.history ? { path_history: localized.history } : {}),
+        };
+      }),
+    };
   }
   traitById(id: string) {
-    return this.traitsMap.get(id) ?? null;
+    const trait = this.traitsMap.get(id);
+    if (!trait) return null;
+    const copy = traitCopy(id);
+    return copy ? { ...trait, name: copy.name, description: copy.description } : trait;
+  }
+  private traitName(id: string) {
+    return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
+  }
+  private upgradeName(layer: Layer, definition: any) {
+    return upgradeCopy(String(definition.id))?.name ?? definition.name;
+  }
+  private objectiveTitle(directiveId: string) {
+    const objective = objectiveForDirective(directiveId);
+    return objective ? (objectiveCopy(String(directiveId))?.title ?? objective.title) : "";
   }
   upgradeById(layer: Layer, id: string) {
     return this.catalog(layer).find((u: any) => u.id === id) ?? null;
@@ -481,15 +594,26 @@ export class GameEngine {
     this.spendCurrency(String(d.currency), cost);
     this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
     this.post(
-      `Modification authorized: ${d.name} level ${this.levels(layer)[id]}.`,
+      fill(text().reports.engine.modificationAuthorized, {
+        name: this.upgradeName(layer, d),
+        level: this.levels(layer)[id],
+      }),
     );
     if (layer === "axiom") this.refreshConvergenceMilestones();
     this.save();
     this.emit();
     return true;
   }
+  // The catalog itself stays canonical -- cost growth, currency and max level are rules -- so the
+  // localized name and description are put on the entry the panel renders, not on the definition the
+  // economy reads.
   visibleUpgradeEntries(layer: Layer) {
-    return visibleUpgradeEntries(this.state, layer, this.catalog(layer));
+    return visibleUpgradeEntries(this.state, layer, this.catalog(layer)).map((entry) => {
+      const copy = upgradeCopy(String(entry.definition.id));
+      return copy
+        ? { ...entry, definition: { ...entry.definition, name: copy.name, description: copy.description } }
+        : entry;
+    });
   }
   visibleResources() {
     return Progression.visibleResourceKeys(this.state);
@@ -526,7 +650,7 @@ export class GameEngine {
     if (!d) return false;
     r.selectedDirective = id;
     r.directiveLocked = true;
-    this.post(`DIRECTIVE LOCKED FOR THE NEXT CIVILIZATION: ${d.name}`);
+    this.post(fill(text().reports.engine.directiveLocked, { name: directiveCopy(String(d.id))?.name ?? d.name }));
     this.save();
     this.emit();
     return true;
@@ -544,7 +668,7 @@ export class GameEngine {
     r.selectedBreedingMatrix = id;
     r.matrixLocked = true;
     r.previewTraitIds = this.buildTraitSelection(r.nextCivilizationSeed).ids;
-    this.post(`BREEDING MATRIX LOCKED FOR THIS UNIVERSE: ${d.name}`);
+    this.post(fill(text().reports.engine.breedingMatrixLocked, { name: matrixCopy(String(d.id))?.name ?? d.name }));
     this.save();
     this.emit();
     return true;
@@ -693,8 +817,7 @@ export class GameEngine {
       run.directiveOfferIds.length &&
       !run.selectedDirective
     ) {
-      this.lastActionFailure =
-        "Select one Directive before starting the Civilization.";
+      this.lastActionFailure = text().reports.engine.selectDirectiveFirst;
       this.emit();
       return false;
     }
@@ -747,7 +870,10 @@ export class GameEngine {
     this.state.machine.activeMutations = [];
     this.appendHistory(
       civ,
-      `YEAR ${Math.trunc(civ.years)}: Cultivation begins. Traits: ${civ.traits.map((id) => this.traitById(id)?.name ?? id).join(", ")}`,
+      fill(text().reports.engine.cultivationBeginsHistory, {
+        year: Math.trunc(civ.years),
+        traits: civ.traits.map((id) => this.traitName(id)).join(", "),
+      }),
     );
     this.state.civilization = civ;
     this.state.phase = "civilization";
@@ -756,7 +882,7 @@ export class GameEngine {
     // wherever the first periodic sample happened to land.
     recordRunTrace(civ);
     this.observe("run_started");
-    this.post(`Cultivation link established for civilization seed ${seed}.`);
+    this.post(fill(text().reports.engine.cultivationLinkEstablished, { seed }));
     this.save();
     this.emit();
     return true;
@@ -782,13 +908,15 @@ export class GameEngine {
       const thresholdId = pressure.queuedCrises.at(-1)!;
       this.worldImpulse = buildDecisionFeedback(
         ++this.feedbackSequence,
-        { id: thresholdId, title: "Entropy Threshold Breach" },
-        { label: "Containment fracture detected" },
+        { id: thresholdId, title: text().reports.engine.entropyThresholdEventTitle },
+        { label: text().reports.engine.entropyThresholdChoiceLabel },
         pressureBefore,
         captureDecisionSnapshot(civ),
       );
       this.post(
-        `ENTROPY THRESHOLD: ${Math.trunc(civ.tactical.entropy)} // containment crisis queued.`,
+        fill(text().reports.engine.entropyThreshold, {
+          entropy: Math.trunc(civ.tactical.entropy),
+        }),
       );
       this.save();
     }
@@ -951,27 +1079,43 @@ export class GameEngine {
       const usesLeft = Math.max(0, definition.maxUses - uses);
       let enabled = true,
         reason = "";
+      const copy = interventionCopy(String(definition.id));
       if (!civ) {
         enabled = false;
-        reason = "Start a civilization first.";
+        reason = text().reports.engine.startCivilizationFirst;
       } else if (this.machineInsight() < definition.insight) {
         enabled = false;
-        reason = `Requires Machine Insight ${definition.insight}.`;
+        reason = fill(text().reports.engine.requiresMachineInsight, { amount: definition.insight });
       } else if (usesLeft <= 0) {
         enabled = false;
-        reason = `${definition.title} is exhausted for this civilization.`;
+        reason = fill(text().reports.engine.interventionExhausted, { title: copy?.title ?? definition.title });
       } else if (this.currencyAmount(definition.currency) < cost) {
         enabled = false;
-        reason = `Requires ${cost} ${definition.currency.replaceAll("_", " ")}.`;
+        reason = fill(text().reports.engine.requiresCurrency, {
+          cost,
+          currency: currencyName(definition.currency),
+        });
       }
-      return { ...definition, cost, uses, usesLeft, enabled, reason };
+      // Title, label and summary are what the reserve rail prints, so the localized copy replaces
+      // the catalog's English on the way out rather than being looked up again in the UI.
+      return {
+        ...definition,
+        title: copy?.title ?? definition.title,
+        label: copy?.label ?? definition.label,
+        summary: copy?.summary ?? definition.summary,
+        cost,
+        uses,
+        usesLeft,
+        enabled,
+        reason,
+      };
     });
   }
   useRunIntervention(id: string) {
     const civ = this.state.civilization;
     const view = this.runInterventions().find((entry) => entry.id === id);
     if (!civ || !view) {
-      this.lastActionFailure = "Unknown machine intervention.";
+      this.lastActionFailure = text().reports.engine.unknownMachineIntervention;
       this.emit();
       return false;
     }
@@ -983,14 +1127,14 @@ export class GameEngine {
     const definition = runInterventionById(id)!;
     const before = captureDecisionSnapshot(civ);
     this.spendCurrency(definition.currency, view.cost);
-    const label = applyRunIntervention(civ, definition);
+    const label = applyRunIntervention(civ, { ...definition, label: view.label });
     const newEra = eraForYears(civ.years);
     if (newEra !== civ.era) this.enterEra(civ, newEra);
     clampStats(civ);
     this.lastActionFailure = "";
     const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
-      { id: `reserve:${id}`, title: definition.title },
+      { id: `reserve:${id}`, title: view.title },
       { label },
       before,
       captureDecisionSnapshot(civ),
@@ -998,10 +1142,14 @@ export class GameEngine {
     this.publishCompletedDecision(civ, feedback);
     this.appendHistory(
       civ,
-      `YEAR ${Math.trunc(civ.years)}: Machine reserve -> ${label}`,
+      fill(text().reports.engine.machineReserveHistory, { year: Math.trunc(civ.years), label }),
     );
     this.post(
-      `MACHINE RESERVE COMMITTED: ${definition.title} for ${view.cost} ${definition.currency.replaceAll("_", " ")}.`,
+      fill(text().reports.engine.machineReserveCommitted, {
+        title: view.title,
+        cost: view.cost,
+        currency: currencyName(definition.currency),
+      }),
     );
     this.save();
     this.emit();
@@ -1010,7 +1158,7 @@ export class GameEngine {
   useTacticalAction(id: TacticalActionId) {
     const civ = this.state.civilization;
     if (!civ) {
-      this.lastActionFailure = "Start a civilization first.";
+      this.lastActionFailure = text().reports.engine.startCivilizationFirst;
       this.emit();
       return false;
     }
@@ -1023,7 +1171,7 @@ export class GameEngine {
     const before = captureDecisionSnapshot(civ);
     const outcome = applyTacticalAction(civ, id, this.runtimeBonuses());
     if (!outcome) {
-      this.lastActionFailure = "The tactical action could not be resolved.";
+      this.lastActionFailure = text().reports.engine.tacticalActionFailed;
       this.emit();
       return false;
     }
@@ -1033,7 +1181,9 @@ export class GameEngine {
     if (dominant) {
       this.recordDominantPath(dominant);
       this.post(
-        `DOMINANT CIVILIZATION PATH: ${CivilizationPaths.displayName(dominant).toUpperCase()}`,
+        fill(text().reports.engine.dominantPathPost, {
+          pathName: CivilizationPaths.displayName(dominant).toUpperCase(),
+        }),
       );
     }
     this.lastActionFailure = "";
@@ -1048,7 +1198,10 @@ export class GameEngine {
     this.observe("tactical_used");
     this.appendHistory(
       civ,
-      `YEAR ${Math.trunc(civ.years)}: Tactical action -> ${outcome.label}`,
+      fill(text().reports.engine.tacticalActionHistory, {
+        year: Math.trunc(civ.years),
+        label: outcome.label,
+      }),
     );
     if (civ.stats.stability <= 0) {
       this.harvest(true, "collapse");
@@ -1082,20 +1235,37 @@ export class GameEngine {
       );
       const succeeded = CivilizationPaths.ensure(civ).successions > 0;
       const pathName = CivilizationPaths.displayName(pr.newDominantPath);
+      const reports = text().reports.engine;
       this.appendHistory(
         civ,
-        `YEAR ${Math.trunc(civ.years)}: ${pathName} ${succeeded ? "succeeded the previous dominant civilization path" : "became the dominant civilization path"}.`,
+        fill(succeeded ? reports.pathSuccessionHistory : reports.dominantPathHistory, {
+          year: Math.trunc(civ.years),
+          pathName,
+        }),
       );
       this.post(
-        `${succeeded ? "PATH SUCCESSION" : "DOMINANT CIVILIZATION PATH"}: ${pathName.toUpperCase()}`,
+        fill(succeeded ? reports.pathSuccessionPost : reports.dominantPathPost, {
+          pathName: pathName.toUpperCase(),
+        }),
       );
     }
     if (pr.history)
-      this.appendHistory(civ, `YEAR ${Math.trunc(civ.years)}: ${pr.history}`);
+      this.appendHistory(
+        civ,
+        fill(text().reports.engine.eventPathHistory, {
+          year: Math.trunc(civ.years),
+          history: pr.history,
+        }),
+      );
     if (pr.endgameState)
       this.appendHistory(
         civ,
-        `YEAR ${Math.trunc(civ.years)}: Civilization reached path end-state ${pr.endgameState.replace("endgame_", "").replaceAll("_", " ")}.`,
+        fill(text().reports.engine.pathEndState, {
+          year: Math.trunc(civ.years),
+          endState:
+            endgameStateLabel(pr.endgameState) ??
+            pr.endgameState.replace("endgame_", "").replaceAll("_", " "),
+        }),
       );
     civ.eventCounts[event.id] = (civ.eventCounts[event.id] ?? 0) + 1;
     civ.eventChoices++;
@@ -1104,7 +1274,11 @@ export class GameEngine {
     if (choice.follow_up) civ.scheduledEvents.push(choice.follow_up);
     this.appendHistory(
       civ,
-      `YEAR ${Math.trunc(civ.years)}: ${event.title} -> ${choice.label}`,
+      fill(text().reports.engine.choiceHistory, {
+        year: Math.trunc(civ.years),
+        eventTitle: event.title,
+        choiceLabel: choice.label,
+      }),
     );
     civ.pendingEvent = "";
     civ.tactical.probedEventId = "";
@@ -1118,7 +1292,9 @@ export class GameEngine {
     const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
       event,
-      choice,
+      // The index travels with the choice so the card can name it again after a locale switch: the
+      // choice itself is one of the event's own, and only its position identifies it.
+      { ...choice, index },
       before,
       captureDecisionSnapshot(civ),
     );
@@ -1142,7 +1318,7 @@ export class GameEngine {
     civ.pendingEvent = "";
     civ.tactical.probedEventId = "";
     this.presentNextEvent(civ);
-    this.post(`Reality rewound at a cost of ${cost} Paradox.`);
+    this.post(fill(text().reports.engine.realityRewound, { cost }));
     this.save();
     this.emit();
     return true;
@@ -1176,14 +1352,14 @@ export class GameEngine {
       reason,
       chaotic,
       details,
-      eraNames: ERA_NAMES,
-      dramaLabels: DRAMA_PHASE_LABELS,
-      resourceLabels: RESOURCE_DISPLAY_NAMES,
-      traitNames: civ.traits.map((id) => this.traitById(id)?.name ?? id),
+      eraNames: ERA_NAMES.map((_, era) => eraLabel(era)),
+      dramaLabels: dramaPhaseLabels(),
+      resourceLabels: resourceLabels(),
+      traitNames: civ.traits.map((id) => this.traitName(id)),
       pathName: civ.pathState.dominantPath
         ? CivilizationPaths.displayName(civ.pathState.dominantPath)
         : "",
-      objectiveTitle: objectiveForDirective(civ.directiveId)?.title ?? "",
+      objectiveTitle: this.objectiveTitle(civ.directiveId),
     };
     const report = buildRunReport(civ, context);
     this.state.machine.lastRunReport = report;
@@ -1250,18 +1426,30 @@ export class GameEngine {
       false,
     );
     this.post(
-      `${chaotic ? "CHAOTIC" : "CONTROLLED"} ${details.grade.toUpperCase()} HARVEST complete. +${details.credits} Cultivation Credits.`,
+      fill(text().reports.engine.harvestComplete, {
+        mode: chaotic ? text().ui.app.chaotic : text().ui.app.controlled,
+        grade: (harvestGradeLabel(String(details.grade)) ?? String(details.grade)).toUpperCase(),
+        credits: details.credits,
+      }),
     );
     if (details.objectiveCompleted)
-      this.post(
-        "DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.",
-      );
+      this.post(text().reports.engine.directiveObjectiveComplete);
     this.post(
-      `Yield: Causal ${rewards.causal_mass}, Cognition ${rewards.cognition}, Paradox ${rewards.paradox}, Existence ${rewards.existence}.`,
+      fill(text().reports.engine.yield, {
+        causal: rewards.causal_mass,
+        cognition: rewards.cognition,
+        paradox: rewards.paradox,
+        existence: rewards.existence,
+      }),
     );
     if (mutationId)
       this.post(
-        `Machine mutation acquired: ${this.mutationsMap.get(mutationId)?.name ?? mutationId}.`,
+        fill(text().reports.engine.mutationAcquired, {
+          name:
+            mutationCopy(mutationId)?.name ??
+            this.mutationsMap.get(mutationId)?.name ??
+            mutationId,
+        }),
       );
     this.save();
     this.emit();
@@ -1314,11 +1502,14 @@ export class GameEngine {
       this.state.meta.victories.unshift(record);
       this.state.meta.victories = this.state.meta.victories.slice(0, 5);
       this.post(
-        `GREAT CONVERGENCE ${record.convergence} ACHIEVED at Cultivation Depth ${details.depth.toFixed(1)}.`,
+        fill(text().reports.engine.convergenceAchieved, {
+          convergence: record.convergence,
+          depth: details.depth.toFixed(1),
+        }),
       );
     } else
       this.post(
-        `CONVERGENCE FAILED at Cultivation Depth ${details.depth.toFixed(1)}. Authorization retained.`,
+        fill(text().reports.engine.convergenceFailed, { depth: details.depth.toFixed(1) }),
       );
     this.state.civilization = null;
     this.state.simulationSpeed = 1;
@@ -1358,7 +1549,7 @@ export class GameEngine {
     this.state.meta.universesThisMultiverse++;
     for (const m of Progression.recordUniverse(this.state)) this.post(m);
     this.resetMachineLayer();
-    this.post(`UNIVERSE CONSUMED. ${award} Universal Residue recovered.`);
+    this.post(fill(text().reports.engine.universeConsumed, { award }));
     this.refreshConvergenceMilestones();
     this.save();
     this.emit();
@@ -1387,7 +1578,7 @@ export class GameEngine {
     this.state.meta.universeUpgradeLevels = {};
     this.state.meta.universesThisMultiverse = 0;
     this.resetMachineLayer();
-    this.post(`MULTIVERSE COLLAPSED. ${award} Axiom units extracted.`);
+    this.post(fill(text().reports.engine.multiverseCollapsed, { award }));
     this.refreshConvergenceMilestones();
     this.save();
     this.emit();
@@ -1430,14 +1621,12 @@ export class GameEngine {
   startConvergenceRun(requestedSeed = 0) {
     if (this.state.phase === "machine") this.refreshConvergenceMilestones();
     if (this.state.phase !== "machine" || !this.convergenceUnlocked()) {
-      this.lastActionFailure = "The Great Convergence is not authorized.";
+      this.lastActionFailure = text().reports.engine.convergenceNotAuthorized;
       this.emit();
       return false;
     }
     if (!this.startCivilization(requestedSeed, true)) return false;
-    this.post(
-      "GREAT CONVERGENCE INITIATED. Terminal cultivation begins in APOTHEOSIS.",
-    );
+    this.post(text().reports.engine.convergenceInitiated);
     this.save();
     this.emit();
     return true;
@@ -1475,9 +1664,7 @@ export class GameEngine {
     if (this.state.tutorial.status !== "active") return false;
     this.state.tutorial.status = "skipped";
     this.state.tutorial.stepId = "";
-    this.post(
-      "Guided run dismissed. FIELD MANUAL and EXPLAIN stay available; REPLAY GUIDED RUN restores it.",
-    );
+    this.post(text().reports.engine.guidedRunDismissed);
     this.save();
     this.emit();
     return true;
@@ -1489,7 +1676,7 @@ export class GameEngine {
     this.state.tutorial = newTutorialState("active");
     this.state.tutorial.observed = liveTutorialFacts(this.state.civilization);
     advanceTutorial(this.state.tutorial);
-    this.post("Guided run restarted.");
+    this.post(text().reports.engine.guidedRunRestarted);
     this.save();
     this.emit();
     return true;
@@ -1735,11 +1922,12 @@ export class GameEngine {
     );
     this.appendHistory(
       civ,
-      `YEAR ${Math.trunc(civ.years)}: Civilization enters ${ERA_NAMES[newEra]}.`,
+      fill(text().reports.engine.eraHistory, {
+        year: Math.trunc(civ.years),
+        era: eraLabel(newEra),
+      }),
     );
-    this.post(
-      `Civilization entered ${ERA_NAMES[newEra]}. Control Capacity +1.`,
-    );
+    this.post(fill(text().reports.engine.eraEntered, { era: eraLabel(newEra) }));
   }
   private appendHistory(civ: Civilization, msg: string) {
     civ.history.unshift(msg);

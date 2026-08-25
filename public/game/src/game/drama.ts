@@ -1,4 +1,5 @@
 import type { Civilization, DramaPhase } from './types.js';
+import { dramaPhaseLabel as localizedDramaPhase } from '../data/i18n.js';
 
 const PHASES: ReadonlyArray<DramaPhase> = [
   { id: 0, name: 'emergence', label: 'Emergence' },
@@ -7,6 +8,13 @@ const PHASES: ReadonlyArray<DramaPhase> = [
   { id: 3, name: 'transformation', label: 'Transformation' },
   { id: 4, name: 'crisis', label: 'Crisis' },
 ];
+
+// `label` above is the canonical English; this is what a surface prints. The phase itself stays a
+// plain constant because its `id` is written into every trace sample and its `name` is the catalog
+// key -- only the label is copy.
+export function dramaPhaseLabel(phase: DramaPhase): string {
+  return localizedDramaPhase(phase.name) ?? phase.label;
+}
 
 export function civilizationDramaScore(civ: Civilization): number {
   return civ.development + civ.era * 120 + civ.institutions.length * 30 + civ.eventChoices * 6;

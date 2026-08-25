@@ -1,5 +1,6 @@
 import type { HarvestGrade } from './types.js';
 import type { HarvestUrgency } from './harvest-quality.js';
+import { fill, harvestGradeLabel, text } from '../data/i18n.js';
 
 // The one-line answer to "what is happening and why". It is a priority ladder over the run's live
 // state, not a script: the highest-severity condition that currently holds wins, and every sentence
@@ -55,30 +56,28 @@ export interface CivilizationSituationInput {
 const round = (value: number): string => `${Math.round(Number.isFinite(value) ? value : 0)}`;
 const one = (value: number): string => (Number.isFinite(value) ? value : 0).toFixed(1);
 const two = (value: number): string => (Number.isFinite(value) ? value : 0).toFixed(2);
-const seconds = (value: number): string => (Number.isFinite(value) ? `${Math.max(0, Math.round(value))}s` : 'no limit');
+const seconds = (value: number): string => (Number.isFinite(value) ? `${Math.max(0, Math.round(value))}s` : text().ui.app.noLimit);
 // Credits are counted, so the plural has to agree with the number that was printed, not with a raw
 // input that may not be one.
 const count = (value: number): number => (Number.isFinite(value) ? Math.round(value) : 0);
 
 export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
+  const copy = text().guidance.civilization;
+  // The grade is an id on the way in and a word on the way out, so it is resolved once here rather
+  // than interpolated raw into the three sentences that name it.
+  const grade = harvestGradeLabel(input.grade) ?? input.grade;
   if (input.entropy >= 100) {
-    return {
-      id: 'cascade',
-      severity: 'critical',
-      headline: 'Entropy has cascaded. The run is being taken from you.',
-      cause: `Entropy reached 100, so Stability is now decaying at a fixed fraction of its maximum on top of everything else.`,
-      advice: 'Harvest now. A cascade harvest still pays, at roughly 40% fewer Cultivation Credits than a controlled one.',
-    };
+    return { id: 'cascade', severity: 'critical', ...copy.cascade };
   }
   if (input.stability < 25) {
     return {
       id: 'collapse_imminent',
       severity: 'critical',
-      headline: `Stability is at ${one(input.stability)}. At zero the run ends by itself.`,
-      cause: 'Stability decays continuously, and both Entropy Vent and several interventions charge more of it.',
+      headline: fill(copy.collapse_imminent.headline, { stability: one(input.stability) }),
+      cause: copy.collapse_imminent.cause,
       advice: input.controlCapacity >= 2
-        ? 'Stabilize (1) buys +14 Stability for 2 Control. Otherwise harvest before the collapse chooses for you.'
-        : 'There is not enough Control left to stabilize. Harvest before the collapse chooses for you.',
+        ? copy.collapse_imminent.adviceWithControl
+        : copy.collapse_imminent.adviceWithoutControl,
     };
   }
   // Below the two branches that end the run and above everything else: an open decision freezes the
@@ -88,9 +87,9 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
     return {
       id: 'decision_pending',
       severity: 'watch',
-      headline: `A decision is open: ${input.pendingEventTitle}.`,
-      cause: 'The simulation is paused while an intervention is unresolved — years, Development and Entropy are all frozen.',
-      advice: 'Read the predictions and choose. Probe (3) reveals the risk directions first, for 1 Control.',
+      headline: fill(copy.decision_pending.headline, { eventTitle: input.pendingEventTitle }),
+      cause: copy.decision_pending.cause,
+      advice: copy.decision_pending.advice,
     };
   }
   if (input.terminal) {
@@ -98,110 +97,122 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       ? {
         id: 'convergence_ready',
         severity: 'watch',
-        headline: `Convergence target reached at Depth ${one(input.depth)}.`,
-        cause: `The terminal run needs a controlled harvest at Depth ${one(input.convergenceTargetDepth)} or deeper, and it is there.`,
-        advice: 'Take the controlled harvest. Depth beyond the target adds nothing to the win.',
+        headline: fill(copy.convergence_ready.headline, { depth: one(input.depth) }),
+        cause: fill(copy.convergence_ready.cause, { targetDepth: one(input.convergenceTargetDepth) }),
+        advice: copy.convergence_ready.advice,
       }
       : {
         id: 'convergence_short',
         severity: 'urgent',
-        headline: `Terminal run at Depth ${one(input.depth)} of the ${one(input.convergenceTargetDepth)} it needs.`,
-        cause: 'A terminal run pays no yield and runs at 1.6× Entropy, so its only measure is whether it reaches the target Depth in time.',
-        advice: `${seconds(input.secondsToCascade)} of cascade clock left. Accelerate (2) is the fastest Depth per Control here.`,
+        headline: fill(copy.convergence_short.headline, { depth: one(input.depth), targetDepth: one(input.convergenceTargetDepth) }),
+        cause: copy.convergence_short.cause,
+        advice: fill(copy.convergence_short.advice, { secondsToCascade: seconds(input.secondsToCascade) }),
       };
   }
   if (input.entropy >= 75) {
     return {
       id: 'entropy_critical',
       severity: 'urgent',
-      headline: `Entropy at ${one(input.entropy)} — the cascade is ${seconds(input.secondsToCascade)} away.`,
-      cause: `Entropy rises at ${two(input.entropyRate)}/s, and the rate grows with every year the civilization lives.`,
-      advice: 'Entropy Vent (4) removes 18 for 1 Control and 10 Stability. Otherwise this is the run’s last window.',
+      headline: fill(copy.entropy_critical.headline, { entropy: one(input.entropy), secondsToCascade: seconds(input.secondsToCascade) }),
+      cause: fill(copy.entropy_critical.cause, { entropyRate: two(input.entropyRate) }),
+      advice: copy.entropy_critical.advice,
     };
   }
   if (input.urgency === 'harvest') {
     return {
       id: 'harvest_window',
       severity: 'urgent',
-      headline: `Harvest now — Cultivation Credit ${count(input.credits) + 1} no longer fits in the run.`,
-      cause: `The next credit needs ${seconds(input.secondsToNextCredit)} of Development and the run can only reach ${seconds(input.secondsOfRunLeft)}.`,
-      advice: `A controlled harvest banks ${count(input.credits)} credit${count(input.credits) === 1 ? '' : 's'} at ${input.grade}. Staying trades that for nothing.`,
+      headline: fill(copy.harvest_window.headline, { nextCredit: count(input.credits) + 1 }),
+      cause: fill(copy.harvest_window.cause, {
+        secondsToNextCredit: seconds(input.secondsToNextCredit),
+        secondsOfRunLeft: seconds(input.secondsOfRunLeft),
+      }),
+      advice: fill(count(input.credits) === 1 ? copy.harvest_window.adviceOneCredit : copy.harvest_window.adviceManyCredits,
+        { credits: count(input.credits), grade }),
     };
   }
   if (input.attention > 65) {
     return {
       id: 'cosmic_attention',
       severity: 'urgent',
-      headline: `Cosmic Attention at ${one(input.attention)} — external observers are converging.`,
-      cause: 'Attention rises on its own and every Stabilize and Vent adds more of it.',
-      advice: 'It also raises the Paradox a harvest pays, so this is a reason to stop soon rather than to panic.',
+      headline: fill(copy.cosmic_attention.headline, { attention: one(input.attention) }),
+      cause: copy.cosmic_attention.cause,
+      advice: copy.cosmic_attention.advice,
     };
   }
   if (input.awareness > 65) {
     return {
       id: 'civilization_awareness',
       severity: 'urgent',
-      headline: `Machine Awareness at ${one(input.awareness)} — the civilization is working out that it is farmed.`,
-      cause: 'Awareness rises with Development and with choices that expose the cultivation.',
-      advice: 'It raises the Cognition yield but pulls hostile interventions into the pool. Bank the run before they land.',
+      headline: fill(copy.civilization_awareness.headline, { awareness: one(input.awareness) }),
+      cause: copy.civilization_awareness.cause,
+      advice: copy.civilization_awareness.advice,
     };
   }
   if (input.sanity < 35) {
     return {
       id: 'sanity_failing',
       severity: 'watch',
-      headline: `Collective Sanity at ${one(input.sanity)}.`,
-      cause: 'Sanity falls continuously and faster after choices that spend the population.',
-      advice: 'Low Sanity raises the Paradox yield and darkens the intervention pool. It costs nothing directly — decide whether that trade is one you want.',
+      headline: fill(copy.sanity_failing.headline, { sanity: one(input.sanity) }),
+      cause: copy.sanity_failing.cause,
+      advice: copy.sanity_failing.advice,
     };
   }
   if (input.grade === 'premature') {
-    const missing = input.eventChoices < 3
-      ? `it has resolved ${count(input.eventChoices)} of the 3 interventions a payout needs`
-      : input.era <= 0
-        ? `it is still in ${input.eraName}, and a payout needs Expansion or later`
-        : `Depth is ${one(input.depth)} and Established starts at 1.5`;
     return {
       id: 'premature',
       severity: 'watch',
-      headline: 'This run cannot pay yet.',
-      cause: `Premature grade: ${missing}.`,
-      advice: 'Keep it alive. Accelerate (2) is the fastest route out of Premature, at +200 years for 2 Control.',
+      headline: copy.premature.headline,
+      cause: input.eventChoices < 3
+        ? fill(copy.premature.causeInterventions, { eventChoices: count(input.eventChoices) })
+        : input.era <= 0
+          ? fill(copy.premature.causeEra, { eraName: input.eraName })
+          : fill(copy.premature.causeDepth, { depth: one(input.depth) }),
+      advice: copy.premature.advice,
     };
   }
   if (input.urgency === 'capped') {
     return {
       id: 'credit_cap',
       severity: 'watch',
-      headline: `Cultivation Credits are capped at ${count(input.credits)}.`,
-      cause: 'The credit formula stops at 20 regardless of Depth.',
-      advice: 'Only raw resource yield still grows. Harvest unless a Directive objective is still within reach.',
+      headline: fill(copy.credit_cap.headline, { credits: count(input.credits) }),
+      cause: copy.credit_cap.cause,
+      advice: copy.credit_cap.advice,
     };
   }
   if (input.urgency === 'closing') {
     return {
       id: 'closing',
       severity: 'watch',
-      headline: `Closing — credit ${count(input.credits) + 1} in ${seconds(input.secondsToNextCredit)}, run reaches ${seconds(input.secondsOfRunLeft)}.`,
-      cause: 'The next credit still fits, but only inside the last 30% of the run the current course allows.',
-      advice: 'One Entropy Vent (4) buys the margin back. Without it, plan to harvest at the credit.',
+      headline: fill(copy.closing.headline, {
+        nextCredit: count(input.credits) + 1,
+        secondsToNextCredit: seconds(input.secondsToNextCredit),
+        secondsOfRunLeft: seconds(input.secondsOfRunLeft),
+      }),
+      cause: copy.closing.cause,
+      advice: copy.closing.advice,
     };
   }
   if (input.objectiveTitle && !input.objectiveCompleted) {
     return {
       id: 'objective_open',
       severity: 'calm',
-      headline: `Building — the Directive objective "${input.objectiveTitle}" is still open.`,
-      cause: `Depth ${one(input.depth)} at ${input.grade}, ${seconds(input.secondsToCascade)} of cascade clock, and the objective unmet.`,
-      advice: 'Meeting it multiplies the whole harvest by 1.15 and adds a Cultivation Credit — often worth a band on its own.',
+      headline: fill(copy.objective_open.headline, { objectiveTitle: input.objectiveTitle }),
+      cause: fill(copy.objective_open.cause, {
+        depth: one(input.depth), grade, secondsToCascade: seconds(input.secondsToCascade),
+      }),
+      advice: copy.objective_open.advice,
     };
   }
   return {
     id: 'building',
     severity: 'calm',
-    headline: `Building — Depth ${one(input.depth)} at ${input.grade}, ${round(input.credits)} credit${count(input.credits) === 1 ? '' : 's'} banked.`,
-    cause: `Development is compounding and Entropy is at ${one(input.entropy)}, ${seconds(input.secondsToCascade)} from the cascade.`,
-    advice: `Credit ${count(input.credits) + 1} lands in ${seconds(input.secondsToNextCredit)}. Nothing needs spending yet.`,
+    headline: fill(count(input.credits) === 1 ? copy.building.headlineOneCredit : copy.building.headlineManyCredits,
+      { depth: one(input.depth), grade, credits: round(input.credits) }),
+    cause: fill(copy.building.cause, { entropy: one(input.entropy), secondsToCascade: seconds(input.secondsToCascade) }),
+    advice: fill(copy.building.advice, {
+      nextCredit: count(input.credits) + 1, secondsToNextCredit: seconds(input.secondsToNextCredit),
+    }),
   };
 }
 
@@ -220,65 +231,43 @@ export interface MachineSituationInput {
 }
 
 export function machineSituation(input: MachineSituationInput): SituationReport {
+  const copy = text().guidance.machine;
   if (input.needsDirective) {
-    return {
-      id: 'pick_directive',
-      severity: 'watch',
-      headline: 'The next run needs a Directive.',
-      cause: 'Three offers were drafted deterministically from the next civilization’s seed, and one must be locked in before it starts.',
-      advice: 'Pick the one whose objective matches how you intend to play the run.',
-    };
+    return { id: 'pick_directive', severity: 'watch', ...copy.pick_directive };
   }
   if (input.canConsumeMultiverse) {
-    return {
-      id: 'collapse_multiverse',
-      severity: 'watch',
-      headline: 'The Multiverse can be collapsed.',
-      cause: 'Enough Universes have been consumed to pay out Axioms.',
-      advice: 'Collapsing resets Universes and Machine upgrades but pays a currency nothing below can touch.',
-    };
+    return { id: 'collapse_multiverse', severity: 'watch', ...copy.collapse_multiverse };
   }
   if (input.canConsumeUniverse) {
     return {
       id: 'consume_universe',
       severity: 'watch',
-      headline: `The Universe can be consumed at ${round(input.credits)} Cultivation Credits.`,
-      cause: `${round(input.creditsRequired)} credits is the prestige threshold, and it has been met.`,
-      advice: 'It resets resources and Machine upgrades and pays Universal Residue. Spend anything you were saving first.',
+      headline: fill(copy.consume_universe.headline, { credits: round(input.credits) }),
+      cause: fill(copy.consume_universe.cause, { creditsRequired: round(input.creditsRequired) }),
+      advice: copy.consume_universe.advice,
     };
   }
   if (input.hasReport) {
-    return {
-      id: 'read_report',
-      severity: 'calm',
-      headline: 'The last run is reported above.',
-      cause: 'It states how the run developed, why it stopped, and what its own numbers suggest changing.',
-      advice: 'Spend the harvest on what the report’s lessons name, then start the next civilization.',
-    };
+    return { id: 'read_report', severity: 'calm', ...copy.read_report };
   }
   if (input.affordableUpgrades > 0) {
     return {
       id: 'spend_bank',
       severity: 'calm',
-      headline: `${count(input.affordableUpgrades)} upgrade${count(input.affordableUpgrades) === 1 ? '' : 's'} affordable right now.`,
-      cause: 'Resources do nothing while banked, and a prestige will take them.',
-      advice: 'Containment buys longer runs; the harvest modules buy more out of the same run.',
+      headline: fill(count(input.affordableUpgrades) === 1 ? copy.spend_bank.headlineOneUpgrade : copy.spend_bank.headlineManyUpgrades,
+        { count: count(input.affordableUpgrades) }),
+      cause: copy.spend_bank.cause,
+      advice: copy.spend_bank.advice,
     };
   }
   if (input.runsTotal === 0) {
-    return {
-      id: 'first_run',
-      severity: 'calm',
-      headline: 'Nothing has been cultivated yet.',
-      cause: 'Every resource in the game comes out of a run, and there has not been one.',
-      advice: 'Start a civilization. The first run is meant to be lost — it still pays.',
-    };
+    return { id: 'first_run', severity: 'calm', ...copy.first_run };
   }
   return {
     id: 'start_run',
     severity: 'calm',
-    headline: input.openMilestone ? `Next milestone: ${input.openMilestone}.` : 'The Machine is idle.',
-    cause: input.canStart ? 'Nothing accumulates between runs.' : 'The next run is not ready to start yet.',
-    advice: input.canStart ? 'Start the next civilization.' : 'Resolve what the panel above is asking for.',
+    headline: input.openMilestone ? fill(copy.start_run.headlineMilestone, { milestone: input.openMilestone }) : copy.start_run.headlineIdle,
+    cause: input.canStart ? copy.start_run.causeReady : copy.start_run.causeNotReady,
+    advice: input.canStart ? copy.start_run.adviceReady : copy.start_run.adviceNotReady,
   };
 }

@@ -1,4 +1,5 @@
 import { evaluateMilestones } from './milestones.js';
+import { directiveCopy, fill, matrixCopy, milestoneCopy, resourceName, text, upgradeCopy } from '../data/i18n.js';
 import type { GameState, Layer } from './types.js';
 
 const MACHINE: Record<string,{insight:number;resource?:string}> = {
@@ -23,14 +24,25 @@ export class Progression {
     return true;
   }
   private static announce(state:GameState,id:string,msg:string,out:string[]){ if(state.meta.progression.announcedUnlocks.includes(id))return; state.meta.progression.announcedUnlocks.push(id); out.push(msg); }
-  private static discover(state:GameState,id:string,name:string,out:string[]){ if(this.resourceDiscovered(state,id))return; state.meta.progression.discoveredResources.push(id); this.announce(state,`resource:${id}`,`NEW RESOURCE IDENTIFIED: ${name}`,out); }
-  private static unlockSystem(state:GameState,id:string,name:string,out:string[]){ if(this.systemUnlocked(state,id))return; state.meta.progression.unlockedSystems.push(id); this.announce(state,`system:${id}`,`NEW SYSTEM UNLOCKED: ${name}`,out); }
-  private static refreshKnown(state:GameState,system:string,thresholds:Record<string,number>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; for(const [id,need] of Object.entries(thresholds)) if(this.machineInsight(state)>=need&&!known.includes(id)){known.push(id);this.announce(state,`option:${id}`,`NEW OPTION UNLOCKED: ${id.replaceAll('_',' ').toUpperCase()}`,out);} }
-  static refresh(state:GameState,out:string[]=[]){ const p=state.meta.progression; const insight=this.machineInsight(state); if(p.controlledHarvestsTotal>=2&&insight>=3)this.unlockSystem(state,'directives','DIRECTIVES',out); if(state.machine.civilizationsTotal>=4||insight>=6)this.unlockSystem(state,'universe_prestige','UNIVERSE PRESTIGE',out); if(state.meta.universesTotal>=1){this.unlockSystem(state,'universe_upgrades','UNIVERSE UPGRADES',out);if(insight>=7)this.unlockSystem(state,'breeding_matrices','BREEDING MATRICES',out);} if(state.meta.universesTotal>=2)this.unlockSystem(state,'multiverse_prestige','MULTIVERSE PRESTIGE',out); if(state.meta.multiversesConsumed>=1&&insight>=18)this.unlockSystem(state,'axioms','AXIOMATIC MANIPULATION',out); this.refreshKnown(state,'directives',DIRECTIVE_INSIGHT,'knownDirectives',out); this.refreshKnown(state,'breeding_matrices',MATRIX_INSIGHT,'knownBreedingMatrices',out); this.refreshKnown(state,'axioms',AXIOM_KNOWLEDGE,'knownAxioms',out); return out; }
-  static recordMilestones(state:GameState,convergenceUnlocked:boolean,out:string[]=[]){ const result=evaluateMilestones(state,convergenceUnlocked); for(const milestone of result.newlyCompleted) if(milestone.insight) out.push(`MACHINE INSIGHT +${milestone.insight}: ${milestone.title}`); return this.refresh(state,out); }
+  // `name` is the canonical English fallback; the announcement itself is read from the catalog, so a
+  // resource identified in one language is not re-announced in another -- `announcedUnlocks` records
+  // the id, never the sentence.
+  private static discover(state:GameState,id:string,name:string,out:string[]){ if(this.resourceDiscovered(state,id))return; state.meta.progression.discoveredResources.push(id); this.announce(state,`resource:${id}`,fill(text().reports.progression.newResourceIdentified,{name:resourceName(id)??name}),out); }
+  private static unlockSystem(state:GameState,id:string,out:string[]){ if(this.systemUnlocked(state,id))return; state.meta.progression.unlockedSystems.push(id); this.announce(state,`system:${id}`,fill(text().reports.progression.newSystemUnlocked,{name:this.systemName(id)}),out); }
+  private static systemName(id:string){ const names:Readonly<Record<string,string>>=text().reports.progression.unlockSystemNames; return names[id]??id.replaceAll('_',' ').toUpperCase(); }
+  // An unlocked option is announced by its name, not by its id spelled out: a matrix is a "Neural
+  // Bloom Matrix" and an axiom has a full sentence for a name, neither of which survives being
+  // reconstructed from the key. The humanized id remains the fallback.
+  private static optionName(storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',id:string){
+    const copy=storage==='knownDirectives'?directiveCopy(id):storage==='knownBreedingMatrices'?matrixCopy(id):upgradeCopy(id);
+    return copy?.name??id.replaceAll('_',' ').toUpperCase();
+  }
+  private static refreshKnown(state:GameState,system:string,thresholds:Record<string,number>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; for(const [id,need] of Object.entries(thresholds)) if(this.machineInsight(state)>=need&&!known.includes(id)){known.push(id);this.announce(state,`option:${id}`,fill(text().reports.progression.newOptionUnlocked,{name:this.optionName(storage,id)}),out);} }
+  static refresh(state:GameState,out:string[]=[]){ const p=state.meta.progression; const insight=this.machineInsight(state); if(p.controlledHarvestsTotal>=2&&insight>=3)this.unlockSystem(state,'directives',out); if(state.machine.civilizationsTotal>=4||insight>=6)this.unlockSystem(state,'universe_prestige',out); if(state.meta.universesTotal>=1){this.unlockSystem(state,'universe_upgrades',out);if(insight>=7)this.unlockSystem(state,'breeding_matrices',out);} if(state.meta.universesTotal>=2)this.unlockSystem(state,'multiverse_prestige',out); if(state.meta.multiversesConsumed>=1&&insight>=18)this.unlockSystem(state,'axioms',out); this.refreshKnown(state,'directives',DIRECTIVE_INSIGHT,'knownDirectives',out); this.refreshKnown(state,'breeding_matrices',MATRIX_INSIGHT,'knownBreedingMatrices',out); this.refreshKnown(state,'axioms',AXIOM_KNOWLEDGE,'knownAxioms',out); return out; }
+  static recordMilestones(state:GameState,convergenceUnlocked:boolean,out:string[]=[]){ const result=evaluateMilestones(state,convergenceUnlocked); for(const milestone of result.newlyCompleted) if(milestone.insight) out.push(fill(text().reports.progression.machineInsightAwarded,{amount:milestone.insight,title:milestoneCopy(milestone.id)?.title??milestone.title})); return this.refresh(state,out); }
   static recordCivilizationProgress(state:GameState,civ:{development:number;era:number;stats:{awareness:number}}){ const out:string[]=[]; if(civ.development>=70)this.discover(state,'cognition','Cognition',out); return this.recordMilestones(state,false,out); }
   static recordHarvest(state:GameState,record:any){ const out:string[]=[]; if(record.chaotic) state.meta.progression.chaoticHarvestsTotal++; else {state.meta.progression.controlledHarvestsTotal++; if(state.meta.progression.controlledHarvestsTotal>=1)this.discover(state,'paradox','Paradox',out);} if(Number(record.development??0)>=180)this.discover(state,'paradox','Paradox',out); return this.recordMilestones(state,false,out); }
-  static recordUniverse(state:GameState){const out:string[]=[];if(state.meta.universesTotal>1){state.meta.progression.machineInsight++;out.push('MACHINE INSIGHT +1: Repeated universe consumption');}this.discover(state,'existence','Existence',out);this.discover(state,'universal_residue','Universal Residue',out);return this.recordMilestones(state,false,out);}
+  static recordUniverse(state:GameState){const out:string[]=[];if(state.meta.universesTotal>1){state.meta.progression.machineInsight++;out.push(fill(text().reports.progression.machineInsightAwarded,{amount:1,title:text().reports.progression.repeatedUniverseConsumption}));}this.discover(state,'existence','Existence',out);this.discover(state,'universal_residue','Universal Residue',out);return this.recordMilestones(state,false,out);}
   static recordMultiverse(state:GameState){const out:string[]=[];this.discover(state,'axioms','Axioms',out);return this.recordMilestones(state,false,out);}
   static visibleResourceKeys(state:GameState){return state.meta.progression.discoveredResources.slice();}
 }
@@ -42,12 +54,13 @@ export function progressionRulesForLayer(layer:Layer): Record<string,{insight:nu
 }
 
 export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):string {
-  const rules=progressionRulesForLayer(layer); const rule=rules[id]; if(!rule)return 'Unknown progression requirement.';
-  if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return 'Consume the first Universe.';
-  if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return 'Unlock Axiomatic Manipulation.';
-  const req:string[]=[]; if(Progression.machineInsight(state)<rule.insight) req.push(`Machine Insight ${rule.insight}`);
-  if(rule.resource&&!Progression.resourceDiscovered(state,rule.resource)) req.push(`discover ${rule.resource.replaceAll('_',' ')}`);
-  return req.length?req.join(' and '):'Available after current progression refresh.';
+  const copy=text().reports.progression;
+  const rules=progressionRulesForLayer(layer); const rule=rules[id]; if(!rule)return copy.unknownProgressionRequirement;
+  if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return copy.consumeFirstUniverse;
+  if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return copy.unlockAxiomaticManipulation;
+  const req:string[]=[]; if(Progression.machineInsight(state)<rule.insight) req.push(fill(copy.machineInsightRequirement,{amount:rule.insight}));
+  if(rule.resource&&!Progression.resourceDiscovered(state,rule.resource)) req.push(fill(copy.discoverResource,{resource:resourceName(rule.resource)??rule.resource.replaceAll('_',' ')}));
+  return req.length?req.join(copy.requirementJoiner):copy.availableAfterRefresh;
 }
 
 export function visibleUpgradeEntries(state:GameState,layer:Layer,catalog:readonly any[]):VisibleUpgradeEntry[] {
@@ -60,13 +73,11 @@ export function visibleUpgradeEntries(state:GameState,layer:Layer,catalog:readon
 }
 
 export function nextSystemPreviews(state:GameState):Array<{id:string;name:string;condition:string}> {
+  const systems=text().reports.progression.systems;
   const candidates=[
-    ['directives','Directive System','Complete 2 Controlled Harvests and reach Machine Insight 3.',3],
-    ['universe_prestige','Universe Consumption','Earn 18 Cultivation Credits from qualified harvests.',6],
-    ['universe_upgrades','Universe Upgrades','Consume your first Universe.',7],
-    ['breeding_matrices','Breeding Matrices','Consume your first Universe and reach Machine Insight 7.',7],
-    ['multiverse_prestige','Multiverse Consumption','Consume 2 Universes.',16],
-    ['axioms','Axiom Layer','Consume a Multiverse and reach Machine Insight 18.',18]
+    ['directives',3],['universe_prestige',6],['universe_upgrades',7],
+    ['breeding_matrices',7],['multiverse_prestige',16],['axioms',18],
   ] as const;
-  return candidates.filter(([id])=>!Progression.systemUnlocked(state,id)).sort((a,b)=>a[3]-b[3]).slice(0,2).map(([id,name,condition])=>({id,name,condition}));
+  return candidates.filter(([id])=>!Progression.systemUnlocked(state,id)).sort((a,b)=>a[1]-b[1]).slice(0,2)
+    .map(([id])=>({id,name:systems[id].name,condition:systems[id].condition}));
 }

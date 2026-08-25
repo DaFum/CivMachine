@@ -423,7 +423,9 @@ test('decision feedback reports exact metric, affinity, and addition deltas', ()
   assert.equal(feedback.metrics.find(delta => delta.key === 'awareness')?.delta, 6);
   assert.equal(feedback.metrics.find(delta => delta.key === 'development')?.delta, 12);
   assert.equal(feedback.affinities.find(delta => delta.pathId === 'machine_faith')?.delta, 2);
-  assert.deepEqual(feedback.additions, [{ kind: 'path_flag', label: 'machine faith devout' }]);
+  // The addition is named the way the localization catalog names it -- the decision that set the flag
+  // -- rather than by humanizing its id, and it carries the localized kind beside it.
+  assert.deepEqual(feedback.additions, [{ kind: 'path_flag', id: 'machine_faith_devout', kindLabel: 'path flag', label: 'Recognize the miracle' }]);
 });
 
 test('engine publishes exact feedback after a choice and clears it for the next intervention', () => {

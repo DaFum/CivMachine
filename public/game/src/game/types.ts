@@ -102,12 +102,20 @@ export interface WorldMemoryState {
 
 export interface DecisionAddition {
   kind: 'trait' | 'institution' | 'flag' | 'path_flag';
+  // The id is what the copy is resolved from; `kindLabel` and `label` are that resolution, carried so
+  // the panel prints them side by side without humanizing an id itself. Both are re-resolved when the
+  // feedback is read, so a locale switch reaches a card that is still on screen.
+  id: string;
+  kindLabel: string;
   label: string;
 }
 
 export interface DecisionFeedback {
   sequence: number;
   eventId: string;
+  // Present only for a real intervention, where the choice is one of the event's own -- the synthetic
+  // decisions resolve their label from the prefixed id instead.
+  choiceIndex?: number;
   eventTitle: string;
   choiceLabel: string;
   tone: 'positive' | 'negative' | 'mixed';

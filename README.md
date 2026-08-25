@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.15.0
+# Reality Consumption Engine — App Edition v1.16.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,50 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.16.0 the game speaks German
+
+v1.16.0 makes every player-facing string in the game a catalog lookup, and adds German as the second
+locale. `SAVE_VERSION` stays at 4, no balance number moved, and English output is unchanged — the
+wiring was checked against the existing suite rather than against a re-read of the copy.
+
+`src/data/localization.ts` is the catalog: one entry per locale, keyed by the ids the runtime already
+uses — event, intervention, trait, mutation, upgrade, directive, milestone, help-topic and tutorial
+ids. `src/data/i18n.ts` beside it holds the one mutable thing about it, which locale is active, plus
+the placeholder filler and the by-id readers. Nothing captures a string at import time, so a switch is
+one assignment and one re-render.
+
+- a language selector in the top bar, next to EXPLAIN; the choice is stored under its own
+  `localStorage` key, so erasing a save does not erase the language
+- the locale is read *before* the save is parsed, so a migration notice arrives in the player's
+  language rather than the build's
+- the active locale is a band in `civilizationRenderKey`, because otherwise a switch mid-run would
+  leave the whole panel column in the language the run started in
+- canonical names stay English in both locales — events, interventions, upgrades, directives, paths,
+  traits, mutations and the generated lore word lists — so a seed-generated civilization cannot end up
+  with two names
+- ids stayed ids: effects, costs, anchors, gating facts and CSS hooks are rules, and a localized
+  lookup that misses falls back to the English the source already carries
+
+A few English strings did change, all for the same reason: an id had been standing in for a name.
+
+- decision feedback named a gained flag by humanizing its id (`machine faith devout`) and now names it
+  the way the catalog does, by the decision that set it (`Recognize the miracle`), with the localized
+  kind beside it
+- `NEW OPTION UNLOCKED` spelled the option's key out in capitals; it now uses the option's own name, so
+  a matrix is a `Neural Bloom Matrix` rather than `NEURAL BLOOM` and an axiom keeps its whole name
+- currencies and harvest grades are named from the catalog instead of humanized from their key, so
+  `causal mass` reads `Causal Mass` and `at premature grade` reads `at Premature grade`
+
+Two localization bugs found in review are fixed here too. `fmt` abbreviated large numbers with
+`toFixed`, which always writes a decimal point, so a German player read `1.5K` next to a `1.234`
+further down the same panel; all three branches go through the number locale now. And the *running*
+Directive objective was read straight from the definition while only the drafted offers were
+localized, so its card stayed English.
+
+Decision feedback is written when a decision resolves but read for as long as its card is on screen,
+which can outlive a locale switch. The ids travel with it now and the copy is resolved again on the
+way out, so the card follows the language like every other live surface.
 
 ## v1.15.0 measure, the type floor, and a coach card that stops covering its own lesson
 
