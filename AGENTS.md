@@ -63,7 +63,7 @@ A release is three edits — the version in `package.json`, the version in `publ
 - Game code (`public/game/src`) is deliberately dense: multiple statements per line, minimal
   whitespace. Match the surrounding file rather than reformatting it.
 - Relative imports in game modules need the `.js` extension (`./engine.js`), even from `.ts` files.
-- Player-facing game copy is English; the Next shell's UI strings are German.
+- Player-facing game copy is localized through the game localization catalog; English is the default/source locale and German is the second supported locale. The Next shell's UI strings are German.
 - **TypeScript stays on 6.x** (TS 7 makes lint fail outright) and **ESLint stays on 9.x** (ESLint 10
   breaks the bundled `eslint-plugin-react`). `@types/node` tracks the Node major in use, not latest.
 - Read the matching document in `docs/superpowers/specs/` before changing balance or progression —
