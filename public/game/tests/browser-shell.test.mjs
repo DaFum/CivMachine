@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { LOCALIZATION } from '../dist/data/localization.js';
+
+// Player-facing copy lives in the localization catalog, so a surface assertion has two halves: the
+// module reads the catalog key, and the catalog's English says what the surface is supposed to say.
+// Matching a literal in the source again would only prove nobody had localized it yet.
+const APP = LOCALIZATION.en.ui.app;
+function saysThrough(source, key, expected) {
+  assert.match(source, new RegExp(`\\bt\\.${key}\\b|\\bcopy\\.${key}\\b|ui\\.app\\.${key}\\b`), `the surface must read ui.app.${key} from the catalog`);
+  assert.equal(APP[key], expected, `ui.app.${key} must still read "${expected}"`);
+}
 
 test('browser shell has a persistent world host and DOM HUD surfaces', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
@@ -110,13 +120,14 @@ test('civilization UI renders exact decision deltas in a polite live region', as
   assert.match(app, /feedback\.affinities/);
   assert.match(app, /feedback\.additions/);
   assert.match(app, /replaceIfChanged/);
-  assert.match(app, /No measurable state change\./);
+  saysThrough(app, 'noMeasurableStateChange', 'No measurable state change.');
   assert.match(app, /metricTone/);
 });
 
 test('intervention UI explains locked predictions without hiding unique actions', async () => {
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
-  assert.match(app, /Prediction Core offline/i);
+  saysThrough(app, 'predictionCoreOffline', APP.predictionCoreOffline);
+  assert.match(APP.predictionCoreOffline, /Prediction Core offline/i);
   assert.match(app, /predictionLocked/);
 });
 
@@ -148,7 +159,7 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(app, /control-pips/);
   assert.match(app, /data-action="tactical"/);
   assert.match(app, /aria-describedby/);
-  assert.match(app, /TACTICAL ACTIONS/);
+  saysThrough(app, 'tacticalActions', 'TACTICAL ACTIONS');
   // Both rails are rendered before the first accordion: what the run asks of the player is never
   // behind a summary they have to open mid-run.
   const panels = app.slice(app.indexOf('replaceIfChanged(civPanels,'));
@@ -172,11 +183,12 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(rail, /data-action="harvest"/);
   assert.match(rail, /data-action="chaos"/);
   const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const speedRow='));
-  assert.match(readout, /HARVEST GRADE/);
+  saysThrough(readout, 'harvestGrade', 'HARVEST GRADE');
   assert.match(readout, /data-live="depth"/);
   assert.match(readout, /data-live="harvest-summary"/);
   assert.match(readout, /data-live="harvest-meter"/);
-  assert.match(readout, /NEXT <b>/, 'the next depth band and its yield must be named');
+  assert.match(readout, /t\.nextBand/, 'the next depth band and its yield must be named');
+  assert.match(APP.nextBand, /^NEXT \{grade\} AT DEPTH \{depth\} FOR ×\{multiplier\}$/);
   assert.match(viewModel, /bandProgress/);
   const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
   assert.match(refresh, /\[data-live="harvest-meter"\][\s\S]{0,120}vm\.harvest\.bandProgress/);
@@ -203,8 +215,8 @@ test('the civilization view is ordered by what it asks of the player', async () 
   // the world it is asking about -- ahead of every readout, control and accordion.
   assert.match(panels, /\$\{terminalBanner\}\$\{eventCard\}/);
   assert.ok(at('${eventCard}') < at('run-controls'), 'the intervention comes before the rails');
-  assert.ok(at('run-controls') < at("card('Strategic Overview'"), 'the rails come before the run context');
-  assert.ok(at("card('Strategic Overview'") < at('<details>'), 'reference material comes last');
+  assert.ok(at('run-controls') < at('t.strategicOverview'), 'the rails come before the run context');
+  assert.ok(at('t.strategicOverview') < at('<details>'), 'reference material comes last');
 
   // Simulation speed is a pacing control used mid-run; it belongs with the actions, not behind an
   // accordion that was misleadingly called Intervention Control next to the actual interventions.
@@ -217,7 +229,8 @@ test('the rail names its keyboard shortcuts once for every bound action', async 
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
   const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(app, /class="rail-keys"/);
-  assert.match(app, /KEYS \$\{keys\}/);
+  assert.match(app, /\$\{esc\(copy\.keys\)\} \$\{keys\}/);
+  assert.equal(APP.keys, 'KEYS');
   // The legend is generated from the same action list the buttons use, so a fifth action cannot
   // ship with a stale legend -- and main.ts must actually bind every shortcut it advertises.
   assert.match(app, /const keys=t\.actions\.map/);
@@ -236,18 +249,20 @@ test('keyboard map binds 1, 2, and 3 once while ignoring editable and modified i
 
 test('Machine phase drafts per-run Directives and previews starting traits above start', async () => {
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
-  assert.match(app, /NEXT CIVILIZATION/);
-  assert.match(app, /DIRECTIVE OBJECTIVE/);
-  assert.match(app, /START CIVILIZATION/);
+  saysThrough(app, 'nextCivilization', 'NEXT CIVILIZATION');
+  saysThrough(app, 'directiveObjective', 'DIRECTIVE OBJECTIVE');
+  saysThrough(app, 'startCivilization', 'START CIVILIZATION');
   assert.match(app, /previewTraits/);
-  assert.ok(app.indexOf('previewTraits') < app.indexOf('START CIVILIZATION'));
+  assert.ok(app.indexOf('previewTraits') < app.indexOf('t.startCivilization'));
 });
 
 test('Harvest projection names grade, credits, and Directive objective bonus', async () => {
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
-  assert.match(app, /HARVEST GRADE/);
-  assert.match(app, /Cultivation Credit/);
-  assert.match(app, /OBJECTIVE BONUS/);
+  saysThrough(app, 'harvestGrade', 'HARVEST GRADE');
+  assert.match(APP.harvestSummaryOne, /Cultivation Credit/);
+  assert.match(APP.objectiveBonus, /OBJECTIVE BONUS/);
+  assert.match(app, /t\.harvestSummaryOne|t\.harvestSummaryMany/);
+  assert.match(app, /t\.objectiveBonus\b/);
 });
 
 test('save reset never depends on a native modal dialog', async () => {

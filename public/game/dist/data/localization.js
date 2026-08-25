@@ -16,7 +16,8 @@ const ENGLISH = {
             "footerTech": "v{saveVersion} save · migrating loader · localStorage · No offline progression",
             "pwaName": "Reality Consumption Engine",
             "pwaShortName": "RCE",
-            "pwaDescription": "Cultivate civilizations, shape their histories, and harvest reality."
+            "pwaDescription": "Cultivate civilizations, shape their histories, and harvest reality.",
+            "languageLabel": "Language"
         },
         "app": {
             "resourceCausal": "Causal",
@@ -4711,7 +4712,8 @@ const GERMAN = {
             "footerTech": "Speicherformat v{saveVersion} · migrierender Loader · localStorage · kein Offline-Fortschritt",
             "pwaName": "Reality Consumption Engine",
             "pwaShortName": "RCE",
-            "pwaDescription": "Zivilisationen kultivieren, ihre Geschichte formen und Reality ernten."
+            "pwaDescription": "Zivilisationen kultivieren, ihre Geschichte formen und Reality ernten.",
+            "languageLabel": "Sprache"
         },
         "app": {
             "resourceCausal": "Causal",

@@ -20,6 +20,9 @@ this, so run it before claiming a game change works.
 - **Structural keys must ignore live values.** `civilizationRenderKey` (ui) and `structuralWorldKey`
   (render) decide when DOM and cached world layers rebuild. They may change on state *bands* and
   interventions, never on continuously ticking numbers — otherwise the game rebuilds itself 60×/s.
+  The active locale *is* such a band: it is in `civilizationRenderKey` because every label in the
+  panel column is read from the catalog, and it is deliberately not in `structuralWorldKey` because
+  the canvases draw no text.
 - **Per-frame work must stay cheap.** Ticking must not write `localStorage` or rebuild interactive
   controls every frame.
 - **Explanation is presentation, and presentation is one-directional.** `state.tutorial`, `state.help`,
@@ -29,8 +32,10 @@ this, so run it before claiming a game change works.
 
 ## Saves
 
-`SAVE_KEY` in `game/engine.ts` writes one `localStorage` entry, versioned by `SAVE_VERSION` in
-`game/rules.ts`. A mismatch is **migrated, not discarded** — `game/save-migration.ts` owns that path
+`SAVE_KEY` in `game/engine.ts` writes the save as one `localStorage` entry, versioned by
+`SAVE_VERSION` in `game/rules.ts`. The only other entry the game writes is `LOCALE_KEY` beside it —
+the chosen language is a device preference, not run state, so it survives `deleteSave()` and is read
+*before* the save is parsed, or a migration notice would come out in the wrong language. A mismatch is **migrated, not discarded** — `game/save-migration.ts` owns that path
 and `docs/superpowers/specs/2026-08-20-save-migration-design.md` explains it.
 
 Changing `GameState`'s shape means:
@@ -58,12 +63,38 @@ A release is three edits — the version in `package.json`, the version in `publ
 (`npm version` writes each package and its lockfile separately), and the single explicit assertion in
 `tests/game-release.test.mjs` — after which that test insists on every other surface itself.
 
+## Localization
+
+`data/localization.ts` is the catalog — pure data, one entry per locale, keyed by the stable IDs the
+runtime already uses. `data/i18n.ts` beside it is the only mutable thing about it, and three rules
+keep a locale switch honest:
+
+- **Read through `text()` at the point of use.** No module may capture a catalog string in a
+  module-level constant: a constant is filled once, at import time, and would keep the language the
+  page booted in. A constant that holds an *id* (`ERA_NAMES`, `TACTICAL_ACTIONS`, `MILESTONE_CATALOG`)
+  stays a constant — it is the English source and the fallback, and the copy is read beside it.
+- **Ids are structure, copy is copy.** Effects, costs, anchors, gating facts, CSS hooks and render-key
+  bands are rules and are never translated. A localized lookup that misses falls back to the English
+  the source already carries; localization must never delete copy.
+- **Canonical names stay English in every locale** — events, interventions, upgrades, directives,
+  paths, traits, mutations and the generated lore word lists. `tests/localization.test.mjs` fails the
+  build if a German entry renames one, because a seed-generated civilization must not have two names.
+
+Player-facing strings the engine composes are localized *at write time*, so `machine.lastRunReport`
+and a run's `history` keep the language they were written in. That is deliberate: the record says what
+was said at the time. Only live surfaces re-read the catalog.
+
+`index.html` carries the English shell as its first paint; `main.ts` rewrites every `ui.shell` string
+from the catalog on boot and on each switch, and the localization test fails if the two drift.
+
 ## Conventions
 
 - Game code (`public/game/src`) is deliberately dense: multiple statements per line, minimal
   whitespace. Match the surrounding file rather than reformatting it.
 - Relative imports in game modules need the `.js` extension (`./engine.js`), even from `.ts` files.
-- Player-facing game copy is localized through the game localization catalog; English is the default/source locale and German is the second supported locale. The Next shell's UI strings are German.
+- Player-facing game copy is localized through the game localization catalog; English is the
+  default/source locale and German is the second supported locale. The Next shell's UI strings are
+  German.
 - **TypeScript stays on 6.x** (TS 7 makes lint fail outright) and **ESLint stays on 9.x** (ESLint 10
   breaks the bundled `eslint-plugin-react`). `@types/node` tracks the Node major in use, not latest.
 - Read the matching document in `docs/superpowers/specs/` before changing balance or progression —

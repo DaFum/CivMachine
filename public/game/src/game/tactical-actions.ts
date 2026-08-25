@@ -1,4 +1,5 @@
 import { CivilizationPaths } from './paths.js';
+import { fill, tacticalActionCopy, text } from '../data/i18n.js';
 import type { Civilization, RuntimeBonuses, TacticalActionId } from './types.js';
 
 export const CONTROL_CAPACITY_MAX = 3;
@@ -91,31 +92,44 @@ export function accelerateEntropyCost(era: number): number {
   return ACCELERATE_ENTROPY_BASE + ACCELERATE_ENTROPY_PER_ERA * clamp(Math.trunc(Number(era) || 0), 0, 3);
 }
 
+// `TACTICAL_ACTIONS` above stays the canonical English definition -- costs, shortcuts and path
+// affinities are rules -- and this is the copy a rail prints for one action.
+export function tacticalActionText(id: TacticalActionId): { title: string; label: string; summary: string } {
+  const definition = TACTICAL_ACTIONS[id];
+  const copy = tacticalActionCopy(id);
+  return {
+    title: copy?.title ?? definition.title,
+    label: copy?.label ?? definition.label,
+    summary: copy?.summary ?? definition.summary,
+  };
+}
+
 /** The risk line as it stands for this civilization, so the rail can name the price actually charged. */
 export function tacticalRisk(civ: Civilization, id: TacticalActionId): string {
-  if (id !== 'accelerate') return TACTICAL_ACTIONS[id].risk;
-  return `-4 Stability · +${accelerateEntropyCost(civ.era)} Entropy`;
+  if (id !== 'accelerate') return tacticalActionCopy(id)?.risk ?? TACTICAL_ACTIONS[id].risk;
+  return fill(text().tacticalActions.reasons.accelerateRisk, { entropy: accelerateEntropyCost(civ.era) });
 }
 
 export function tacticalAvailability(civ: Civilization, id: TacticalActionId): TacticalAvailability {
   const definition = TACTICAL_ACTIONS[id];
+  const reasons = text().tacticalActions.reasons;
   if (civ.tactical.controlCapacity < definition.cost) {
-    return { enabled: false, reason: `Requires ${definition.cost} Control.`, cost: definition.cost };
+    return { enabled: false, reason: fill(reasons.requiresControl, { cost: definition.cost }), cost: definition.cost };
   }
   if (id === 'stabilize' && civ.stats.stability >= civ.stats.stabilityMax) {
-    return { enabled: false, reason: 'Reality Stability is already at maximum.', cost: definition.cost };
+    return { enabled: false, reason: reasons.stabilityAtMaximum, cost: definition.cost };
   }
   if (id === 'accelerate' && civ.pendingEvent) {
-    return { enabled: false, reason: 'Resolve the active intervention before accelerating.', cost: definition.cost };
+    return { enabled: false, reason: reasons.resolveInterventionFirst, cost: definition.cost };
   }
   if (id === 'probe' && !civ.pendingEvent) {
-    return { enabled: false, reason: 'Probe requires an active intervention.', cost: definition.cost };
+    return { enabled: false, reason: reasons.probeRequiresIntervention, cost: definition.cost };
   }
   if (id === 'probe' && civ.tactical.probedEventId === civ.pendingEvent) {
-    return { enabled: false, reason: 'This intervention has already been probed.', cost: definition.cost };
+    return { enabled: false, reason: reasons.alreadyProbed, cost: definition.cost };
   }
   if (id === 'vent' && civ.tactical.entropy < VENT_MIN_ENTROPY) {
-    return { enabled: false, reason: 'Entropy is too low to vent.', cost: definition.cost };
+    return { enabled: false, reason: reasons.entropyTooLowToVent, cost: definition.cost };
   }
   return { enabled: true, reason: '', cost: definition.cost };
 }
@@ -158,6 +172,6 @@ export function applyTacticalAction(
     for (const pathId of ACTION_PATHS[id]) pathState.affinity[pathId] = (pathState.affinity[pathId] ?? 0) + 1;
   }
 
-  const definition = TACTICAL_ACTIONS[id];
-  return { id, title: definition.title, label: definition.label };
+  const copy = tacticalActionText(id);
+  return { id, title: copy.title, label: copy.label };
 }

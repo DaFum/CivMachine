@@ -7,6 +7,9 @@ export const SUPPORTED_LOCALES = [
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
+// The English catalog is `as const`, so its own values are literal types. Every consumer wants the
+// widened shape instead -- a locale switch hands out German strings through the same accessor -- so
+// `Catalog` is what `i18n.ts` exposes and what the rest of the game reads.
 type LocalizedShape<T> =
   T extends string ? string :
   T extends readonly unknown[] ? { readonly [K in keyof T]: LocalizedShape<T[K]> } :
@@ -26,7 +29,8 @@ const ENGLISH = {
       "footerTech": "v{saveVersion} save · migrating loader · localStorage · No offline progression",
       "pwaName": "Reality Consumption Engine",
       "pwaShortName": "RCE",
-      "pwaDescription": "Cultivate civilizations, shape their histories, and harvest reality."
+      "pwaDescription": "Cultivate civilizations, shape their histories, and harvest reality.",
+      "languageLabel": "Language"
     },
     "app": {
       "resourceCausal": "Causal",
@@ -4722,7 +4726,8 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "footerTech": "Speicherformat v{saveVersion} · migrierender Loader · localStorage · kein Offline-Fortschritt",
       "pwaName": "Reality Consumption Engine",
       "pwaShortName": "RCE",
-      "pwaDescription": "Zivilisationen kultivieren, ihre Geschichte formen und Reality ernten."
+      "pwaDescription": "Zivilisationen kultivieren, ihre Geschichte formen und Reality ernten.",
+      "languageLabel": "Sprache"
     },
     "app": {
       "resourceCausal": "Causal",
@@ -9406,3 +9411,5 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
 };
 
 export const LOCALIZATION = { en: ENGLISH, de: GERMAN } as const;
+
+export type Catalog = LocalizedShape<typeof ENGLISH>;

@@ -23,6 +23,8 @@
   <link rel="modulepreload" href="./dist/data/apotheosis-events.js">
   <link rel="modulepreload" href="./dist/game/guidance.js">
   <link rel="modulepreload" href="./dist/ui/format.js">
+  <link rel="modulepreload" href="./dist/data/localization.js">
+  <link rel="modulepreload" href="./dist/data/i18n.js">
 </head>
 <body>
   <div class="background-noise"></div>
@@ -30,6 +32,10 @@
     <header class="topbar">
       <div class="brand"><span class="brand-mark">RCE</span><div><b>REALITY CONSUMPTION ENGINE</b><small>BROWSER CULTIVATION NODE</small></div></div>
       <div id="resource-bar" class="resource-bar"></div>
+      <!-- The static copy in this file is the English default and the pre-hydration paint. `main.ts`
+           rewrites every one of these strings from the localization catalog on boot and on every
+           locale change, so a stale label here survives exactly one frame. -->
+      <select id="locale-select" class="icon-button" title="Language" aria-label="Language"></select>
       <button id="explain-toggle" class="icon-button" data-action="explain" aria-pressed="false" title="Explain mode: annotate every panel with what it is for and what it decides." aria-label="Toggle explain mode: annotate every panel with what it is, where it is and why it matters">?</button>
       <button id="reset-save" class="icon-button" title="Reset browser save" aria-label="Reset browser save">⌫</button>
     </header>
@@ -53,7 +59,9 @@
     <!-- The guided run's coach card. It lives outside the phase views so a step can point at either
          of them, and it is never a modal: ignoring it entirely still plays a normal game. -->
     <div id="tutorial-layer" class="tutorial-layer is-hidden"></div>
-    <footer><span>Reality Consumption Engine Browser v1.15.0</span><span>v4 save · migrating loader · localStorage · No offline progression</span></footer>
+    <!-- `data-version` is where `main.ts` reads the shipped version from when it fills the localized
+         footer template; the text beside it is the same string in English, for the first paint. -->
+    <footer><span id="footer-version" data-version="1.16.0">Reality Consumption Engine Browser v1.16.0</span><span id="footer-tech">v4 save · migrating loader · localStorage · No offline progression</span></footer>
   </div>
   <script type="module" src="./dist/main.js"></script>
 </body>

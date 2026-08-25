@@ -102,6 +102,9 @@ export interface WorldMemoryState {
 
 export interface DecisionAddition {
   kind: 'trait' | 'institution' | 'flag' | 'path_flag';
+  // What the addition is called, and what kind of thing it is -- both already localized, because the
+  // feedback panel prints them side by side and neither is an id the UI should be humanizing itself.
+  kindLabel: string;
   label: string;
 }
 

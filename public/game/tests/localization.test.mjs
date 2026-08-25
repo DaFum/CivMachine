@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { DEFAULT_LOCALE, LOCALIZATION, SUPPORTED_LOCALES } from '../dist/data/localization.js';
 
 function kind(value) {
@@ -311,7 +312,8 @@ async function tsFiles(root, prefix = '') {
 
 const AUDITED_SOURCE_FILES = [
   'data/apotheosis-events.ts', 'data/content.generated.ts', 'data/entropy-crises.ts', 'data/event-chains.ts',
-  'data/expanded-interventions.ts', 'data/expanded-path-interventions.ts', 'data/help-topics.ts', 'data/intervention-copy.ts',
+  'data/expanded-interventions.ts', 'data/expanded-path-interventions.ts', 'data/help-topics.ts', 'data/i18n.ts',
+  'data/intervention-copy.ts',
   'data/localization.ts',
   'game/consequence-profiles.ts', 'game/convergence.ts', 'game/decision-consequences.ts', 'game/decision-feedback.ts',
   'game/development.ts', 'game/drama.ts', 'game/effects.ts', 'game/engine.ts', 'game/guidance.ts', 'game/harvest-quality.ts',
@@ -328,4 +330,160 @@ const AUDITED_SOURCE_FILES = [
 test('every game TypeScript source file is included in the localization audit inventory', async () => {
   const sourceRoot = fileURLToPath(new URL('../src/', import.meta.url));
   assert.deepEqual(await tsFiles(sourceRoot), AUDITED_SOURCE_FILES);
+});
+
+// --- The runtime -------------------------------------------------------------------------------
+// The catalog above is data. What follows pins the one mutable thing about it -- which locale is
+// active -- and the rule that makes a switch honest: nothing captures a string at import time.
+import { activeLocale, fill, isLocale, setActiveLocale, text } from '../dist/data/i18n.js';
+import { GameEngine } from '../dist/game/engine.js';
+import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
+
+function withLocale(locale, body) {
+  const previous = activeLocale();
+  setActiveLocale(locale);
+  try { return body(); } finally { setActiveLocale(previous); }
+}
+
+test('the active locale starts at the default and text() follows it', () => {
+  assert.equal(activeLocale(), DEFAULT_LOCALE);
+  assert.equal(text().ui.shell.brandName, LOCALIZATION.en.ui.shell.brandName);
+  withLocale('de', () => assert.equal(text().ui.shell.footerTech, LOCALIZATION.de.ui.shell.footerTech));
+  assert.equal(activeLocale(), DEFAULT_LOCALE);
+});
+
+test('setActiveLocale reports whether anything changed and refuses unknown codes', () => {
+  assert.equal(isLocale('de'), true);
+  assert.equal(isLocale('fr'), false);
+  assert.equal(isLocale(null), false);
+  withLocale('en', () => {
+    assert.equal(setActiveLocale('en'), false, 're-picking the active locale is not a change');
+    assert.equal(setActiveLocale('de'), true);
+    assert.equal(activeLocale(), 'de');
+  });
+});
+
+test('fill substitutes named placeholders and leaves an unknown token standing', () => {
+  assert.equal(fill('COST {cost} {currency}', { cost: 12, currency: 'causal mass' }), 'COST 12 causal mass');
+  // A visible `{depth}` is a bug someone reports; an empty gap is one that ships.
+  assert.equal(fill('DEPTH {depth}', {}), 'DEPTH {depth}');
+  assert.equal(fill('no tokens', { depth: 1 }), 'no tokens');
+});
+
+function memoryStorage(seed = {}) {
+  const store = new Map(Object.entries(seed));
+  return {
+    store,
+    getItem: key => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: key => store.delete(key),
+  };
+}
+const LOCALE_KEY = 'reality_consumption_engine_locale';
+
+test('the engine persists the chosen locale under its own key', () => {
+  const storage = memoryStorage();
+  const engine = new GameEngine({ storage });
+  try {
+    assert.equal(engine.locale(), DEFAULT_LOCALE);
+    assert.equal(engine.setLocale('de'), true);
+    assert.equal(storage.store.get(LOCALE_KEY), 'de');
+    assert.equal(engine.setLocale('de'), false, 'the same locale twice is not a change');
+    assert.equal(engine.setLocale('fr'), false, 'an unsupported locale is refused');
+    assert.equal(engine.locale(), 'de');
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('erasing the save keeps the language the player reads the game in', () => {
+  const storage = memoryStorage();
+  const engine = new GameEngine({ storage });
+  try {
+    engine.setLocale('de');
+    engine.deleteSave();
+    assert.equal(storage.store.get(LOCALE_KEY), 'de', 'the locale is a device preference, not run state');
+    assert.equal(engine.locale(), 'de');
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+const SAVE_SLOT = 'reality_consumption_engine_browser_save_v2';
+
+test('a stored locale is restored before the save is read, so a migration notice is localized', () => {
+  // A real save marked as v1 forces the migrator to speak, and it speaks while the engine is still
+  // being constructed -- which is the whole reason the locale is read from storage before the save.
+  const seeded = memoryStorage();
+  new GameEngine({ storage: seeded }).save();
+  const stored = JSON.parse(seeded.store.get(SAVE_SLOT));
+  const storage = memoryStorage({ [LOCALE_KEY]: 'de', [SAVE_SLOT]: JSON.stringify({ ...stored, saveVersion: 1 }) });
+  const engine = new GameEngine({ storage });
+  try {
+    assert.equal(engine.locale(), 'de');
+    const notice = buildViewModel(engine).messages.find(message => message.includes('v1'));
+    assert.ok(notice, 'the migration must have been announced');
+    assert.equal(notice, fill(LOCALIZATION.de.reports.saveMigration.migrated, { fromVersion: 1, toVersion: stored.saveVersion, runNote: '' }));
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('an engine that does not autosave does not write the locale preference either', () => {
+  const storage = memoryStorage();
+  const engine = new GameEngine({ storage, autosave: false });
+  try {
+    assert.equal(engine.setLocale('de'), true, 'the switch still applies in memory');
+    assert.equal(storage.store.has(LOCALE_KEY), false);
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('the locale is a band in the structural render key, so a switch rebuilds the panel column', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  try {
+    engine.startCivilization(4242);
+    const before = civilizationRenderKey(buildViewModel(engine));
+    engine.setLocale('de');
+    const after = civilizationRenderKey(buildViewModel(engine));
+    assert.notEqual(after, before, 'without this the column keeps the language the run started in');
+    // And it is the only thing that moved: the rest of the key is unchanged state.
+    assert.equal(before.replace(`|${DEFAULT_LOCALE}|`, '|de|'), after);
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('a locale switch reaches copy the engine composes, not just static labels', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  try {
+    engine.startCivilization(4242);
+    engine.forceEvent('mirror_delay');
+    const english = buildViewModel(engine);
+    engine.setLocale('de');
+    const german = buildViewModel(engine);
+    // Event bodies and choice labels are translated; the title is canonical in both, by design.
+    assert.equal(german.event.title, english.event.title);
+    assert.notEqual(german.event.body, english.event.body);
+    assert.notEqual(german.event.choices[0].label, english.event.choices[0].label);
+    assert.notEqual(german.situation.cause, english.situation.cause);
+    assert.notEqual(german.tactical.actions[0].reason || 'x', 'x');
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('the static shell in index.html says exactly what the English catalog says', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const shell = LOCALIZATION.en.ui.shell;
+  // index.html is the first paint, before any module runs, so its English must not drift from the
+  // catalog `main.ts` replaces it with one frame later.
+  assert.match(html, new RegExp(`<title>${shell.documentTitle}</title>`));
+  assert.match(html, new RegExp(`<b>${shell.brandName}</b>`));
+  assert.match(html, new RegExp(`<small>${shell.brandNode}</small>`));
+  assert.match(html, new RegExp(`aria-label="${shell.explainAria}"`));
+  assert.match(html, new RegExp(`aria-label="${shell.worldVisualizationAria}"`));
+  assert.match(html, new RegExp(`>${shell.machineRecord}<`));
+  assert.match(html, new RegExp(`aria-label="${shell.languageLabel}"`));
+});
+
+test('main.ts rewrites every shell string and hosts the locale switcher', async () => {
+  const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+  // Every `ui.shell` key except the three the web app manifest owns has to be applied by the shell
+  // pass, or a locale switch leaves part of the chrome in the previous language.
+  const applied = Object.keys(LOCALIZATION.en.ui.shell).filter(key => !key.startsWith('pwa'));
+  for (const key of applied) assert.match(main, new RegExp(`shell\\.${key}\\b`), `main.ts must apply ui.shell.${key}`);
+  assert.match(main, /#locale-select/);
+  assert.match(main, /SUPPORTED_LOCALES/);
+  assert.match(main, /engine\.setLocale\(/);
+  assert.match(main, /applyShellText\(\)/);
 });

@@ -64,6 +64,14 @@ test('app manifest requests fullscreen without locking orientation', async () =>
   assert.equal(manifest.display, 'fullscreen');
   assert.equal(manifest.start_url, '/');
   assert.equal('orientation' in manifest, false);
+  // The browser reads the manifest itself, so this is the one player-facing surface a locale switch
+  // cannot reach. It stays English -- and it stays the *same* English as the catalog's shell entries,
+  // which is what this pins.
+  const { LOCALIZATION } = await import('../public/game/dist/data/localization.js');
+  const shell = LOCALIZATION.en.ui.shell;
+  assert.equal(manifest.name, shell.pwaName);
+  assert.equal(manifest.short_name, shell.pwaShortName);
+  assert.equal(manifest.description, shell.pwaDescription);
 });
 
 test('shell registers offline support and requires user action for fullscreen', async () => {
@@ -138,11 +146,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.15.0', async () => {
+test('release metadata identifies browser app v1.16.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.15.0');
+  assert.equal(rootPackage.version, '1.16.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 

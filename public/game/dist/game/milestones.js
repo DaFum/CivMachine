@@ -1,4 +1,5 @@
 import { gradeIndex } from './harvest-quality.js';
+import { milestoneCopy } from '../data/i18n.js';
 const RESOURCE_IDS = ['causal_mass', 'cognition', 'paradox', 'existence'];
 export const MILESTONE_CATALOG = [
     { id: 'development_70', title: 'First Complexity', description: 'Bring a civilization to Development 70.', group: 'CULTIVATION', insight: 1, target: 70, current: s => s.development },
@@ -79,7 +80,8 @@ export function milestoneProgress(state, convergenceUnlocked) {
     return MILESTONE_CATALOG.map(milestone => {
         const completed = Boolean(done[milestone.id]);
         const current = Math.max(0, Math.min(milestone.target, Math.floor(completed ? milestone.target : milestone.current(snapshot))));
-        return { id: milestone.id, title: milestone.title, description: milestone.description, group: milestone.group, insight: milestone.insight, current, target: milestone.target, completed };
+        const copy = milestoneCopy(milestone.id);
+        return { id: milestone.id, title: copy?.title ?? milestone.title, description: copy?.description ?? milestone.description, group: milestone.group, insight: milestone.insight, current, target: milestone.target, completed };
     });
 }
 export function completedMilestoneCount(state) {

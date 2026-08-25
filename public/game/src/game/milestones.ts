@@ -1,4 +1,5 @@
 import { gradeIndex } from './harvest-quality.js';
+import { milestoneCopy } from '../data/i18n.js';
 import type { GameState } from './types.js';
 
 export type MilestoneGroup = 'CULTIVATION' | 'HARVEST' | 'PATHS' | 'PRESTIGE' | 'CONVERGENCE';
@@ -96,7 +97,8 @@ export function milestoneProgress(state:GameState,convergenceUnlocked:boolean):M
   return MILESTONE_CATALOG.map(milestone=>{
     const completed=Boolean(done[milestone.id]);
     const current=Math.max(0,Math.min(milestone.target,Math.floor(completed?milestone.target:milestone.current(snapshot))));
-    return {id:milestone.id,title:milestone.title,description:milestone.description,group:milestone.group,insight:milestone.insight,current,target:milestone.target,completed};
+    const copy=milestoneCopy(milestone.id);
+    return {id:milestone.id,title:copy?.title??milestone.title,description:copy?.description??milestone.description,group:milestone.group,insight:milestone.insight,current,target:milestone.target,completed};
   });
 }
 

@@ -1,3 +1,4 @@
+import { text, tutorialStepCopy } from '../data/i18n.js';
 // The guided first run. It is a cursor over an ordered, declarative step list -- no timers, no
 // scripted state, no branching. A step is cleared either because the player acknowledged it or
 // because a monotonic *fact* about their play was recorded, which is what keeps it honest: the
@@ -241,24 +242,30 @@ export function tutorialView(state, phase) {
         visible: state.status === 'active' && Boolean(step),
         collapsed: state.collapsed,
         replayable: state.status !== 'active' && phase === 'machine',
-        step: step ? {
-            id: step.id,
-            index: index + 1,
-            total: TUTORIAL_STEPS.length,
-            title: step.title,
-            what: step.what,
-            where: step.where,
-            why: step.why,
-            action: step.action,
-            anchor: offPhase ? '' : step.anchor,
-            phase: step.phase,
-            canAcknowledge: !step.requires,
-            offPhaseHint: offPhase
-                ? step.phase === 'machine'
-                    ? 'This step is about the Machine view. End or abandon the run to get back to it.'
-                    : 'This step is about a running civilization. Start one to continue.'
-                : '',
-        } : null,
+        // `TUTORIAL_STEPS` above is the canonical English and the step's identity -- its id, anchor,
+        // phase and gating fact are structure, not copy. The view is where the copy is read, so a locale
+        // switch re-renders the card without moving the cursor.
+        step: step ? (() => {
+            const copy = tutorialStepCopy(step.id);
+            return {
+                id: step.id,
+                index: index + 1,
+                total: TUTORIAL_STEPS.length,
+                title: copy?.title ?? step.title,
+                what: copy?.what ?? step.what,
+                where: copy?.where ?? step.where,
+                why: copy?.why ?? step.why,
+                action: copy?.action ?? step.action,
+                anchor: offPhase ? '' : step.anchor,
+                phase: step.phase,
+                canAcknowledge: !step.requires,
+                offPhaseHint: offPhase
+                    ? step.phase === 'machine'
+                        ? text().tutorial.offPhase.machine
+                        : text().tutorial.offPhase.civilization
+                    : '',
+            };
+        })() : null,
     };
 }
 //# sourceMappingURL=tutorial.js.map

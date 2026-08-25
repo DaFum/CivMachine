@@ -4,9 +4,10 @@ import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
 import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalRisk } from '../game/tactical-actions.js';
+import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalActionText, tacticalRisk } from '../game/tactical-actions.js';
 import { civilizationSituation, machineSituation } from '../game/guidance.js';
-import { ERA_NAMES } from '../game/engine.js';
+import { eraLabel } from '../game/engine.js';
+import { activeLocale, directiveCopy, fill, harvestGradeLabel, matrixCopy, metricName, objectiveCopy, resourceName, text } from '../data/i18n.js';
 import type { GameEngine } from '../game/engine.js';
 import type { SituationReport } from '../game/guidance.js';
 import type { Civilization, RuntimeBonuses } from '../game/types.js';
@@ -15,14 +16,12 @@ import type { Civilization, RuntimeBonuses } from '../game/types.js';
 // player comparing the two must not be shown two different numbers.
 const UNIVERSE_CREDIT_REQUIREMENT = 18;
 
-const RESOURCE_NAMES: Record<string,string> = {
-  causal_mass:'Causal Mass', cognition:'Cognition', paradox:'Paradox', existence:'Existence', universal_residue:'Universal Residue', axioms:'Axioms'
-};
-
-const EFFECT_LABELS: Record<string,string> = {
-  stability:'Stability', awareness:'Awareness', sanity:'Sanity', attention:'Attention',
-  development:'Development', entropy:'Entropy', stability_max:'Maximum Stability',
-};
+// Which effect keys a probe may name at all. The labels come from the catalog; this set is the rule
+// about what is nameable, so it stays a constant.
+const EFFECT_KEYS: ReadonlyArray<string> = [
+  'stability', 'awareness', 'sanity', 'attention', 'development', 'entropy', 'stability_max',
+];
+const effectLabel = (key:string):string => metricName(key) ?? key;
 
 function amountLabel(value:number):string {
   const rounded=Math.round(value*10)/10;
@@ -30,26 +29,29 @@ function amountLabel(value:number):string {
 }
 
 function riskVector(effects:any, precisionLevel:number):string {
-  const vectors=Object.entries(effects).filter(([key,value])=>key in EFFECT_LABELS&&Number(value)!==0).map(([key,value])=>{
+  const copy=text().ui.viewModel;
+  const vectors=Object.entries(effects).filter(([key,value])=>EFFECT_KEYS.includes(key)&&Number(value)!==0).map(([key,value])=>{
     const amount=Number(value);
-    if(precisionLevel>=5)return `${EFFECT_LABELS[key]} ${amountLabel(amount)}`;
+    if(precisionLevel>=5)return `${effectLabel(key)} ${amountLabel(amount)}`;
     if(precisionLevel>=2){
       const spread=precisionLevel===2?3:precisionLevel===3?2:1;
       const lower=amount>0?Math.max(.1,amount-spread):amount-spread;
       const upper=amount<0?Math.min(-.1,amount+spread):amount+spread;
-      return `${EFFECT_LABELS[key]} range ${amountLabel(lower)} to ${amountLabel(upper)}`;
+      return fill(copy.range,{label:effectLabel(key),lower:amountLabel(lower),upper:amountLabel(upper)});
     }
-    return `${EFFECT_LABELS[key]} ${amount>0?'↑':'↓'}`;
+    return `${effectLabel(key)} ${amount>0?'↑':'↓'}`;
   });
-  return vectors.length?vectors.join(' · '):'No direct metric vector detected';
+  return vectors.length?vectors.join(' · '):copy.noDirectMetricVector;
 }
 
+// The band's `id` is the CSS hook and the render key's band, so it stays an id; only the label is copy.
 function entropyBand(value:number):{index:number;id:string;label:string}{
-  if(value>=100)return {index:4,id:'cascade',label:'CASCADE'};
-  if(value>=75)return {index:3,id:'critical',label:'CRITICAL'};
-  if(value>=50)return {index:2,id:'fractured',label:'FRACTURED'};
-  if(value>=25)return {index:1,id:'strained',label:'STRAINED'};
-  return {index:0,id:'contained',label:'CONTAINED'};
+  const copy=text().ui.viewModel;
+  if(value>=100)return {index:4,id:'cascade',label:copy.entropyCascade};
+  if(value>=75)return {index:3,id:'critical',label:copy.entropyCritical};
+  if(value>=50)return {index:2,id:'fractured',label:copy.entropyFractured};
+  if(value>=25)return {index:1,id:'strained',label:copy.entropyStrained};
+  return {index:0,id:'contained',label:copy.entropyContained};
 }
 
 // How far the run has travelled inside its current depth band, as a percentage. The tactical rail
@@ -70,7 +72,7 @@ function nextDepthBand(depth: number) {
   if (!upcoming) return null;
   return {
     grade: upcoming.grade,
-    label: HARVEST_GRADE_LABELS[upcoming.grade],
+    label: harvestGradeLabel(upcoming.grade) ?? HARVEST_GRADE_LABELS[upcoming.grade],
     depthNeeded: upcoming.minDepth,
     yieldMultiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * upcoming.minDepth,
   };
@@ -81,7 +83,7 @@ function buildResourcesViewModel(engine: GameEngine) {
   const state = engine.state;
   return engine.visibleResources().map(id => ({
     id,
-    name: RESOURCE_NAMES[id] ?? id,
+    name: resourceName(id) ?? id,
     amount: id === 'universal_residue' ? state.meta.universalResidue : id === 'axioms' ? state.meta.axioms : (state.machine.currencies as any)[id] ?? 0,
   }));
 }
@@ -99,7 +101,7 @@ function buildConvergenceViewModel(engine: GameEngine) {
     requirements: convergenceEntries,
     targetDepth: convergenceTargetDepth,
     convergences: state.meta.convergences,
-    reason: openRequirement ? `${openRequirement.label}: ${openRequirement.current}/${openRequirement.target}` : 'All requirements met.',
+    reason: openRequirement ? `${openRequirement.label}: ${openRequirement.current}/${openRequirement.target}` : text().ui.viewModel.allRequirementsMet,
   };
 }
 
@@ -113,12 +115,13 @@ function buildEventViewModel(engine: GameEngine, civ: Civilization | null, event
     probed,
     choices: (event.choices ?? []).map((choice:any, index:number) => {
       const vector=probed?riskVector(engine.previewEventChoiceEffects(choice),civ?.predictionLevel??0):'';
+      const copy=text().ui.viewModel;
       return {
         index,
         label: choice.label,
         prediction: predictionsUnlocked
-          ? `${choice.prediction}${probed?` Probe vector: ${vector}.`:''}`
-          : probed?`Probe vector: ${vector}.`:'',
+          ? `${choice.prediction}${probed?fill(copy.probeVectorAppend,{vector}):''}`
+          : probed?fill(copy.probeVector,{vector}):'',
       };
     }),
   };
@@ -137,6 +140,7 @@ function buildTacticalViewModel(engine: GameEngine, civ: Civilization | null, bo
     containmentRating: bonuses.containmentRating,
     actions: (Object.keys(TACTICAL_ACTIONS) as Array<keyof typeof TACTICAL_ACTIONS>).map(id=>({
       ...TACTICAL_ACTIONS[id],
+      ...tacticalActionText(id),
       risk: tacticalRisk(civ, id),
       ...engine.tacticalAvailability(id),
     })),
@@ -201,12 +205,12 @@ function buildSituation(
     controlCapacity: tactical.controlCapacity,
     eventChoices: civ.eventChoices,
     era: civ.era,
-    eraName: ERA_NAMES[civ.era] ?? `Era ${civ.era}`,
+    eraName: eraLabel(civ.era) || fill(text().ui.viewModel.eraFallback, { era: civ.era }),
     development: civ.development,
     terminal: Boolean(civ.terminal),
     convergenceReady: Boolean(harvest.convergenceReady),
     convergenceTargetDepth,
-    objectiveTitle: objective?.title ?? '',
+    objectiveTitle: objective ? (objectiveCopy(civ.directiveId)?.title ?? objective.title) : '',
     objectiveCompleted: Boolean(objective?.completed),
   });
 }
@@ -294,11 +298,27 @@ export function buildViewModel(engine: GameEngine) {
     convergence: buildConvergenceViewModel(engine),
     victory: state.phase === 'victory' ? { record: engine.lastVictory(), convergences: state.meta.convergences } : null,
     runBuild: { ...state.machine.runBuild },
-    directives: engine.availableDirectives().map((directive:any)=>({ ...directive, objective: objectiveForDirective(directive.id) })),
-    matrices: engine.availableMatrices(),
+    // Directives, matrices and upgrades all keep their rule fields and take their copy from the
+    // catalog on the way into the view, so the panels that print them never look an id up themselves.
+    directives: engine.availableDirectives().map((directive:any)=>{
+      const objective=objectiveForDirective(directive.id);
+      const localizedObjective=objectiveCopy(directive.id);
+      const copy=directiveCopy(String(directive.id));
+      return {
+        ...directive,
+        name: copy?.name ?? directive.name,
+        description: copy?.description ?? directive.description,
+        objective: objective ? { ...objective, title: localizedObjective?.title ?? objective.title, description: localizedObjective?.description ?? objective.description } : objective,
+      };
+    }),
+    matrices: engine.availableMatrices().map((matrix:any)=>{
+      const copy=matrixCopy(String(matrix.id));
+      return { ...matrix, name: copy?.name ?? matrix.name, description: copy?.description ?? matrix.description };
+    }),
     previewTraits: state.machine.runBuild.previewTraitIds.map((id:string)=>({id,name:engine.traitById(id)?.name??id})),
     canStartCivilization: !directiveRequired || Boolean(state.machine.runBuild.selectedDirective),
-    startReason: directiveRequired&&!state.machine.runBuild.selectedDirective?'Select one offered Directive for this Civilization.':'',
+    startReason: directiveRequired&&!state.machine.runBuild.selectedDirective?text().ui.viewModel.selectDirective:'',
+    locale: activeLocale(),
     machineUpgrades: machineUpgradeEntries,
     universeUpgrades: engine.visibleUpgradeEntries('universe'),
     axiomUpgrades: engine.visibleUpgradeEntries('axiom'),
@@ -373,6 +393,10 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     vm.tutorial.step?.id ?? '',
     vm.tutorial.collapsed ? 'coach-collapsed' : 'coach-open',
     vm.explain ? 'explain' : 'plain',
+    // The active locale is a discrete state like the explain toggle, and every label in the column is
+    // read from the catalog -- so without it here a locale switch would leave the whole panel column
+    // in the language the run started in, refreshed only where a live value happens to land.
+    vm.locale,
     vm.machineReserve.map(entry => (entry.enabled ? '1' : '0')).join(''),
     vm.lastActionFailure,
   ].join('|');

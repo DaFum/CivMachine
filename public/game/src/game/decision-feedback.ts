@@ -1,6 +1,7 @@
 import { buildDecisionConsequence } from './decision-consequences.js';
 import { civilizationDramaPhase } from './drama.js';
 import { CivilizationPaths } from './paths.js';
+import { flagLabel, institutionName, pathFlagLabel, text, traitCopy } from '../data/i18n.js';
 import type { Civilization, DecisionFeedback, DecisionMetricDelta, DramaPhaseId } from './types.js';
 
 export interface DecisionSnapshot {
@@ -17,6 +18,8 @@ export interface DecisionSnapshot {
   entropyBand: number;
 }
 
+// `label` here is the canonical English and the fallback; which metric is `inverse` is a rule, so the
+// table itself stays a constant and only the label is read from the catalog at build time.
 const METRICS: ReadonlyArray<Readonly<{ key:string; label:string; inverse?:boolean }>> = [
   { key: 'stability', label: 'Stability' },
   { key: 'stabilityMax', label: 'Maximum Stability' },
@@ -31,9 +34,18 @@ const METRICS: ReadonlyArray<Readonly<{ key:string; label:string; inverse?:boole
 ];
 
 function humanize(id:string):string{return id.replaceAll('_',' ');}
+// What the player gained, named the way the catalog names it: a trait and an institution by their own
+// name, a flag by the decision that set it. The snake_case id is the last resort, not the label.
+function additionLabel(id:string,kind:'trait'|'institution'|'flag'|'path_flag'):string{
+  if(kind==='trait')return traitCopy(id)?.name??humanize(id);
+  if(kind==='institution')return institutionName(id)??humanize(id);
+  if(kind==='flag')return flagLabel(id)??humanize(id);
+  return pathFlagLabel(id)??humanize(id);
+}
 function additions(after:string[],before:string[],kind:'trait'|'institution'|'flag'|'path_flag'){
   const known=new Set(before);
-  return after.filter(id=>!known.has(id)).map(id=>({kind,label:humanize(id)}));
+  const kinds:Readonly<Record<string,string>>=text().reports.decisionFeedback.additionKinds;
+  return after.filter(id=>!known.has(id)).map(id=>({kind,kindLabel:kinds[kind]??humanize(kind),label:additionLabel(id,kind)}));
 }
 
 export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
@@ -71,11 +83,12 @@ export function buildDecisionFeedback(
   after:DecisionSnapshot,
 ):DecisionFeedback {
   const metrics:DecisionMetricDelta[]=[];
+  const metricLabels:Readonly<Record<string,string>>=text().reports.decisionFeedback.metrics;
   let positive=false,negative=false;
   for(const definition of METRICS){
     const prior=before.metrics[definition.key]??0,current=after.metrics[definition.key]??0,delta=current-prior;
     if(Math.abs(delta)<.0001)continue;
-    metrics.push({key:definition.key,label:definition.label,before:prior,after:current,delta});
+    metrics.push({key:definition.key,label:metricLabels[definition.key]??definition.label,before:prior,after:current,delta});
     const beneficial=definition.inverse?delta<0:delta>0;
     if(beneficial)positive=true;else negative=true;
   }
