@@ -25,13 +25,18 @@
   --radius-xs:calc(var(--radius) * .375);--radius-sm:calc(var(--radius) * .625);
   --radius-md:var(--radius);--radius-lg:calc(var(--radius) * 1.5);--radius-pill:999px;
   /* Fluid type. Every size is a clamp, so the scale grows with the viewport instead of stepping at
-     a breakpoint -- a phone gets a readable floor and a large display stops looking sparse. */
-  --text-3xs:clamp(.58rem,.556rem + .1vw,.65rem);
-  --text-2xs:clamp(.64rem,.616rem + .1vw,.71rem);
-  --text-xs:clamp(.68rem,.656rem + .1vw,.75rem);
-  --text-sm:clamp(.72rem,.696rem + .1vw,.79rem);
-  --text-md:clamp(.76rem,.733rem + .114vw,.84rem);
-  --text-base:clamp(.82rem,.793rem + .114vw,.9rem);
+     a breakpoint -- a phone gets a readable floor and a large display stops looking sparse. The
+     floor was the half of that promise the scale was not keeping: --text-3xs resolved to 9.29px at
+     390px, and what sits on it is `.tactical-reason` -- the sentence that says why an action is
+     refused -- plus the harvest call and the world strip. Contrast was never the problem there
+     (5.98:1); size was. The whole bottom half moved up together rather than only its floor, because
+     raising one tier's minimum alone would have collapsed it into the two tiers above it. */
+  --text-3xs:clamp(.66rem,.65rem + .042vw,.7rem);
+  --text-2xs:clamp(.7rem,.69rem + .042vw,.74rem);
+  --text-xs:clamp(.74rem,.73rem + .042vw,.78rem);
+  --text-sm:clamp(.77rem,.76rem + .052vw,.82rem);
+  --text-md:clamp(.8rem,.79rem + .063vw,.86rem);
+  --text-base:clamp(.84rem,.82rem + .084vw,.92rem);
   --text-lg:clamp(.93rem,.889rem + .171vw,1.05rem);
   --text-xl:clamp(1.02rem,.959rem + .257vw,1.2rem);
   --text-2xl:clamp(1.08rem,.93rem + .66vw,1.55rem);
@@ -43,6 +48,13 @@
      uneven rather than dense. Ten steps on a 2px grid, snapped from what was already there. */
   --space-3xs:.125rem;--space-2xs:.25rem;--space-xs:.375rem;--space-sm:.5rem;--space-md:.625rem;
   --space-lg:.75rem;--space-xl:1rem;--space-2xl:1.25rem;--space-3xl:1.5rem;--space-4xl:2rem;
+  /* The fourth scale. Type, spacing, radius and colour all collapsed to single sources; measure was
+     the one still missing, and it is the one that decides whether a wide display reads as designed.
+     The shell is monospace, so a container is far more characters than its pixel width suggests:
+     .panel-note ran 171 characters at 1440px and 177 at 1920px, and even the one prose block that
+     was capped -- .machine-hero p at 780px -- was 109. 68ch is the cap; the panels stay full width,
+     only the running text inside them stops. */
+  --measure:68ch;
   /* One easing and one duration, used by every transition below. Consistency is the effect. */
   --ease:cubic-bezier(.22,.61,.36,1);--dur:.18s;--dur-slow:.42s
 }
@@ -55,7 +67,16 @@ body{margin:0;min-height:100vh;background:radial-gradient(circle at 25% -10%,#10
 .background-noise{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .background-noise::before{content:"";position:absolute;inset:0;opacity:.13;background-image:linear-gradient(#ffffff03 1px,transparent 1px),linear-gradient(90deg,#ffffff02 1px,transparent 1px);background-size:20px 20px}
 .background-noise::after{content:"";position:absolute;inset:-30%;opacity:.55;filter:blur(20px);background:radial-gradient(38% 32% at 22% 18%,#1a6b8c3d,transparent 70%),radial-gradient(34% 30% at 78% 74%,#5a3b943d,transparent 70%),radial-gradient(30% 26% at 62% 10%,#1d7d6c30,transparent 70%)}
-button{font:inherit;color:var(--text);background:var(--surface-raised);border:1px solid #294251;border-radius:var(--radius-sm);padding:var(--space-lg) var(--space-xl);cursor:pointer;transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease),transform var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+/* The two elements that were taking a fixed size from outside the scale, and the reason the fluid
+   guard never saw them: it can only check sizes that are *declared*, and neither of these declared
+   one. `small` carries a UA default of 0.8333em, which held 17 of them at a flat 13.33px -- larger,
+   on a phone, than the labels they sat under. A button takes the family from html through the
+   shorthand and the size along with it, which put 40 labels at a flat 16px: the largest body text
+   in the interface and the only text in it that never moved with the viewport. Declared here rather
+   than at the call sites, so the next one inherits a tier instead of the default. --text-lg
+   brackets where the labels already sat, so no control changes size on a desktop. */
+small{font-size:var(--text-2xs)}
+button{font:inherit;font-size:var(--text-lg);color:var(--text);background:var(--surface-raised);border:1px solid #294251;border-radius:var(--radius-sm);padding:var(--space-lg) var(--space-xl);cursor:pointer;transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease),transform var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 button:hover:not(:disabled){border-color:var(--cyan);box-shadow:var(--ring),var(--glow);transform:translateY(-1px)}
 button:active:not(:disabled){transform:translateY(0)}
 button:disabled{opacity:.38;cursor:not-allowed}
@@ -64,7 +85,12 @@ button:disabled{opacity:.38;cursor:not-allowed}
 .ghost{background:transparent}
 .big{padding:var(--space-xl) var(--space-2xl);font-weight:800;letter-spacing:.08em}
 .is-hidden{display:none!important}
-#app-shell{position:relative;z-index:1;max-width:1500px;margin:auto;padding-bottom:calc(var(--space-4xl) * 1.5)}
+/* The base every unstyled line falls back to. Without it the fallback is the root's 16px, which is
+   how 25 content lines -- the overview readouts, the history entries, the identity paragraphs --
+   ended up as the largest body text in the shell and the only text in it that never moved with the
+   viewport. Anything that names its own tier is unaffected: the scale is in rem, which resolves
+   against the root rather than against this. */
+#app-shell{position:relative;z-index:1;max-width:1500px;margin:auto;font-size:var(--text-base);padding-bottom:calc(var(--space-4xl) * 1.5)}
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--space-xl);padding:var(--space-lg) var(--space-xl);background:#060a0fef;border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}
 .brand{display:flex;align-items:center;gap:var(--space-lg);min-width:max-content}
 .brand-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid #4f7d8e;background:#0e1f28;color:var(--cyan);font-weight:900;letter-spacing:.06em}
@@ -83,15 +109,20 @@ button:disabled{opacity:.38;cursor:not-allowed}
 main{padding:var(--space-xl)}
 .machine-hero{display:flex;justify-content:space-between;gap:var(--space-4xl);align-items:center;padding:var(--space-3xl);border:1px solid #284351;background:linear-gradient(120deg,#0b1820,var(--surface-sunken));box-shadow:var(--shadow);margin-bottom:var(--space-xl)}
 .machine-hero h2{margin:var(--space-2xs) 0 var(--space-sm);font-size:var(--text-4xl)}
-.machine-hero p{max-width:780px;color:#9bb0bc;line-height:1.55}
+.machine-hero p{max-width:var(--measure);color:#9bb0bc;line-height:1.55}
 .eyebrow,.panel-kicker{color:var(--cyan);font-size:var(--text-xs);letter-spacing:.12em;text-transform:uppercase}
 .panel{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel-hi),var(--panel-lo));box-shadow:0 12px 30px #0004;margin:0 0 var(--space-xl);padding:var(--space-xl)}
 .panel h3{margin:var(--space-3xs) 0 var(--space-xl);font-size:var(--text-lg);color:#cde7f3;text-transform:uppercase;letter-spacing:.06em}
 .panel h4{margin:var(--space-3xs) 0 var(--space-xs)}
-.panel p{color:#93a8b4;line-height:1.5}
-.upgrade-list{display:grid;gap:var(--space-sm)}
+.panel p{max-width:var(--measure);color:#93a8b4;line-height:1.5}
+/* One column at every width meant a 1374px row at 1440px, with 338px of dead panel between each
+   description and its INSTALL button. The option grid beside it already did this.
+   The floor is min(), not a bare 420px: auto-fit still lays a 420px track inside a narrower
+   container, so a bare minimum pushed the whole register 445px wide on a 320px phone and put the
+   INSTALL buttons off screen. min(420px,100%) collapses the track to the container instead. */
+.upgrade-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--space-sm)}
 .upgrade{display:flex;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-lg);border:1px solid #1e3541;background:var(--surface-1)}
-.upgrade p{margin:var(--space-2xs) 0;font-size:var(--text-md)}
+.upgrade p{max-width:var(--measure);margin:var(--space-2xs) 0;font-size:var(--text-md)}
 .upgrade small{color:var(--amber)}
 .upgrade.locked{opacity:.7;background:#0a0e12}
 .option-grid,.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--space-md)}
@@ -271,11 +302,11 @@ details .panel{margin:0;border:0;border-top:1px solid var(--line-soft);box-shado
 .cosmic-line{margin:var(--space-lg) 0 0;color:var(--muted);font-size:var(--text-md)}
 /* Reserve commitments read like the tactical actions and are laid out like them. */
 .reserve-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--space-md)}
-.panel-note{margin:0 0 var(--space-lg);color:var(--muted);font-size:var(--text-md)}
+.panel-note{max-width:var(--measure);margin:0 0 var(--space-lg);color:var(--muted);font-size:var(--text-md)}
 .machine-log{margin-top:var(--space-2xl)}
 .machine-log ul{list-style:none;padding:0;margin:var(--space-sm) 0;max-height:220px;overflow:auto;font-size:var(--text-sm);color:#8195a0}
 .machine-log li{padding:var(--space-2xs) 0;border-bottom:1px solid #15232b}
-footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:wrap;padding:var(--space-xl);color:#536b77;font-size:var(--text-2xs);border-top:1px solid #14232c}
+footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:wrap;padding:var(--space-xl);color:var(--muted);font-size:var(--text-2xs);border-top:1px solid #14232c}
 @keyframes decisionPulse{0%{opacity:.92;transform:scale(.985)}35%{opacity:.58}100%{opacity:0;transform:scale(1)}}
 @media(max-width:760px){main{padding:var(--space-sm)}
 /* The header cost 188px of an 844px phone -- 22% of the viewport spent before the world appears --
@@ -321,8 +352,14 @@ footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:
 
 .milestone-register{display:flex;flex-direction:column;gap:var(--space-xl)}
 .register-summary{opacity:.75;margin:0}
-.milestone-group{display:flex;flex-direction:column;gap:var(--space-xs)}
-.milestone{display:flex;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-sm) var(--space-lg);border:1px solid rgba(140,180,255,.18);border-radius:var(--radius-sm)}
+.milestone-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--space-xs)}
+/* The group heading is a direct child, so on a grid it takes a cell and lands beside the first
+   milestone instead of over the set. It spans. */
+.milestone-group>.panel-kicker{grid-column:1/-1}
+/* The progress block carries min-width:11rem, which a 270px card cannot seat beside the title: the
+   register overflowed a 320px viewport before this grid existed and kept doing so after. Wrapping
+   drops the meter under the title only when the row genuinely cannot hold both. */
+.milestone{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-sm) var(--space-lg);border:1px solid rgba(140,180,255,.18);border-radius:var(--radius-sm)}
 .milestone p{margin:var(--space-3xs) 0 0;opacity:.7;font-size:var(--text-md)}
 .milestone-progress{min-width:11rem;text-align:right}
 .milestone.complete{opacity:.55;border-style:dashed}
@@ -366,13 +403,27 @@ footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:
    never be brought out from under it. Progressive enhancement: browsers without :has() keep the
    existing padding, and the card is collapsible and skippable in either case. */
 body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:clamp(14rem,32dvh,22rem)}
+/* Above 1000px the card stops overlaying the column at all: it docks to a rail and the shell gives
+   up exactly that much width, so the panel a step is about can never be underneath the step. That
+   is what the "never a modal" contract actually requires -- a card sitting on the situation
+   banner's DO line cannot be ignored, whatever its role attribute says. The bottom reservation is
+   the phone's answer to the same problem and is undone here, because nothing is docked there now. */
+@media(min-width:1000px){
+  body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:calc(var(--space-4xl) * 1.5);padding-right:clamp(20rem,24vw,26rem)}
+  .tutorial-layer{left:auto;top:0;width:clamp(20rem,24vw,26rem);align-items:center;justify-content:flex-end;padding:var(--space-xl)}
+  .tutorial-card{width:100%;max-height:calc(100dvh - var(--space-4xl) * 2);overflow-y:auto}
+}
 .tutorial-card{pointer-events:auto;display:grid;gap:var(--space-xs);width:min(560px,100%);padding:var(--space-lg) var(--space-xl);border:1px solid #4a7d92;border-radius:var(--radius-md);background:#071219f2;box-shadow:0 20px 50px #000a;backdrop-filter:blur(10px)}
 .tutorial-card.is-collapsed{padding:0;border-color:#33566380;background:transparent;box-shadow:none;backdrop-filter:none}
 .tutorial-expand{width:100%;text-align:left;font-size:var(--text-xs);letter-spacing:.04em;background:#071219f2;border-color:#4a7d92}
 .tutorial-expand b{float:right;color:var(--cyan)}
-.tutorial-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-md)}
-.tutorial-head-buttons{display:flex;gap:var(--space-xs)}
-.tutorial-head-buttons button{padding:var(--space-2xs) var(--space-sm);font-size:var(--text-3xs);letter-spacing:.08em}
+.tutorial-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-md)}
+.tutorial-head .panel-kicker{white-space:nowrap}
+.tutorial-head-buttons{display:flex;margin-left:auto;gap:var(--space-xs)}
+/* WCAG 2.2 2.5.8 wants 24x24, and these are the only controls that clear the card off the text
+   below it -- so they may not be the smallest targets in the shell. mobile.css raises every button
+   to 44px under 760px; nothing did on a pointer. */
+.tutorial-head-buttons button{min-height:24px;padding:var(--space-2xs) var(--space-sm);font-size:var(--text-3xs);letter-spacing:.08em}
 .tutorial-progress{display:flex;gap:var(--space-3xs)}
 .tutorial-progress i{display:block;flex:1 1 0;height:3px;background:#1d3340}
 .tutorial-progress i.done{background:var(--cyan);box-shadow:0 0 8px #6bdcf655}
@@ -387,7 +438,7 @@ body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:clamp(14rem,
    and the pair wraps rather than fighting over one line. */
 .tutorial-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:var(--space-md);margin-top:var(--space-3xs)}
 .tutorial-foot button{flex:0 0 auto}
-.tutorial-waiting{flex:1 1 12ch;min-width:0;margin:0;color:var(--amber);font-size:var(--text-xs);letter-spacing:.04em}
+.tutorial-waiting{flex:1 1 100%;min-width:0;margin:0;color:var(--amber);font-size:var(--text-xs);letter-spacing:.04em}
 .tutorial-replay{display:flex;align-items:center;justify-content:space-between;gap:var(--space-lg);flex-wrap:wrap;margin-top:var(--space-xs);padding-top:var(--space-lg);border-top:1px solid var(--line-soft)}
 .tutorial-replay span{color:var(--muted);font-size:var(--text-xs);line-height:1.4}
 /* The highlight is rendered into the panel's own class list, so it can never fight the DOM diff. */
@@ -412,7 +463,7 @@ body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:clamp(14rem,
 .run-report.reason-convergence_won{border-color:#5aa88a}
 .report-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-2xl);flex-wrap:wrap}
 .report-reason h2{margin:var(--space-2xs) 0 var(--space-xs);font-size:var(--text-3xl)}
-.report-reason p{margin:0;max-width:70ch;line-height:1.55}
+.report-reason p{margin:0;max-width:var(--measure);line-height:1.55}
 .report-grade{display:grid;gap:var(--space-2xs);min-width:230px;padding:var(--space-lg) var(--space-lg);border:1px solid #2c4654;background:var(--surface-inset)}
 .report-grade span{color:var(--muted);font-size:var(--text-2xs);letter-spacing:.08em}
 .report-grade b{color:var(--amber);font-size:var(--text-xl)}

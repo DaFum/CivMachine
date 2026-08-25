@@ -516,6 +516,10 @@ class WorldRenderer {
     this.staticCanvas.className = 'fallback-canvas fallback-static';
     this.sceneryCanvas.className = 'fallback-canvas fallback-scenery';
     this.dynamicCanvas.className = 'fallback-canvas fallback-dynamic';
+    // Three unlabelled canvases would each present as an empty node. The host carries the name and
+    // the world strip carries the numbers, so these are decoration to a screen reader.
+    for (const canvas of [this.staticCanvas, this.sceneryCanvas, this.dynamicCanvas])
+      canvas.setAttribute('aria-hidden', 'true');
     this.staticContext = this.staticCanvas.getContext('2d')!;
     this.sceneryContext = this.sceneryCanvas.getContext('2d')!;
     this.dynamicContext = this.dynamicCanvas.getContext('2d')!;

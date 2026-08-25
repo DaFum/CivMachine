@@ -138,11 +138,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.14.0', async () => {
+test('release metadata identifies browser app v1.15.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.14.0');
+  assert.equal(rootPackage.version, '1.15.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 
@@ -153,6 +153,14 @@ test('release metadata identifies browser app v1.14.0', async () => {
   const worker = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
 
   assert.equal(gamePackage.version, version, 'the game package must ship the shell version');
+  // `npm version` writes each package *and its lockfile*; a hand-edited bump writes neither, and the
+  // lockfiles then identify a release that no longer exists. Both fields, because npm records the
+  // root package's version twice.
+  for (const lock of ['../package-lock.json', '../public/game/package-lock.json']) {
+    const parsed = JSON.parse(await readFile(new URL(lock, import.meta.url), 'utf8'));
+    assert.equal(parsed.version, version, `${lock} must ship the shell version`);
+    assert.equal(parsed.packages[''].version, version, `${lock} packages[""] must ship the shell version`);
+  }
   assert.match(html, new RegExp(`Browser v${escaped}`));
   assert.match(html, /v4 save/);
   // Both README titles, not merely a mention anywhere in the file: the release notes for older

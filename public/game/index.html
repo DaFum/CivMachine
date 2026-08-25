@@ -38,18 +38,22 @@
       <section id="machine-view" class="phase-view"></section>
       <section id="civilization-view" class="phase-view is-hidden">
         <div id="world-shell" class="world-shell">
-          <div id="world-surface" class="world-surface" aria-label="Scrollable civilization visualization"></div>
+          <div id="world-surface" class="world-surface" role="img" aria-label="Scrollable civilization visualization"></div>
           <div id="world-hud" class="world-hud"></div>
         </div>
         <div id="civilization-panels" class="civilization-panels"></div>
       </section>
       <section id="victory-view" class="phase-view is-hidden"></section>
-      <section class="machine-log panel"><div class="panel-kicker">MACHINE RECORD</div><ul id="machine-log"></ul></section>
+      <!-- `role="log"` names the region so it can be navigated to and read on demand. The live setting
+         is deliberately off, not merely absent: the situation banner is already a polite status
+         region narrating the same events in summary, and a record that appends on every intervention
+         and every tactical action would talk over it continuously. One narrator, not two. -->
+    <section class="machine-log panel"><div class="panel-kicker">MACHINE RECORD</div><ul id="machine-log" role="log" aria-live="off"></ul></section>
     </main>
     <!-- The guided run's coach card. It lives outside the phase views so a step can point at either
          of them, and it is never a modal: ignoring it entirely still plays a normal game. -->
     <div id="tutorial-layer" class="tutorial-layer is-hidden"></div>
-    <footer><span>Reality Consumption Engine Browser v1.14.0</span><span>v4 save · migrating loader · localStorage · No offline progression</span></footer>
+    <footer><span>Reality Consumption Engine Browser v1.15.0</span><span>v4 save · migrating loader · localStorage · No offline progression</span></footer>
   </div>
   <script type="module" src="./dist/main.js"></script>
 </body>

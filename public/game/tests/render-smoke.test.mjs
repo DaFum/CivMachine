@@ -4,6 +4,8 @@ import { GameEngine } from '../dist/game/engine.js';
 
 // Drives the renderer end to end against recording stubs, so a change that stops the world from
 // actually drawing creatures, banners or structures fails here rather than in a browser.
+// The canvas doubles carry `setAttribute` because the renderer marks its three layers aria-hidden:
+// the host element owns the accessible name, so the layers themselves are decoration.
 
 const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio'];
 
@@ -100,7 +102,7 @@ test('both layers paint the visible slice instead of the whole world', async () 
     const buckets = [[], [], []];
     globalThis.__buckets = buckets;
     globalThis.document = { createElement: () => { const calls = buckets[created++] ?? [];
-      return { className: '', style: {}, width: 0, height: 0, getContext: () => trackingContext(calls), addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => trackingContext(calls), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { globalThis.__frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -154,7 +156,7 @@ test('the renderer actually draws a populated world', async () => {
     const contexts = [recordingContext(staticCalls), recordingContext(sceneryCalls), recordingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? recordingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? recordingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -184,7 +186,7 @@ test('the renderer actually draws a populated world', async () => {
 test('panning repaints the cached static layer without rebuilding the scene', async () => {
   await withStubbedDom(() => {
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext([]), addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }) };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext([]), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { globalThis.__frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -241,7 +243,7 @@ test('dragging repaints only the strip the scroll exposed', async () => {
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? recordingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
         addEventListener: (name, handler) => { if (context === contexts[1]) listeners.set(name, handler); },
-        removeEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+        removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -292,7 +294,7 @@ async function sceneryAfterDrags(seed, drags, tag, { makeCiv = developedCiviliza
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
         addEventListener: (name, handler) => { if (context === contexts[1]) listeners.set(name, handler); },
-        removeEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+        removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -343,7 +345,7 @@ test('live stats control dynamic rendering without rebuilding the static scene',
     const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -381,7 +383,7 @@ async function bucketsForCivilization(civ, tag) {
     const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -420,7 +422,7 @@ test('a world impulse paints only on the dynamic layer and never forces a scener
     const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -460,7 +462,7 @@ async function bucketsAtQualityTier(seed, costMs, tag) {
     const contexts = [trackingContext(staticCalls), trackingContext(sceneryCalls), trackingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -515,7 +517,7 @@ test('a Tier-3 frame keeps drawing the current decision impact', async () => {
     const contexts = [trackingContext([]), trackingContext([]), trackingContext(withImpact)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -591,7 +593,7 @@ test('a Drama Phase reached by surviving draws a bounded cue and writes no gamep
     const contexts = [trackingContext([]), trackingContext([]), trackingContext(dynamicCalls)];
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
@@ -681,7 +683,7 @@ async function referenceStripRedraw(nudgePx) {
     globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]);
       return { className: '', style: {}, width: 0, height: 0, getContext: () => context,
         addEventListener: (name, handler) => { if (context === contexts[1]) listeners.set(name, handler); },
-        removeEventListener: () => {}, setPointerCapture: () => {}, remove: () => {} }; } };
+        removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};

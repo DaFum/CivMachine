@@ -87,6 +87,47 @@ export function createGameUI(engine, world) {
     let currentCivilizationKey = '';
     let lastFeedbackSequence = 0;
     let impactTimer = 0;
+    let lastTutorialStepId = '';
+    // Above 1000px the coach card docks to its own rail and overlaps nothing, so this never fires
+    // there. Below it the card is pinned to the bottom edge, and the scroll position a step arrives at
+    // is not something the step controls: on the first render of a run it sat directly on the
+    // situation banner, truncating the WHY and DO lines mid-sentence -- the one sentence the guided
+    // run exists to teach the player to read. Bring the anchored panel out from under it, once, when
+    // the step changes; doing it on every render would take the scrollbar away from the player for
+    // the whole run.
+    function revealTutorialAnchor(view) {
+        if (!view.visible || view.collapsed)
+            return;
+        requestAnimationFrame(() => {
+            const card = tutorialLayer.querySelector('.tutorial-card');
+            if (!card)
+                return;
+            // An off-phase step still names its anchor, and that anchor sits in the hidden phase view: it
+            // has no box at all, so scrolling to it would move the page for a panel nobody can see.
+            const onScreen = (selector) => {
+                if (!selector)
+                    return null;
+                const el = document.querySelector(selector);
+                return el && el.offsetParent !== null && el.getBoundingClientRect().height > 0 ? el : null;
+            };
+            // The step's own anchor when it is actually rendered, and otherwise the situation line -- the
+            // one surface that is always saying what to do next, and so the one that must never be the
+            // thing the coach card is sitting on.
+            const target = onScreen(view.step?.anchor ?? '') ?? onScreen('#civilization-panels .situation-banner');
+            if (!target)
+                return;
+            const t = target.getBoundingClientRect(), c = card.getBoundingClientRect();
+            if (t.bottom <= c.top || t.top >= c.bottom || t.right <= c.left || t.left >= c.right)
+                return;
+            const bar = document.querySelector('.topbar');
+            const safeTop = bar ? bar.getBoundingClientRect().bottom : 0;
+            const delta = t.top - safeTop - 12;
+            if (Math.abs(delta) < 2)
+                return;
+            const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+            window.scrollBy({ top: delta, behavior: reduce ? 'auto' : 'smooth' });
+        });
+    }
     const render = () => {
         const vm = buildViewModel(engine);
         replaceIfChanged(resourceBar, vm.resources.map(r => `<div class="resource"><span>${esc(r.name)}</span><strong>${fmt(r.amount)}</strong></div>`).join(''));
@@ -115,6 +156,15 @@ export function createGameUI(engine, world) {
         // card itself being torn down when the phase changes.
         replaceIfChanged(tutorialLayer, tutorialOverlay(vm.tutorial));
         tutorialLayer.classList.toggle('is-hidden', !vm.tutorial.visible);
+        // Phase and collapsed state belong in this key beside the step id. Step 1 is already on screen
+        // in the Machine view when the player starts a run: the step does not change, the entire layout
+        // under the card does -- which is exactly the moment the card ended up sitting on the situation
+        // banner. Expanding the card back out is the same situation in miniature.
+        const stepKey = `${vm.phase}|${vm.tutorial.step?.id ?? ''}|${vm.tutorial.collapsed ? 'c' : 'o'}`;
+        if (stepKey !== lastTutorialStepId) {
+            lastTutorialStepId = stepKey;
+            revealTutorialAnchor(vm.tutorial);
+        }
         if (explainToggle) {
             explainToggle.setAttribute('aria-pressed', vm.explain ? 'true' : 'false');
             explainToggle.classList.toggle('is-active', vm.explain);
