@@ -345,17 +345,27 @@ test('one --space scale drives every gap in the shell', async () => {
       [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
   ));
   const scale = [...sheets['styles.css'].matchAll(/--space-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
-  assert.ok(scale.length >= 8, `the spacing scale has only ${scale.length} steps`);
+  // The exact ten steps, not a floor: a scale that can quietly grow an eleventh step is the thing
+  // this test exists to prevent. Adding one is fine -- it just has to be a deliberate edit here too.
+  assert.deepEqual(
+    [...sheets['styles.css'].matchAll(/--space-([\w-]+):/g)].map(match => match[1]),
+    ['3xs', '2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'],
+    'the --space scale must be exactly the ten declared steps',
+  );
 
   // Padding, margin and gap only. A rem inside `height`, `min-width` or `flex-basis` is a container
   // decision, not a spacing step, and must keep its own value.
   const PROP = /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block))?|(?:row-|column-)?gap)\s*:\s*([^;}!]+)/g;
-  const LENGTH = /(?<![\w.])\d*\.?\d+rem/;
+  // Every unit, not just rem: `gap:3px` and `margin:1em` are literals the rem-only pattern waved
+  // through, and the type test beside this one has always checked the full set.
+  const LENGTH = /(?<![\w.-])\d*\.?\d+(?:rem|em|px|pt|ch|ex|vw|vh|vmin|vmax)/;
   for (const [name, css] of Object.entries(sheets)) {
     const literals = [...css.matchAll(PROP)]
       .map(match => `${match[1]}:${match[2].trim()}`)
       // A clamp is a layout allowance -- the same exemption the world viewport's height already has.
-      .filter(value => !value.includes('clamp(') && LENGTH.test(value));
+      // A negative offset is not a spacing step either: `margin:-1px` is part of the visually-hidden
+      // idiom, where the value is dictated by the clip rect rather than by the rhythm.
+      .filter(value => !value.includes('clamp(') && !/-\d*\.?\d+/.test(value) && LENGTH.test(value));
     assert.deepEqual(literals, [], `${name}: every gap must come from the --space scale`);
   }
 });

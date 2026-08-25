@@ -15,7 +15,10 @@
   --ring:0 0 0 1px color-mix(in srgb,var(--cyan) 34%,transparent);
   --glow:0 0 26px color-mix(in srgb,var(--cyan) 16%,transparent);
   /* Every meter track is one channel cut into the surface. Without it a track at #11171b on a rail
-     at #0c1a22 was invisible, so an empty meter read as no meter at all. */
+     at #0c1a22 was invisible, so an empty meter read as no meter at all. The well is what carries
+     that legibility, which is why no fill carries a min-width floor: a floor would paint a visible
+     bar for a genuinely zero reading -- Entropy starts every run at 0 -- and on an instrument a
+     value that lies is worse than a sub-pixel one. */
   --meter-well:inset 0 1px 2px #00000059;
   /* ONE radius drives the whole scale: change this line and the entire UI re-rounds. */
   --radius:8px;
@@ -168,7 +171,7 @@ main{padding:var(--space-xl)}
 .entropy-readout>span b,.entropy-readout>strong{color:var(--entropy-color)}
 .entropy-readout>strong{font-size:var(--text-xl)}
 .entropy-meter{grid-column:1/-1;height:10px;border:1px solid #32434a;background:var(--surface-sunken);box-shadow:var(--meter-well);overflow:hidden}
-.entropy-meter i{display:block;height:100%;min-width:3px;background:linear-gradient(90deg,var(--mint),var(--entropy-color));box-shadow:0 0 16px var(--entropy-color);transition:width .25s linear}
+.entropy-meter i{display:block;height:100%;background:linear-gradient(90deg,var(--mint),var(--entropy-color));box-shadow:0 0 16px var(--entropy-color);transition:width .25s linear}
 .entropy-readout small{grid-column:1/-1;color:var(--muted)}
 .entropy-readout small b{color:var(--text)}
 .harvest-readout{display:grid;grid-template-columns:1fr auto;gap:var(--space-2xs) var(--space-lg);padding-top:var(--space-lg);border-top:1px solid #24404e}
@@ -183,7 +186,7 @@ main{padding:var(--space-xl)}
 .harvest-readout.urgency-harvest{--harvest-call:var(--mint)}
 .harvest-readout.urgency-cascading{--harvest-call:var(--danger)}
 .harvest-meter{grid-column:1/-1;height:10px;border:1px solid #43413a;background:#17150f;box-shadow:var(--meter-well);overflow:hidden}
-.harvest-meter i{display:block;height:100%;min-width:3px;background:linear-gradient(90deg,#8a7a45,var(--amber));box-shadow:0 0 16px #e8c66a55;transition:width .25s linear}
+.harvest-meter i{display:block;height:100%;background:linear-gradient(90deg,#8a7a45,var(--amber));box-shadow:0 0 16px #e8c66a55;transition:width .25s linear}
 .tactical-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-md)}
 .tactical-action-wrap{display:grid;grid-template-rows:1fr auto;min-width:0}
 .tactical-action-wrap button{display:grid;gap:var(--space-xs);min-height:112px;padding:var(--space-lg);text-align:left;border-color:#315160;background:linear-gradient(180deg,#132631,#0e1921)}
@@ -236,7 +239,7 @@ main{padding:var(--space-xl)}
 .stat-row>div:first-child{display:flex;justify-content:space-between;font-size:var(--text-sm)}
 .stat-row span{color:var(--muted)}
 .meter{height:8px;background:var(--surface-sunken);border:1px solid #22343f;box-shadow:var(--meter-well);margin-top:var(--space-2xs);overflow:hidden}
-.meter i{display:block;height:100%;min-width:3px;background:var(--cyan)}
+.meter i{display:block;height:100%;background:var(--cyan)}
 .meter.stability i{background:var(--mint)}
 .meter.awareness i{background:var(--amber)}
 .meter.sanity i{background:#85b7ff}
@@ -280,8 +283,13 @@ footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:
    written. There are two, so the pair wrapped to a row of their own and the resource bar to a third.
    A shrinkable brand puts the wordmark and both buttons back on one line. */
 .topbar{align-items:center;flex-wrap:wrap;gap:var(--space-sm);padding:var(--space-md) var(--space-lg)}
-.brand{flex:1 1 auto;min-width:0;gap:var(--space-sm)}
-.brand-mark{width:34px;height:34px}
+/* A zero basis, not `auto`: flex collects lines from the hypothetical main size, so an auto basis
+   offers the full wordmark width and the second icon button wraps before the brand ever shrinks.
+   Measured at 320px that cost a third row and a 164px header. The inner wrapper needs min-width:0
+   of its own or the ellipsis below can never engage. */
+.brand{flex:1 1 0;min-width:0;gap:var(--space-sm)}
+.brand>div{min-width:0}
+.brand-mark{flex:0 0 auto;width:34px;height:34px}
 .brand b{font-size:var(--text-md);letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Decorative brand copy; the document title already carries it and the phone needs the band. */
 .brand small{display:none}
@@ -365,7 +373,7 @@ body:has(#tutorial-layer:not(.is-hidden)) #app-shell{padding-bottom:clamp(14rem,
 .tutorial-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-md)}
 .tutorial-head-buttons{display:flex;gap:var(--space-xs)}
 .tutorial-head-buttons button{padding:var(--space-2xs) var(--space-sm);font-size:var(--text-3xs);letter-spacing:.08em}
-.tutorial-progress{display:flex;gap:3px}
+.tutorial-progress{display:flex;gap:var(--space-3xs)}
 .tutorial-progress i{display:block;flex:1 1 0;height:3px;background:#1d3340}
 .tutorial-progress i.done{background:var(--cyan);box-shadow:0 0 8px #6bdcf655}
 .tutorial-card h4{margin:var(--space-3xs) 0 var(--space-3xs);font-size:var(--text-lg);color:#e6f6fc}
