@@ -1,6 +1,6 @@
 import type { HarvestGrade } from './types.js';
 import type { HarvestUrgency } from './harvest-quality.js';
-import { fill, text } from '../data/i18n.js';
+import { fill, harvestGradeLabel, text } from '../data/i18n.js';
 
 // The one-line answer to "what is happening and why". It is a priority ladder over the run's live
 // state, not a script: the highest-severity condition that currently holds wins, and every sentence
@@ -63,6 +63,9 @@ const count = (value: number): number => (Number.isFinite(value) ? Math.round(va
 
 export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
   const copy = text().guidance.civilization;
+  // The grade is an id on the way in and a word on the way out, so it is resolved once here rather
+  // than interpolated raw into the three sentences that name it.
+  const grade = harvestGradeLabel(input.grade) ?? input.grade;
   if (input.entropy >= 100) {
     return { id: 'cascade', severity: 'critical', ...copy.cascade };
   }
@@ -125,7 +128,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
         secondsOfRunLeft: seconds(input.secondsOfRunLeft),
       }),
       advice: fill(count(input.credits) === 1 ? copy.harvest_window.adviceOneCredit : copy.harvest_window.adviceManyCredits,
-        { credits: count(input.credits), grade: input.grade }),
+        { credits: count(input.credits), grade }),
     };
   }
   if (input.attention > 65) {
@@ -196,7 +199,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       severity: 'calm',
       headline: fill(copy.objective_open.headline, { objectiveTitle: input.objectiveTitle }),
       cause: fill(copy.objective_open.cause, {
-        depth: one(input.depth), grade: input.grade, secondsToCascade: seconds(input.secondsToCascade),
+        depth: one(input.depth), grade, secondsToCascade: seconds(input.secondsToCascade),
       }),
       advice: copy.objective_open.advice,
     };
@@ -205,7 +208,7 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
     id: 'building',
     severity: 'calm',
     headline: fill(count(input.credits) === 1 ? copy.building.headlineOneCredit : copy.building.headlineManyCredits,
-      { depth: one(input.depth), grade: input.grade, credits: round(input.credits) }),
+      { depth: one(input.depth), grade, credits: round(input.credits) }),
     cause: fill(copy.building.cause, { entropy: one(input.entropy), secondsToCascade: seconds(input.secondsToCascade) }),
     advice: fill(copy.building.advice, {
       nextCredit: count(input.credits) + 1, secondsToNextCredit: seconds(input.secondsToNextCredit),

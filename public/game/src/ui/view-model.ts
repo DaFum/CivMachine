@@ -6,6 +6,7 @@ import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from
 import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
 import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalActionText, tacticalRisk } from '../game/tactical-actions.js';
 import { civilizationSituation, machineSituation } from '../game/guidance.js';
+import { localizeDecisionFeedback } from '../game/decision-feedback.js';
 import { eraLabel } from '../game/engine.js';
 import { activeLocale, directiveCopy, fill, harvestGradeLabel, matrixCopy, metricName, objectiveCopy, resourceName, text } from '../data/i18n.js';
 import type { GameEngine } from '../game/engine.js';
@@ -333,15 +334,19 @@ export function buildViewModel(engine: GameEngine) {
       axioms: engine.systemUnlocked('axioms'),
     },
     event: buildEventViewModel(engine, civ, event, probed, predictionsUnlocked),
-    feedback: engine.decisionFeedback ? structuredClone(engine.decisionFeedback) : null,
+    // Cloned so no panel can write back into the engine's copy, and re-localized on the way out: the
+    // card is a live surface, and it can still be on screen when the player switches language.
+    feedback: engine.decisionFeedback ? localizeDecisionFeedback(structuredClone(engine.decisionFeedback)) : null,
     lastActionFailure: engine.lastActionFailure,
     tactical,
     harvest,
     machineReserve: civ ? engine.runInterventions() : [],
+    // The offers list localizes each objective it draws; the running one is the same objective read
+    // from the civilization instead of the draft, and it needs the same lookup.
     directiveObjective: activeObjective ? {
       id: activeObjective.id,
-      title: activeObjective.title,
-      description: activeObjective.description,
+      title: objectiveCopy(String(civ?.directiveId ?? ''))?.title ?? activeObjective.title,
+      description: objectiveCopy(String(civ?.directiveId ?? ''))?.description ?? activeObjective.description,
       completed: Boolean(controlledHarvest?.objectiveCompleted),
     } : null,
     lastHarvest: { ...state.machine.lastHarvest },

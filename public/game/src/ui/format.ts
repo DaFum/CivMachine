@@ -6,8 +6,17 @@ import { text } from '../data/i18n.js';
 export const esc = (v: unknown): string =>
   String(v ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]!));
 
-export const fmt = (n: number): string =>
-  Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : Math.abs(n) >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : Math.round(n).toLocaleString(text().ui.format.numberLocale);
+// All three branches go through the locale, not just the unabbreviated one: `toFixed` always writes a
+// decimal point, so a German player read `1.5K` next to a `1.234` further down the same panel.
+export const fmt = (n: number): string => {
+  const locale = text().ui.format.numberLocale;
+  const scaled = (value: number, digits: number): string =>
+    // Grouping stays off: the abbreviated forms never had it, and this must change the separator only.
+    value.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false });
+  return Math.abs(n) >= 1e6 ? `${scaled(n / 1e6, 2)}M`
+    : Math.abs(n) >= 1e3 ? `${scaled(n / 1e3, 1)}K`
+      : Math.round(n).toLocaleString(locale);
+};
 
 // A meter width, so it has to stay a length whatever it is handed. The clamp already turns an
 // infinite share into a full meter and a negative one into an empty one; only NaN -- `0 / 0`, a stat

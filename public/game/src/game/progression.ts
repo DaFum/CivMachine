@@ -1,5 +1,5 @@
 import { evaluateMilestones } from './milestones.js';
-import { fill, milestoneCopy, resourceName, text } from '../data/i18n.js';
+import { directiveCopy, fill, matrixCopy, milestoneCopy, resourceName, text, upgradeCopy } from '../data/i18n.js';
 import type { GameState, Layer } from './types.js';
 
 const MACHINE: Record<string,{insight:number;resource?:string}> = {
@@ -30,7 +30,14 @@ export class Progression {
   private static discover(state:GameState,id:string,name:string,out:string[]){ if(this.resourceDiscovered(state,id))return; state.meta.progression.discoveredResources.push(id); this.announce(state,`resource:${id}`,fill(text().reports.progression.newResourceIdentified,{name:resourceName(id)??name}),out); }
   private static unlockSystem(state:GameState,id:string,out:string[]){ if(this.systemUnlocked(state,id))return; state.meta.progression.unlockedSystems.push(id); this.announce(state,`system:${id}`,fill(text().reports.progression.newSystemUnlocked,{name:this.systemName(id)}),out); }
   private static systemName(id:string){ const names:Readonly<Record<string,string>>=text().reports.progression.unlockSystemNames; return names[id]??id.replaceAll('_',' ').toUpperCase(); }
-  private static refreshKnown(state:GameState,system:string,thresholds:Record<string,number>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; for(const [id,need] of Object.entries(thresholds)) if(this.machineInsight(state)>=need&&!known.includes(id)){known.push(id);this.announce(state,`option:${id}`,fill(text().reports.progression.newOptionUnlocked,{name:id.replaceAll('_',' ').toUpperCase()}),out);} }
+  // An unlocked option is announced by its name, not by its id spelled out: a matrix is a "Neural
+  // Bloom Matrix" and an axiom has a full sentence for a name, neither of which survives being
+  // reconstructed from the key. The humanized id remains the fallback.
+  private static optionName(storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',id:string){
+    const copy=storage==='knownDirectives'?directiveCopy(id):storage==='knownBreedingMatrices'?matrixCopy(id):upgradeCopy(id);
+    return copy?.name??id.replaceAll('_',' ').toUpperCase();
+  }
+  private static refreshKnown(state:GameState,system:string,thresholds:Record<string,number>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; for(const [id,need] of Object.entries(thresholds)) if(this.machineInsight(state)>=need&&!known.includes(id)){known.push(id);this.announce(state,`option:${id}`,fill(text().reports.progression.newOptionUnlocked,{name:this.optionName(storage,id)}),out);} }
   static refresh(state:GameState,out:string[]=[]){ const p=state.meta.progression; const insight=this.machineInsight(state); if(p.controlledHarvestsTotal>=2&&insight>=3)this.unlockSystem(state,'directives',out); if(state.machine.civilizationsTotal>=4||insight>=6)this.unlockSystem(state,'universe_prestige',out); if(state.meta.universesTotal>=1){this.unlockSystem(state,'universe_upgrades',out);if(insight>=7)this.unlockSystem(state,'breeding_matrices',out);} if(state.meta.universesTotal>=2)this.unlockSystem(state,'multiverse_prestige',out); if(state.meta.multiversesConsumed>=1&&insight>=18)this.unlockSystem(state,'axioms',out); this.refreshKnown(state,'directives',DIRECTIVE_INSIGHT,'knownDirectives',out); this.refreshKnown(state,'breeding_matrices',MATRIX_INSIGHT,'knownBreedingMatrices',out); this.refreshKnown(state,'axioms',AXIOM_KNOWLEDGE,'knownAxioms',out); return out; }
   static recordMilestones(state:GameState,convergenceUnlocked:boolean,out:string[]=[]){ const result=evaluateMilestones(state,convergenceUnlocked); for(const milestone of result.newlyCompleted) if(milestone.insight) out.push(fill(text().reports.progression.machineInsightAwarded,{amount:milestone.insight,title:milestoneCopy(milestone.id)?.title??milestone.title})); return this.refresh(state,out); }
   static recordCivilizationProgress(state:GameState,civ:{development:number;era:number;stats:{awareness:number}}){ const out:string[]=[]; if(civ.development>=70)this.discover(state,'cognition','Cognition',out); return this.recordMilestones(state,false,out); }
@@ -52,7 +59,7 @@ export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):strin
   if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return copy.consumeFirstUniverse;
   if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return copy.unlockAxiomaticManipulation;
   const req:string[]=[]; if(Progression.machineInsight(state)<rule.insight) req.push(fill(copy.machineInsightRequirement,{amount:rule.insight}));
-  if(rule.resource&&!Progression.resourceDiscovered(state,rule.resource)) req.push(fill(copy.discoverResource,{resource:rule.resource.replaceAll('_',' ')}));
+  if(rule.resource&&!Progression.resourceDiscovered(state,rule.resource)) req.push(fill(copy.discoverResource,{resource:resourceName(rule.resource)??rule.resource.replaceAll('_',' ')}));
   return req.length?req.join(copy.requirementJoiner):copy.availableAfterRefresh;
 }
 

@@ -487,3 +487,91 @@ test('main.ts rewrites every shell string and hosts the locale switcher', async 
   assert.match(main, /engine\.setLocale\(/);
   assert.match(main, /applyShellText\(\)/);
 });
+
+// --- Nothing structural reaches a sentence, and nothing on screen keeps a stale language ---------
+import { fmt } from '../dist/ui/format.js';
+import { Progression } from '../dist/game/progression.js';
+
+test('abbreviated numbers are written in the active number locale', () => {
+  // The unabbreviated branch always went through `toLocaleString`; the K and M branches used
+  // `toFixed`, which writes a decimal point whatever the locale says.
+  assert.equal(LOCALIZATION.de.ui.format.numberLocale, 'de-DE');
+  assert.deepEqual([999, 1500, 12345, 1500000].map(fmt), ['999', '1.5K', '12.3K', '1.50M']);
+  withLocale('de', () => {
+    assert.deepEqual([999, 1500, 12345, 1500000].map(fmt), ['999', '1,5K', '12,3K', '1,50M']);
+  });
+});
+
+test('the running Directive objective is localized, not just the offers', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  try {
+    engine.state.meta.progression.unlockedSystems.push('directives');
+    engine.state.meta.progression.knownDirectives = CONTENT.directives.map(item => item.id);
+    engine.prepareNextRun(777);
+    const selected = engine.state.machine.runBuild.directiveOfferIds[0];
+    assert.equal(engine.selectDirective(selected), true);
+    engine.startCivilization(91);
+    const english = buildViewModel(engine).directiveObjective;
+    engine.setLocale('de');
+    const german = buildViewModel(engine).directiveObjective;
+    assert.equal(german.id, english.id);
+    assert.equal(german.description, LOCALIZATION.de.content.directives.objectives[selected].description);
+    assert.notEqual(german.description, english.description, 'the objective card followed the switch');
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('a decision feedback card still on screen follows a locale switch', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  try {
+    engine.startCivilization(4242);
+    engine.forceEvent('mirror_delay');
+    engine.chooseEvent(0);
+    const english = buildViewModel(engine).feedback;
+    engine.setLocale('de');
+    const german = buildViewModel(engine).feedback;
+    // The heading is the event and the choice that was taken -- resolved again from the event id and
+    // the choice index, because the card outlives the decision.
+    assert.equal(german.eventTitle, english.eventTitle, 'event titles are canonical in both locales');
+    assert.equal(german.choiceLabel, LOCALIZATION.de.content.events.mirror_delay.choices[0].label);
+    assert.notEqual(german.choiceLabel, english.choiceLabel);
+    for (const item of german.metrics) assert.equal(item.label, LOCALIZATION.de.reports.decisionFeedback.metrics[item.key]);
+    for (const item of german.additions) assert.equal(item.kindLabel, LOCALIZATION.de.reports.decisionFeedback.additionKinds[item.kind]);
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('a synthetic decision names itself from the id the engine built it from', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  try {
+    engine.startCivilization(4242);
+    engine.state.civilization.stats.stability = 50;
+    assert.equal(engine.useTacticalAction('stabilize'), true);
+    const english = buildViewModel(engine).feedback;
+    assert.equal(english.eventId, 'tactical:stabilize');
+    assert.equal(english.choiceIndex, undefined, 'a tactical action is not one of an event’s choices');
+    engine.setLocale('de');
+    const german = buildViewModel(engine).feedback;
+    assert.equal(german.choiceLabel, LOCALIZATION.de.tacticalActions.actions.stabilize.label);
+    assert.notEqual(german.choiceLabel, english.choiceLabel);
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
+});
+
+test('currencies, grades and unlocked options are named, never spelled out from their id', () => {
+  const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
+  engine.state.meta.progression.machineInsight = 25;
+  engine.state.meta.progression.unlockedSystems = ['directives', 'breeding_matrices', 'axioms', 'universe_upgrades'];
+  const announcements = [];
+  Progression.refresh(engine.state, announcements);
+  const options = announcements.filter(message => message.includes('OPTION'));
+  // A matrix is not called "NEURAL BLOOM" and an axiom's name is a whole sentence; neither survives
+  // being reconstructed from its key.
+  assert.ok(options.some(message => message.endsWith(LOCALIZATION.en.content.breedingMatrices.neural_bloom.name)));
+  assert.ok(options.some(message => message.endsWith(LOCALIZATION.en.content.upgrades.axiom_stability.name)));
+  assert.equal(options.filter(message => /_/.test(message)).length, 0, 'no id may reach the log');
+
+  // The reserve rail prices a commitment in a named resource, and the report grades a run by name.
+  engine.startCivilization(4242);
+  const reason = buildViewModel(engine).machineReserve.map(entry => entry.reason).join(' ');
+  assert.equal(/causal mass|causal_mass/.test(reason), false, `a humanized key reached the rail: ${reason}`);
+  engine.harvest(false);
+  assert.match(engine.lastRunReport().reasonDetail, new RegExp(LOCALIZATION.en.reports.harvestGrades.premature));
+});

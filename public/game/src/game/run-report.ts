@@ -92,10 +92,12 @@ export function traceSamples(civ: Civilization): RunTraceSample[] {
   return validRunTrace(civ.trace) ? [...civ.trace!.samples] : [];
 }
 
-function reasonDetail(reason: RunEndReason, civ: Civilization, grade: HarvestGrade, credits: number, depth: number): string {
+function reasonDetail(reason: RunEndReason, civ: Civilization, gradeId: HarvestGrade, credits: number, depth: number): string {
   const year = Math.trunc(civ.years);
   const entropy = civ.tactical.entropy.toFixed(0);
   const copy = text().reports.runReport.reasonDetails;
+  // `HarvestGrade` stays the identifier the callers switch on; what a sentence prints is its name.
+  const grade = harvestGradeLabel(gradeId) ?? HARVEST_GRADE_LABELS[gradeId];
   switch (reason) {
     case 'controlled_harvest':
       return fill(credits === 1 ? copy.controlledOneCredit : copy.controlledManyCredits,
@@ -209,7 +211,7 @@ export function runLessons(civ: Civilization, context: RunReportContext, depth: 
   }
   if (!lessons.length) {
     lessons.push(fill(credits === 1 ? copy.cleanOneCredit : copy.cleanManyCredits,
-      { grade, depth: depth.toFixed(1), credits }));
+      { grade: harvestGradeLabel(grade) ?? HARVEST_GRADE_LABELS[grade], depth: depth.toFixed(1), credits }));
   }
   return lessons;
 }

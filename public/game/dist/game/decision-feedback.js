@@ -1,7 +1,7 @@
 import { buildDecisionConsequence } from './decision-consequences.js';
 import { civilizationDramaPhase } from './drama.js';
 import { CivilizationPaths } from './paths.js';
-import { flagLabel, institutionName, pathFlagLabel, text, traitCopy } from '../data/i18n.js';
+import { eventCopy, flagLabel, institutionName, interventionCopy, pathFlagLabel, tacticalActionCopy, text, traitCopy } from '../data/i18n.js';
 // `label` here is the canonical English and the fallback; which metric is `inverse` is a rule, so the
 // table itself stays a constant and only the label is read from the catalog at build time.
 const METRICS = [
@@ -31,7 +31,7 @@ function additionLabel(id, kind) {
 function additions(after, before, kind) {
     const known = new Set(before);
     const kinds = text().reports.decisionFeedback.additionKinds;
-    return after.filter(id => !known.has(id)).map(id => ({ kind, kindLabel: kinds[kind] ?? humanize(kind), label: additionLabel(id, kind) }));
+    return after.filter(id => !known.has(id)).map(id => ({ kind, id, kindLabel: kinds[kind] ?? humanize(kind), label: additionLabel(id, kind) }));
 }
 export function captureDecisionSnapshot(civ) {
     return {
@@ -57,6 +57,34 @@ export function captureDecisionSnapshot(civ) {
         dominantPath: civ.pathState.dominantPath,
         endgameStates: [...(civ.pathState.endgameStates ?? [])],
         entropyBand: Math.min(4, Math.floor(Math.max(0, Math.min(100, civ.tactical.entropy)) / 25)),
+    };
+}
+// Feedback is written when a decision resolves and read for as long as its card is on screen, which
+// can outlive a locale switch. So the ids travel with it and the copy is resolved again on the way
+// out: `metrics` from their keys, `affinities` from their path ids, `additions` from theirs, and the
+// heading from the event id plus, for a real intervention, the index of the choice that was taken.
+// The three synthetic decisions -- a tactical action, a reserve commitment and a queued Entropy
+// crisis -- name themselves through the same ids the engine built them from.
+export function localizeDecisionFeedback(feedback) {
+    const kinds = text().reports.decisionFeedback.additionKinds;
+    const metricLabels = text().reports.decisionFeedback.metrics;
+    const event = eventCopy(feedback.eventId);
+    const tactical = feedback.eventId.startsWith('tactical:') ? tacticalActionCopy(feedback.eventId.slice('tactical:'.length)) : undefined;
+    const reserve = feedback.eventId.startsWith('reserve:') ? interventionCopy(feedback.eventId.slice('reserve:'.length)) : undefined;
+    const choiceLabel = typeof feedback.choiceIndex === 'number'
+        ? event?.choices[feedback.choiceIndex]?.label
+        : tactical?.label ?? reserve?.label;
+    return {
+        ...feedback,
+        eventTitle: event?.title ?? tactical?.title ?? reserve?.title ?? feedback.eventTitle,
+        choiceLabel: choiceLabel ?? feedback.choiceLabel,
+        metrics: feedback.metrics.map(item => ({ ...item, label: metricLabels[item.key] ?? item.label })),
+        affinities: feedback.affinities.map(item => ({ ...item, label: CivilizationPaths.displayName(item.pathId) })),
+        additions: feedback.additions.map(item => ({
+            ...item,
+            kindLabel: kinds[item.kind] ?? item.kindLabel,
+            label: additionLabel(item.id, item.kind),
+        })),
     };
 }
 export function buildDecisionFeedback(sequence, event, choice, before, after) {
@@ -88,6 +116,7 @@ export function buildDecisionFeedback(sequence, event, choice, before, after) {
     return {
         sequence,
         eventId: event.id,
+        choiceIndex: choice.index,
         eventTitle: event.title,
         choiceLabel: choice.label,
         tone: positive && negative ? 'mixed' : negative ? 'negative' : positive ? 'positive' : 'mixed',

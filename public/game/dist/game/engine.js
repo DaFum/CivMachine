@@ -1,6 +1,6 @@
 import { applyEffects, clampStats } from "./effects.js";
 import { CONTENT } from "../data/content.generated.js";
-import { activeLocale, directiveCopy, endgameStateLabel, eraName, eventCopy, fill, harvestGradeLabel, interventionCopy, matrixCopy, mutationCopy, objectiveCopy, isLocale, setActiveLocale, text, traitCopy, upgradeCopy, } from "../data/i18n.js";
+import { activeLocale, directiveCopy, endgameStateLabel, eraName, eventCopy, fill, harvestGradeLabel, interventionCopy, matrixCopy, mutationCopy, resourceName, objectiveCopy, isLocale, setActiveLocale, text, traitCopy, upgradeCopy, } from "../data/i18n.js";
 import { applyEraCeiling, applyInterventionCopy, } from "../data/intervention-copy.js";
 import { APOTHEOSIS_EVENTS } from "../data/apotheosis-events.js";
 import { ENTROPY_CRISES } from "../data/entropy-crises.js";
@@ -42,6 +42,9 @@ const DRAMA_PHASE_IDS = [
     "transformation",
     "crisis",
 ];
+// A currency is a resource key, and a resource has a name in the catalog. The humanized key is the
+// fallback only -- it is a structural id, and an id is not something to print at a player.
+export const currencyName = (currency) => resourceName(currency) ?? String(currency).replaceAll("_", " ");
 export const eraLabel = (era) => {
     const id = ERA_NAMES[era];
     return id ? (eraName(id.toLowerCase()) ?? id).toUpperCase() : "";
@@ -932,7 +935,7 @@ export class GameEngine {
                 enabled = false;
                 reason = fill(text().reports.engine.requiresCurrency, {
                     cost,
-                    currency: definition.currency.replaceAll("_", " "),
+                    currency: currencyName(definition.currency),
                 });
             }
             // Title, label and summary are what the reserve rail prints, so the localized copy replaces
@@ -978,7 +981,7 @@ export class GameEngine {
         this.post(fill(text().reports.engine.machineReserveCommitted, {
             title: view.title,
             cost: view.cost,
-            currency: definition.currency.replaceAll("_", " "),
+            currency: currencyName(definition.currency),
         }));
         this.save();
         this.emit();
@@ -1082,7 +1085,10 @@ export class GameEngine {
             Math.max(1, Math.trunc(this.runtimeBonuses().controlRecharge)));
         civ.eventTimer = this.rollEventDelay(civ);
         clampStats(civ);
-        const feedback = buildDecisionFeedback(++this.feedbackSequence, event, choice, before, captureDecisionSnapshot(civ));
+        const feedback = buildDecisionFeedback(++this.feedbackSequence, event, 
+        // The index travels with the choice so the card can name it again after a locale switch: the
+        // choice itself is one of the event's own, and only its position identifies it.
+        { ...choice, index }, before, captureDecisionSnapshot(civ));
         this.publishCompletedDecision(civ, feedback);
         if (civ.stats.stability <= 0) {
             this.harvest(true, "collapse");

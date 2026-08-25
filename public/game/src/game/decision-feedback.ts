@@ -1,7 +1,7 @@
 import { buildDecisionConsequence } from './decision-consequences.js';
 import { civilizationDramaPhase } from './drama.js';
 import { CivilizationPaths } from './paths.js';
-import { flagLabel, institutionName, pathFlagLabel, text, traitCopy } from '../data/i18n.js';
+import { eventCopy, flagLabel, institutionName, interventionCopy, pathFlagLabel, tacticalActionCopy, text, traitCopy } from '../data/i18n.js';
 import type { Civilization, DecisionFeedback, DecisionMetricDelta, DramaPhaseId } from './types.js';
 
 export interface DecisionSnapshot {
@@ -45,7 +45,7 @@ function additionLabel(id:string,kind:'trait'|'institution'|'flag'|'path_flag'):
 function additions(after:string[],before:string[],kind:'trait'|'institution'|'flag'|'path_flag'){
   const known=new Set(before);
   const kinds:Readonly<Record<string,string>>=text().reports.decisionFeedback.additionKinds;
-  return after.filter(id=>!known.has(id)).map(id=>({kind,kindLabel:kinds[kind]??humanize(kind),label:additionLabel(id,kind)}));
+  return after.filter(id=>!known.has(id)).map(id=>({kind,id,kindLabel:kinds[kind]??humanize(kind),label:additionLabel(id,kind)}));
 }
 
 export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
@@ -75,10 +75,39 @@ export function captureDecisionSnapshot(civ:Civilization):DecisionSnapshot {
   };
 }
 
+// Feedback is written when a decision resolves and read for as long as its card is on screen, which
+// can outlive a locale switch. So the ids travel with it and the copy is resolved again on the way
+// out: `metrics` from their keys, `affinities` from their path ids, `additions` from theirs, and the
+// heading from the event id plus, for a real intervention, the index of the choice that was taken.
+// The three synthetic decisions -- a tactical action, a reserve commitment and a queued Entropy
+// crisis -- name themselves through the same ids the engine built them from.
+export function localizeDecisionFeedback(feedback:DecisionFeedback):DecisionFeedback {
+  const kinds:Readonly<Record<string,string>>=text().reports.decisionFeedback.additionKinds;
+  const metricLabels:Readonly<Record<string,string>>=text().reports.decisionFeedback.metrics;
+  const event=eventCopy(feedback.eventId);
+  const tactical=feedback.eventId.startsWith('tactical:')?tacticalActionCopy(feedback.eventId.slice('tactical:'.length)):undefined;
+  const reserve=feedback.eventId.startsWith('reserve:')?interventionCopy(feedback.eventId.slice('reserve:'.length)):undefined;
+  const choiceLabel=typeof feedback.choiceIndex==='number'
+    ? event?.choices[feedback.choiceIndex]?.label
+    : tactical?.label ?? reserve?.label;
+  return {
+    ...feedback,
+    eventTitle:event?.title??tactical?.title??reserve?.title??feedback.eventTitle,
+    choiceLabel:choiceLabel??feedback.choiceLabel,
+    metrics:feedback.metrics.map(item=>({...item,label:metricLabels[item.key]??item.label})),
+    affinities:feedback.affinities.map(item=>({...item,label:CivilizationPaths.displayName(item.pathId)})),
+    additions:feedback.additions.map(item=>({
+      ...item,
+      kindLabel:kinds[item.kind]??item.kindLabel,
+      label:additionLabel(item.id,item.kind),
+    })),
+  };
+}
+
 export function buildDecisionFeedback(
   sequence:number,
   event:{id:string;title:string},
-  choice:{label:string},
+  choice:{label:string;index?:number},
   before:DecisionSnapshot,
   after:DecisionSnapshot,
 ):DecisionFeedback {
@@ -105,6 +134,7 @@ export function buildDecisionFeedback(
   return {
     sequence,
     eventId:event.id,
+    choiceIndex:choice.index,
     eventTitle:event.title,
     choiceLabel:choice.label,
     tone:positive&&negative?'mixed':negative?'negative':positive?'positive':'mixed',

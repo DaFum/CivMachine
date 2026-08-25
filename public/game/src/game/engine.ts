@@ -11,6 +11,7 @@ import {
   interventionCopy,
   matrixCopy,
   mutationCopy,
+  resourceName,
   objectiveCopy,
   isLocale,
   setActiveLocale,
@@ -153,6 +154,10 @@ const DRAMA_PHASE_IDS = [
   "transformation",
   "crisis",
 ] as const;
+// A currency is a resource key, and a resource has a name in the catalog. The humanized key is the
+// fallback only -- it is a structural id, and an id is not something to print at a player.
+export const currencyName = (currency: string): string =>
+  resourceName(currency) ?? String(currency).replaceAll("_", " ");
 export const eraLabel = (era: number): string => {
   const id = ERA_NAMES[era];
   return id ? (eraName(id.toLowerCase()) ?? id).toUpperCase() : "";
@@ -1088,7 +1093,7 @@ export class GameEngine {
         enabled = false;
         reason = fill(text().reports.engine.requiresCurrency, {
           cost,
-          currency: definition.currency.replaceAll("_", " "),
+          currency: currencyName(definition.currency),
         });
       }
       // Title, label and summary are what the reserve rail prints, so the localized copy replaces
@@ -1143,7 +1148,7 @@ export class GameEngine {
       fill(text().reports.engine.machineReserveCommitted, {
         title: view.title,
         cost: view.cost,
-        currency: definition.currency.replaceAll("_", " "),
+        currency: currencyName(definition.currency),
       }),
     );
     this.save();
@@ -1287,7 +1292,9 @@ export class GameEngine {
     const feedback = buildDecisionFeedback(
       ++this.feedbackSequence,
       event,
-      choice,
+      // The index travels with the choice so the card can name it again after a locale switch: the
+      // choice itself is one of the event's own, and only its position identifies it.
+      { ...choice, index },
       before,
       captureDecisionSnapshot(civ),
     );

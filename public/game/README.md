@@ -77,9 +77,25 @@ one assignment and one re-render.
 - ids stayed ids: effects, costs, anchors, gating facts and CSS hooks are rules, and a localized
   lookup that misses falls back to the English the source already carries
 
-One English string did change on purpose. Decision feedback used to name a gained flag by humanizing
-its id (`machine faith devout`); it now names it the way the catalog does — by the decision that set
-it (`Recognize the miracle`) — and prints the localized kind beside it.
+A few English strings did change, all for the same reason: an id had been standing in for a name.
+
+- decision feedback named a gained flag by humanizing its id (`machine faith devout`) and now names it
+  the way the catalog does, by the decision that set it (`Recognize the miracle`), with the localized
+  kind beside it
+- `NEW OPTION UNLOCKED` spelled the option's key out in capitals; it now uses the option's own name, so
+  a matrix is a `Neural Bloom Matrix` rather than `NEURAL BLOOM` and an axiom keeps its whole name
+- currencies and harvest grades are named from the catalog instead of humanized from their key, so
+  `causal mass` reads `Causal Mass` and `at premature grade` reads `at Premature grade`
+
+Two localization bugs found in review are fixed here too. `fmt` abbreviated large numbers with
+`toFixed`, which always writes a decimal point, so a German player read `1.5K` next to a `1.234`
+further down the same panel; all three branches go through the number locale now. And the *running*
+Directive objective was read straight from the definition while only the drafted offers were
+localized, so its card stayed English.
+
+Decision feedback is written when a decision resolves but read for as long as its card is on screen,
+which can outlive a locale switch. The ids travel with it now and the copy is resolved again on the
+way out, so the card follows the language like every other live surface.
 
 ## v1.15.0 measure, the type floor, and a coach card that stops covering its own lesson
 

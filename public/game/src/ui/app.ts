@@ -1,5 +1,5 @@
 import type { GameEngine } from '../game/engine.js';
-import { eraLabel } from '../game/engine.js';
+import { currencyName, eraLabel } from '../game/engine.js';
 import { endgameStateLabel, fill, harvestGradeLabel, institutionName, milestoneGroupLabel, resourceName, text } from '../data/i18n.js';
 import { buildViewModel, civilizationRenderKey } from './view-model.js';
 import { CivilizationPaths } from '../game/paths.js';
@@ -17,7 +17,7 @@ const CHAOTIC_KEYS=['causal_mass','paradox'] as const;
 // Reserve cost and harvest yield both move with Cultivation Depth on every tick. They must not enter
 // the structural render key -- that would rebuild the DOM continuously -- so they are written through
 // the live refresh instead, from the same builders the structural render uses.
-const reserveCostText=(entry:any)=>fill(text().ui.app.reserveCost,{cost:fmt(entry.cost),currency:entry.currency.replaceAll('_',' '),usesLeft:entry.usesLeft,maxUses:entry.maxUses});
+const reserveCostText=(entry:any)=>fill(text().ui.app.reserveCost,{cost:fmt(entry.cost),currency:currencyName(entry.currency),usesLeft:entry.usesLeft,maxUses:entry.maxUses});
 const harvestSummaryText=(details:any)=>{const t=text().ui.app;return fill(details.credits===1?t.harvestSummaryOne:t.harvestSummaryMany,{multiplier:details.rewardMultiplier.toFixed(2),credits:details.credits,objectiveBonus:details.objectiveCompleted?t.objectiveBonusActive:''});};
 function statBar(name:string,value:number,max=100,kind=''){return `<div class="stat-row" data-stat="${esc(kind)}"><div><span>${esc(name)}</span><b>${value.toFixed(1)}${max!==100?` / ${max.toFixed(0)}`:''}</b></div><div class="meter ${kind}"><i style="width:${pct(value,max)}"></i></div></div>`;}
 function card(title:string,body:string,cls=''){return `<section class="panel ${cls}"><h3>${title}</h3>${body}</section>`;}
@@ -175,7 +175,7 @@ export function createGameUI(engine:GameEngine,world:WorldController){
     bindActions();
   };
 
-  const upgrades=(entries:any[],layer:string)=>entries.map(entry=>{const t=text().ui.app;const d=entry.definition;const level=engine.upgradeLevel(layer as any,d.id),cost=engine.upgradeCost(layer as any,d.id),max=Number(d.max_level);const locked=entry.status==='locked';return `<article class="upgrade ${locked?'locked':''}"><div><h4>${esc(d.name)}</h4><p>${esc(d.description)}</p>${locked?`<small>🔒 ${esc(entry.reason)}</small>`:`<small>${esc(d.currency.replaceAll('_',' '))} ${fmt(cost)} · ${esc(fill(t.level,{level,max}))}</small>`}</div><button data-action="upgrade" data-layer="${layer}" data-id="${esc(d.id)}" ${locked||level>=max||!engine.canPurchaseUpgrade(layer as any,d.id)?'disabled':''}>${esc(level>=max?t.max:locked?t.locked:t.install)}</button></article>`;}).join('');
+  const upgrades=(entries:any[],layer:string)=>entries.map(entry=>{const t=text().ui.app;const d=entry.definition;const level=engine.upgradeLevel(layer as any,d.id),cost=engine.upgradeCost(layer as any,d.id),max=Number(d.max_level);const locked=entry.status==='locked';return `<article class="upgrade ${locked?'locked':''}"><div><h4>${esc(d.name)}</h4><p>${esc(d.description)}</p>${locked?`<small>🔒 ${esc(entry.reason)}</small>`:`<small>${esc(currencyName(d.currency))} ${fmt(cost)} · ${esc(fill(t.level,{level,max}))}</small>`}</div><button data-action="upgrade" data-layer="${layer}" data-id="${esc(d.id)}" ${locked||level>=max||!engine.canPurchaseUpgrade(layer as any,d.id)?'disabled':''}>${esc(level>=max?t.max:locked?t.locked:t.install)}</button></article>`;}).join('');
 
   const optionCards=(items:any[],kind:'directive'|'matrix',selected:string,locked:boolean)=>items.map(x=>{const t=text().ui.app;return `<article class="build-option ${selected===x.id?'selected':''}"><h4>${esc(x.name)}</h4><p>${esc(x.description)}</p>${x.objective?`<div class="objective-brief"><span>${esc(t.directiveObjective)}</span><b>${esc(x.objective.title)}</b><small>${esc(x.objective.description)}</small></div>`:''}<button data-action="${kind}" data-id="${esc(x.id)}" ${locked||selected===x.id?'disabled':''}>${esc(selected===x.id?t.active:locked?t.lockedForRun:t.select)}</button></article>`;}).join('');
 
