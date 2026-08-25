@@ -355,7 +355,10 @@ test('one --space scale drives every gap in the shell', async () => {
 
   // Padding, margin and gap only. A rem inside `height`, `min-width` or `flex-basis` is a container
   // decision, not a spacing step, and must keep its own value.
-  const PROP = /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block))?|(?:row-|column-)?gap)\s*:\s*([^;}!]+)/g;
+  // The logical longhands are here for the day someone reaches for them: `margin-inline-start` is
+  // not matched by a pattern that stops at `margin-inline`, so the guard would quietly stop covering
+  // the property that replaced the one it was watching.
+  const PROP = /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|(?:row-|column-)?gap)\s*:\s*([^;}!]+)/g;
   // Every unit, not just rem: `gap:3px` and `margin:1em` are literals the rem-only pattern waved
   // through, and the type test beside this one has always checked the full set.
   const LENGTH = /(?<![\w.-])\d*\.?\d+(?:rem|em|px|pt|ch|ex|vw|vh|vmin|vmax)/;
