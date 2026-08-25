@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.13.0
+# Reality Consumption Engine — App Edition v1.14.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,24 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.14.0 the last two scales, and a decision sized to what it asks
+
+v1.14.0 is presentation only, like the release before it. `SAVE_VERSION` stays at 4, no rule module
+moved, and the renderer draws exactly what it drew before -- every change is in the two stylesheets.
+
+v1.13.0 collapsed radius and type to single sources and left the other two scales alone: colour and
+spacing were still 224 literal hexes and 197 gaps across 24 distinct values, and the surface tokens
+meant to prevent exactly that had been declared and then never used.
+
+- five declared surface tiers replace ten near-identical darks, so a dozen panel types stop reading
+  as a dozen designs
+- one `--space` scale drives every gap, snapped from the values already in use
+- a choice button was 92px holding 19px of text; sized to its content, it lifts the whole pressure
+  rail above the fold
+- the Entropy and Harvest gauges connect their labels to their right-aligned values with a leader
+- meter tracks read as channels cut into the surface instead of near-invisible hairlines
+- a phone gets 23px of viewport back, and `CONTINUE` stops rendering as `CONTI`
 
 ## v1.13.0 a shell that reads as built
 

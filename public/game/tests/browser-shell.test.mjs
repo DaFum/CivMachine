@@ -339,6 +339,81 @@ test('panel reveals are driven by scroll position, never by a clock', async () =
   assert.ok(!reveal.includes('.world-shell'), 'the world host must not animate');
 });
 
+test('one --space scale drives every gap in the shell', async () => {
+  const sheets = Object.fromEntries(await Promise.all(
+    ['styles.css', 'mobile.css'].map(async name =>
+      [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
+  ));
+  const scale = [...sheets['styles.css'].matchAll(/--space-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
+  // The exact ten steps, not a floor: a scale that can quietly grow an eleventh step is the thing
+  // this test exists to prevent. Adding one is fine -- it just has to be a deliberate edit here too.
+  assert.deepEqual(
+    [...sheets['styles.css'].matchAll(/--space-([\w-]+):/g)].map(match => match[1]),
+    ['3xs', '2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl'],
+    'the --space scale must be exactly the ten declared steps',
+  );
+
+  // Padding, margin and gap only. A rem inside `height`, `min-width` or `flex-basis` is a container
+  // decision, not a spacing step, and must keep its own value.
+  // The logical longhands are here for the day someone reaches for them: `margin-inline-start` is
+  // not matched by a pattern that stops at `margin-inline`, so the guard would quietly stop covering
+  // the property that replaced the one it was watching.
+  const PROP = /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|(?:row-|column-)?gap)\s*:\s*([^;}!]+)/g;
+  // Every unit, not just rem: `gap:3px` and `margin:1em` are literals the rem-only pattern waved
+  // through, and the type test beside this one has always checked the full set.
+  const LENGTH = /(?<![\w.-])\d*\.?\d+(?:rem|em|px|pt|ch|ex|vw|vh|vmin|vmax)/;
+  // Strip what is exempt out of the value and check what is left, rather than letting one exempt
+  // part excuse the whole declaration. Doing it per-declaration is what made this guard nearly
+  // blind: `var(--space-3xs)` contains `-3`, so the negative-offset exemption matched every one of
+  // the 53 declarations that reference a numbered token, and any literal beside it went unseen.
+  const remainder = value => value
+    // Token references and the nested calc() they sit in are the whole point of the scale.
+    .replace(/\bvar\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ')
+    // A clamp is a layout allowance -- the same exemption the world viewport's height already has.
+    .replace(/\bclamp\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ')
+    // A negative offset is not a spacing step: `margin:-1px` belongs to the visually-hidden idiom,
+    // where the value is dictated by the clip rect rather than by the rhythm.
+    .replace(/-\d*\.?\d+[a-z%]*/g, ' ');
+  for (const [name, css] of Object.entries(sheets)) {
+    const literals = [...css.matchAll(PROP)]
+      .filter(match => LENGTH.test(remainder(match[2].trim())))
+      .map(match => `${match[1]}:${match[2].trim()}`);
+    assert.deepEqual(literals, [], `${name}: every gap must come from the --space scale`);
+  }
+  // A guard that detects nothing passes exactly like a guard that has nothing to find, and this one
+  // spent a commit in that state. These must still be caught beside an exempt component.
+  for (const bad of ['padding:var(--space-3xs) 1px', 'margin:clamp(1rem,2vw,3rem) 4px',
+                     'gap:var(--space-sm) -1px 2em', 'padding-inline-start:8px']) {
+    const match = [...bad.matchAll(PROP)][0];
+    assert.ok(match && LENGTH.test(remainder(match[2].trim())), `the guard must still flag "${bad}"`);
+  }
+  for (const good of ['padding:var(--space-lg) var(--space-xl)', 'margin:-1px',
+                      'padding-bottom:clamp(14rem,32dvh,22rem)', 'margin:var(--space-2xs) 0',
+                      'padding-bottom:calc(var(--space-4xl) * 1.5)']) {
+    const match = [...good.matchAll(PROP)][0];
+    assert.ok(match && !LENGTH.test(remainder(match[2].trim())), `the guard must not flag "${good}"`);
+  }
+});
+
+test('every dark surface in the shell comes from a declared tier', async () => {
+  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const root = styles.slice(0, styles.indexOf('}'));
+  for (const tier of ['surface-sunken', 'surface-inset', 'surface-1', 'surface-translucent', 'surface-raised']) {
+    assert.match(root, new RegExp(`--${tier}:`), `--${tier} must be declared`);
+    assert.ok(
+      styles.slice(root.length).includes(`var(--${tier})`),
+      `--${tier} is declared but never used -- that is how ten near-identical darks accumulated`,
+    );
+  }
+  // The specific darks that were doing the tiers' jobs by hand. Any of them reappearing means a new
+  // surface invented its own hex instead of taking the tier one step above or below it.
+  const body = styles.slice(root.length);
+  for (const literal of ['#0b141b', '#0b141a', '#0b151b', '#0a1218', '#0c151c', '#081218',
+    '#070d12', '#080e13', '#080f14', '#12202a', '#13202a']) {
+    assert.ok(!body.toLowerCase().includes(literal), `${literal} must come from a --surface tier`);
+  }
+});
+
 test('reduced motion silences every decorative animation the shell adds', async () => {
   const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
   const reduced = styles.slice(styles.lastIndexOf('@media(prefers-reduced-motion:reduce)'));

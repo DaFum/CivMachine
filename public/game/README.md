@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.13.0
+# Reality Consumption Engine — App Edition v1.14.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,43 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.14.0 the last two scales, and a decision sized to what it asks
+
+v1.14.0 is presentation only, like the release before it. No rule module, balance number or content
+entry moved, `SAVE_VERSION` stays at 4, and the renderer draws exactly what it drew before — every
+change is in the two stylesheets.
+
+v1.13.0 collapsed radius and type to single sources and left the other two scales alone. Colour and
+spacing were still literals: 224 hard-coded hexes, and 197 gaps across 24 distinct values, so
+`.65`/`.7`/`.75`/`.8rem` all did the same job on adjacent cards. The tokens meant to prevent exactly
+that — `--surface-1/2/3`, `--line-soft`, `--line-strong` — had been declared in v1.13.0 and then used
+zero times.
+
+- **Five surface tiers instead of ten near-identical darks.** `#0b141b`, `#0b141a`, `#0b151b`,
+  `#0a1218`, `#0c151c`, `#081218`, `#070d12`, `#080e13` and `#080f14` were doing five jobs between
+  them, which is what made a dozen panel types read as a dozen designs. They are `--surface-sunken`,
+  `--surface-inset`, `--surface-1`, `--surface-translucent` and `--surface-raised` now, ordered by
+  elevation, plus the two gradient pairs the panels and rails are built from.
+- **One `--space` scale drives every gap.** Ten steps on a 2px grid, snapped from the values already
+  in use, so nothing moved more than 1.6px and the rhythm is even for the first time.
+- **The decision is sized to what it asks.** A choice button was a flat 92px box holding 19px of
+  text — 79% dead space, because the consequence line does not exist until Probe is spent. It sizes
+  to its content now and grows with its pair when predictions are revealed; on a 1440×900 desktop
+  that lifts the whole pressure rail, harvest buttons included, above the fold.
+- **The gauges connect their labels to their numbers.** Entropy and Harvest Grade are right-aligned
+  so the two read as a column, which on a wide rail left the label 700px from its own value. A leader
+  carries the eye across without moving the number off its alignment.
+- **Meters read as instruments.** Each track is a channel cut into the surface rather than a
+  near-invisible hairline, and a non-zero value is always visible instead of rounding to nothing.
+- **A phone gets its viewport back.** The header reserved `100% - 50px` for the one icon button that
+  existed when the rule was written; there are two, so the pair wrapped to a row of their own and the
+  resource bar to a third — 188px of an 844px screen spent before the world appeared. And
+  `.tutorial-foot` let the waiting sentence crush `CONTINUE` from 106px to 65px, so the first control
+  a new player is asked to press rendered as `CONTI`.
+
+Two tests pin the new scales the way the radius and type tests already do: a literal gap in either
+stylesheet, or any of the retired darks reappearing, fails the build rather than shipping.
 
 ## v1.13.0 a shell that reads as built
 
