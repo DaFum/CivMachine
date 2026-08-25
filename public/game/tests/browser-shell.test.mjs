@@ -262,13 +262,18 @@ test('save reset never depends on a native modal dialog', async () => {
   assert.match(main, /armed/i, 'reset must require a second, explicit in-page confirmation');
 });
 
+// A declaration is code; a comment about one is not. These guards scan the stylesheet as text, so a
+// comment that quotes a property -- `font:inherit`, or a note recording that a size used to be 16px --
+// used to fail them for describing exactly the thing they enforce. Strip comments before scanning.
+const declarationsOf = css => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+
 // --- The design system ---------------------------------------------------------------------------
 // Radius and type are the two scales that make a dozen unrelated panel types read as one UI. Both
 // collapsed to a single source in v1.13.0, and both are trivial to un-collapse by hand later, so
 // each one is pinned as an invariant rather than as a list of expected values.
 
 test('one --radius drives every corner in the shell', async () => {
-  const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+  const styles = declarationsOf(await readFile(new URL('../styles.css', import.meta.url), 'utf8'));
   assert.match(styles, /--radius:\s*\d/, 'the scale must have a single numeric root');
   for (const step of ['xs', 'sm', 'md', 'lg']) {
     assert.match(
@@ -288,7 +293,7 @@ test('one --radius drives every corner in the shell', async () => {
 test('every font size in the shell is fluid', async () => {
   const sheets = Object.fromEntries(await Promise.all(
     ['styles.css', 'mobile.css'].map(async name =>
-      [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
+      [name, declarationsOf(await readFile(new URL(`../${name}`, import.meta.url), 'utf8'))]),
   ));
   const scale = [...sheets['styles.css'].matchAll(/--text-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
   assert.ok(scale.length >= 9, `the type scale has only ${scale.length} steps`);
@@ -322,6 +327,47 @@ test('every font size in the shell is fluid', async () => {
   }
 });
 
+test('the elements that inherit a size from outside the scale name a tier', async () => {
+  const styles = declarationsOf(await readFile(new URL('../styles.css', import.meta.url), 'utf8'));
+  // The guard above can only see sizes that are declared, which is exactly why these two escaped it:
+  // neither declared anything. `small` carries a UA default of 0.8333em and held 17 elements at a
+  // flat 13.33px; a button takes the root size through the `font` shorthand and held 40 labels at a
+  // flat 16px. Both are fixed px that ignore the clamps, so on a phone a detail line rendered larger
+  // than the label above it. Declared at the element, not at the call sites -- patching the six
+  // selectors that happened to exist would have left the seventh inheriting the default again.
+  for (const [element, rule] of [['small', /(?<![-\w])small\{([^}]*)\}/], ['button', /(?<![-\w])button\{([^}]*)\}/]]) {
+    const match = styles.match(rule);
+    assert.ok(match, `${element} must carry a base rule`);
+    assert.match(
+      match[1],
+      /font-size:var\(--text-/,
+      `${element} must name a type tier -- without one it silently takes a fixed size from the UA`,
+    );
+  }
+});
+
+test('running prose is capped by one --measure token', async () => {
+  const styles = declarationsOf(await readFile(new URL('../styles.css', import.meta.url), 'utf8'));
+  assert.match(styles, /--measure:\s*\d+ch/, 'measure must have a single root in ch, not px');
+  // The shell is monospace, so a pixel cap says nothing about how many characters land on a line:
+  // .machine-hero p was capped at 780px and still ran 109 characters. Every prose block that carries
+  // a cap must take it from the token.
+  // A `ch` cap is a measure decision and belongs to the token; a px or % cap is a container
+  // decision -- #app-shell's 1500px and the world chip's 58% are not prose and keep their own
+  // values. The lookbehind is what separates a declaration from a media feature, which is spelled
+  // the same way and is not a cap at all.
+  const caps = [...styles.matchAll(/(?<!\()max-width:\s*([^;}!]+)/g)]
+    .map(match => match[1].trim())
+    .filter(value => /(?<![\w.-])\d*\.?\d+ch/.test(value));
+  assert.deepEqual(caps, [], 'a measure must come from --measure rather than a literal ch width');
+  // And the running-prose blocks must actually carry it, or the token caps nothing.
+  for (const selector of ['.panel p', '.panel-note', '.upgrade p', '.machine-hero p']) {
+    const rule = styles.match(new RegExp(`${selector.replace('.', '\\.')}\\{([^}]*)\\}`));
+    assert.ok(rule, `${selector} must carry a rule`);
+    assert.match(rule[1], /max-width:var\(--measure\)/, `${selector} must take its measure from the token`);
+  }
+});
+
 test('panel reveals are driven by scroll position, never by a clock', async () => {
   const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
   // This is the whole reason the reveal is safe here. `replaceIfChanged` rebuilds a panel's HTML
@@ -342,7 +388,7 @@ test('panel reveals are driven by scroll position, never by a clock', async () =
 test('one --space scale drives every gap in the shell', async () => {
   const sheets = Object.fromEntries(await Promise.all(
     ['styles.css', 'mobile.css'].map(async name =>
-      [name, await readFile(new URL(`../${name}`, import.meta.url), 'utf8')]),
+      [name, declarationsOf(await readFile(new URL(`../${name}`, import.meta.url), 'utf8'))]),
   ));
   const scale = [...sheets['styles.css'].matchAll(/--space-[\w-]+:\s*([^;]+)/g)].map(match => match[1].trim());
   // The exact ten steps, not a floor: a scale that can quietly grow an eleventh step is the thing

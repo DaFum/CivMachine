@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.14.0
+# Reality Consumption Engine — App Edition v1.15.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,38 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.15.0 measure, the type floor, and a coach card that stops covering its own lesson
+
+v1.15.0 is presentation and accessibility only. `SAVE_VERSION` stays at 4, no rule module moved, and
+the renderer draws exactly what it drew before. It closes an eight-finding frontend audit of the
+shipped build, measured in a browser rather than read off the stylesheets.
+
+Three of the four scales were already single sources. **Measure was the one still missing**, and it
+is the one that decides whether a wide display reads as designed: the shell is monospace, so
+`.panel-note` ran 171 characters per line at 1440px and 177 at 1920px, `.upgrade-list` never left a
+single 1374px column, and each upgrade row put 338px of dead panel between a description and the
+button that acts on it.
+
+- `--measure` caps running prose at 68ch; the panels stay full width, only the text inside them stops
+- the upgrade list and the milestone register go multi-column, like the option grid already did
+- the type scale's bottom half moves up together: `--text-3xs` resolved to 9.29px on a phone, and
+  what sat on it was the sentence explaining why a tactical action is refused
+- 57 elements were off the scale entirely -- five `small` selectors took the browser default 13.33px
+  and every button label took a flat 16px through `font:inherit`; both now name a tier
+- the guided run docks to its own rail above 1000px and the shell gives up that width, so the card
+  can no longer sit on the situation banner's DO line; below that width the anchored panel is
+  scrolled clear once, when the step changes
+- `HIDE` and `SKIP` were 46x22px on a pointer -- under WCAG 2.2 2.5.8, and the only controls that
+  clear the card off the text underneath it
+- the world host takes `role="img"` so its label is exposed at all (a bare `div` is `role=generic`,
+  which prohibits naming) and its three canvases are hidden from the tree
+- the machine record takes `role="log"` with live updates explicitly off, so it does not talk over
+  the situation banner
+- the footer line was the shell's one contrast failure at 3.59:1; it takes `--muted` at 5.74:1
+
+Reduced motion, focus visibility, reflow, control naming, touch targets and per-frame cost were all
+checked and all held: the render-key gate keeps the sanitiser at 0.08% of wall clock across a run.
 
 ## v1.14.0 the last two scales, and a decision sized to what it asks
 
