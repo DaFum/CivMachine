@@ -116,8 +116,11 @@ main{padding:var(--space-xl)}
 .panel h4{margin:var(--space-3xs) 0 var(--space-xs)}
 .panel p{max-width:var(--measure);color:#93a8b4;line-height:1.5}
 /* One column at every width meant a 1374px row at 1440px, with 338px of dead panel between each
-   description and its INSTALL button. The option grid beside it already did this. */
-.upgrade-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:var(--space-sm)}
+   description and its INSTALL button. The option grid beside it already did this.
+   The floor is min(), not a bare 420px: auto-fit still lays a 420px track inside a narrower
+   container, so a bare minimum pushed the whole register 445px wide on a 320px phone and put the
+   INSTALL buttons off screen. min(420px,100%) collapses the track to the container instead. */
+.upgrade-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--space-sm)}
 .upgrade{display:flex;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-lg);border:1px solid #1e3541;background:var(--surface-1)}
 .upgrade p{max-width:var(--measure);margin:var(--space-2xs) 0;font-size:var(--text-md)}
 .upgrade small{color:var(--amber)}
@@ -349,11 +352,14 @@ footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:
 
 .milestone-register{display:flex;flex-direction:column;gap:var(--space-xl)}
 .register-summary{opacity:.75;margin:0}
-.milestone-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:var(--space-xs)}
+.milestone-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:var(--space-xs)}
 /* The group heading is a direct child, so on a grid it takes a cell and lands beside the first
    milestone instead of over the set. It spans. */
 .milestone-group>.panel-kicker{grid-column:1/-1}
-.milestone{display:flex;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-sm) var(--space-lg);border:1px solid rgba(140,180,255,.18);border-radius:var(--radius-sm)}
+/* The progress block carries min-width:11rem, which a 270px card cannot seat beside the title: the
+   register overflowed a 320px viewport before this grid existed and kept doing so after. Wrapping
+   drops the meter under the title only when the row genuinely cannot hold both. */
+.milestone{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-xl);align-items:center;padding:var(--space-sm) var(--space-lg);border:1px solid rgba(140,180,255,.18);border-radius:var(--radius-sm)}
 .milestone p{margin:var(--space-3xs) 0 0;opacity:.7;font-size:var(--text-md)}
 .milestone-progress{min-width:11rem;text-align:right}
 .milestone.complete{opacity:.55;border-style:dashed}
