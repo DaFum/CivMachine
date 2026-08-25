@@ -38,9 +38,9 @@
   --text-3xl:clamp(1.3rem,.99rem + 1.29vw,2rem);
   --text-4xl:clamp(1.5rem,1.05rem + 1.88vw,2.6rem);
   --text-glyph:clamp(1.3rem,1.1rem + .6vw,1.65rem);
-  /* Fluid spacing. The last scale the shell was missing: 197 literal gaps across 24 distinct values
+  /* Fluid spacing. The last scale the shell was missing: 248 literal gaps across 24 distinct values
      sat here, so .65/.7/.75/.8rem all did the same job on adjacent cards and the rhythm read as
-     uneven rather than dense. Nine steps on a 2px grid, snapped from what was already there. */
+     uneven rather than dense. Ten steps on a 2px grid, snapped from what was already there. */
   --space-3xs:.125rem;--space-2xs:.25rem;--space-xs:.375rem;--space-sm:.5rem;--space-md:.625rem;
   --space-lg:.75rem;--space-xl:1rem;--space-2xl:1.25rem;--space-3xl:1.5rem;--space-4xl:2rem;
   /* One easing and one duration, used by every transition below. Consistency is the effect. */

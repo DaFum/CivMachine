@@ -362,14 +362,36 @@ test('one --space scale drives every gap in the shell', async () => {
   // Every unit, not just rem: `gap:3px` and `margin:1em` are literals the rem-only pattern waved
   // through, and the type test beside this one has always checked the full set.
   const LENGTH = /(?<![\w.-])\d*\.?\d+(?:rem|em|px|pt|ch|ex|vw|vh|vmin|vmax)/;
+  // Strip what is exempt out of the value and check what is left, rather than letting one exempt
+  // part excuse the whole declaration. Doing it per-declaration is what made this guard nearly
+  // blind: `var(--space-3xs)` contains `-3`, so the negative-offset exemption matched every one of
+  // the 53 declarations that reference a numbered token, and any literal beside it went unseen.
+  const remainder = value => value
+    // Token references and the nested calc() they sit in are the whole point of the scale.
+    .replace(/\bvar\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ')
+    // A clamp is a layout allowance -- the same exemption the world viewport's height already has.
+    .replace(/\bclamp\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ')
+    // A negative offset is not a spacing step: `margin:-1px` belongs to the visually-hidden idiom,
+    // where the value is dictated by the clip rect rather than by the rhythm.
+    .replace(/-\d*\.?\d+[a-z%]*/g, ' ');
   for (const [name, css] of Object.entries(sheets)) {
     const literals = [...css.matchAll(PROP)]
-      .map(match => `${match[1]}:${match[2].trim()}`)
-      // A clamp is a layout allowance -- the same exemption the world viewport's height already has.
-      // A negative offset is not a spacing step either: `margin:-1px` is part of the visually-hidden
-      // idiom, where the value is dictated by the clip rect rather than by the rhythm.
-      .filter(value => !value.includes('clamp(') && !/-\d*\.?\d+/.test(value) && LENGTH.test(value));
+      .filter(match => LENGTH.test(remainder(match[2].trim())))
+      .map(match => `${match[1]}:${match[2].trim()}`);
     assert.deepEqual(literals, [], `${name}: every gap must come from the --space scale`);
+  }
+  // A guard that detects nothing passes exactly like a guard that has nothing to find, and this one
+  // spent a commit in that state. These must still be caught beside an exempt component.
+  for (const bad of ['padding:var(--space-3xs) 1px', 'margin:clamp(1rem,2vw,3rem) 4px',
+                     'gap:var(--space-sm) -1px 2em', 'padding-inline-start:8px']) {
+    const match = [...bad.matchAll(PROP)][0];
+    assert.ok(match && LENGTH.test(remainder(match[2].trim())), `the guard must still flag "${bad}"`);
+  }
+  for (const good of ['padding:var(--space-lg) var(--space-xl)', 'margin:-1px',
+                      'padding-bottom:clamp(14rem,32dvh,22rem)', 'margin:var(--space-2xs) 0',
+                      'padding-bottom:calc(var(--space-4xl) * 1.5)']) {
+    const match = [...good.matchAll(PROP)][0];
+    assert.ok(match && !LENGTH.test(remainder(match[2].trim())), `the guard must not flag "${good}"`);
   }
 });
 
