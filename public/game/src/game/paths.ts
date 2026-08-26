@@ -65,7 +65,7 @@ export class CivilizationPaths {
     });
   }
   static mergedChoiceEffects(civ: Civilization, choice: any): Record<string, any> {
-    const merged = structuredClone(choice.effects ?? {});
+    const merged = { ...(choice.effects ?? {}) };
     const secondary = choice.secondary_effects ?? {};
     for (const id of this.secondaryPaths(civ,3)) {
       if (!secondary[id]) continue;
