@@ -31,6 +31,22 @@ export class CivilizationPaths {
             ps.successionAtChoice = 0;
         return ps;
     }
+    static getCompletedEventsSet(ps) {
+        if (!(ps._completedEventsSet instanceof Set) || ps._cachedEventsArray !== ps.completedEvents || ps._completedEventsSet.size !== ps.completedEvents.length || ps._cachedEventsVersion !== ps._completedEventsVersion) {
+            ps._completedEventsSet = new Set(ps.completedEvents);
+            ps._cachedEventsArray = ps.completedEvents;
+            ps._cachedEventsVersion = ps._completedEventsVersion;
+        }
+        return ps._completedEventsSet;
+    }
+    static getChoiceFlagsSet(ps) {
+        if (!(ps._choiceFlagsSet instanceof Set) || ps._cachedFlagsArray !== ps.choiceFlags || ps._choiceFlagsSet.size !== ps.choiceFlags.length || ps._cachedFlagsVersion !== ps._choiceFlagsVersion) {
+            ps._choiceFlagsSet = new Set(ps.choiceFlags);
+            ps._cachedFlagsArray = ps.choiceFlags;
+            ps._cachedFlagsVersion = ps._choiceFlagsVersion;
+        }
+        return ps._choiceFlagsSet;
+    }
     static displayName(id) { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
     static affinity(civ, id) { return PATH_IDS.includes(id) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
     static ranked(civ, limit = 10, excludeDominant = false) {
@@ -101,11 +117,17 @@ export class CivilizationPaths {
             }
         ps.recentDeltas = recent;
         const flag = String(choice.path_flag_add ?? '');
-        if (flag && !ps.choiceFlags.includes(flag))
+        if (flag && !this.getChoiceFlagsSet(ps).has(flag)) {
             ps.choiceFlags.push(flag);
+            ps._choiceFlagsVersion = (ps._choiceFlagsVersion ?? 0) + 1;
+            ps._choiceFlagsSet.add(flag);
+        }
         const eventId = String(event.id ?? '');
-        if (eventId && !ps.completedEvents.includes(eventId))
+        if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) {
             ps.completedEvents.push(eventId);
+            ps._completedEventsVersion = (ps._completedEventsVersion ?? 0) + 1;
+            ps._completedEventsSet.add(eventId);
+        }
         const newDominantPath = this.resolveDominance(civ);
         let endgameState = '';
         if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {
@@ -134,15 +156,17 @@ export class CivilizationPaths {
             return false;
         if (req.requires_secondary_path != null && !this.secondaryPaths(civ, 3).includes(String(req.requires_secondary_path)))
             return false;
+        const completedSet = this.getCompletedEventsSet(ps);
         const any = req.completed_any ?? [];
-        if (any.length && !any.some((x) => ps.completedEvents.includes(String(x))))
+        if (any.length && !any.some((x) => completedSet.has(String(x))))
             return false;
         const all = req.completed_all ?? [];
-        if (all.some((x) => !ps.completedEvents.includes(String(x))))
+        if (all.some((x) => !completedSet.has(String(x))))
             return false;
-        if (req.requires_path_flag != null && !ps.choiceFlags.includes(String(req.requires_path_flag)))
+        const flagSet = this.getChoiceFlagsSet(ps);
+        if (req.requires_path_flag != null && !flagSet.has(String(req.requires_path_flag)))
             return false;
-        if (req.excludes_path_flag != null && ps.choiceFlags.includes(String(req.excludes_path_flag)))
+        if (req.excludes_path_flag != null && flagSet.has(String(req.excludes_path_flag)))
             return false;
         return true;
     }
