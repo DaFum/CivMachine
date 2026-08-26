@@ -122,10 +122,23 @@ export class GameEngine {
         this.directives = C.directives;
         this.matrices = C.breeding_matrices;
         this.mutations = C.mutations;
+        this.eventsByEra = new Map();
         this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
         this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
         this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
         this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
+        for (const e of this.events) {
+            const minEra = Number(e.min_era ?? 0);
+            const maxEra = Number(e.max_era ?? 2);
+            for (let era = minEra; era <= maxEra; era++) {
+                let list = this.eventsByEra.get(era);
+                if (!list) {
+                    list = [];
+                    this.eventsByEra.set(era, list);
+                }
+                list.push(e);
+            }
+        }
         this.storage = options.storage ?? globalThis.localStorage;
         this.autosave = options.autosave ?? true;
         this.restoreLocale();
@@ -1509,7 +1522,7 @@ export class GameEngine {
                 return scheduled;
             }
         }
-        const eligible = this.events.filter((event) => this.eventEligible(event, civ));
+        const eligible = (this.eventsByEra.get(civ.era) ?? []).filter((event) => this.eventEligible(event, civ));
         const stateMultiplier = (event) => {
             const s = civ.stats, id = event.id;
             let weight = 1;
@@ -1552,8 +1565,6 @@ export class GameEngine {
         return selected;
     }
     eventEligible(e, civ) {
-        if (civ.era < Number(e.min_era ?? 0) || civ.era > Number(e.max_era ?? 2))
-            return false;
         const r = e.requirements ?? {};
         if (r.scheduled_only)
             return false;
