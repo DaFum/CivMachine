@@ -806,7 +806,7 @@ export class GameEngine {
         const civ = this.state.civilization;
         if (!civ)
             return {};
-        const effects = structuredClone(CivilizationPaths.mergedChoiceEffects(civ, choice));
+        const effects = CivilizationPaths.mergedChoiceEffects(civ, choice);
         const b = this.runtimeBonuses();
         for (const key of ["stability", "awareness", "sanity", "attention"]) {
             if (effects[key] == null)
