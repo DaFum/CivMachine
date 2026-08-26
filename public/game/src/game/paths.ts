@@ -28,12 +28,20 @@ export class CivilizationPaths {
     if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
     return ps;
   }
-  static getCompletedEventsSet(ps: PathState): Set<string> {
-    if (!(ps._completedEventsSet instanceof Set) || ps._completedEventsSet.size !== ps.completedEvents.length) ps._completedEventsSet = new Set(ps.completedEvents);
+  static getCompletedEventsSet(ps: PathState & { _cachedEventsVersion?: number, _cachedEventsArray?: string[] }): Set<string> {
+    if (!(ps._completedEventsSet instanceof Set) || ps._cachedEventsArray !== ps.completedEvents || ps._completedEventsSet.size !== ps.completedEvents.length || ps._cachedEventsVersion !== ps._completedEventsVersion) {
+      ps._completedEventsSet = new Set(ps.completedEvents);
+      ps._cachedEventsArray = ps.completedEvents;
+      ps._cachedEventsVersion = ps._completedEventsVersion;
+    }
     return ps._completedEventsSet;
   }
-  static getChoiceFlagsSet(ps: PathState): Set<string> {
-    if (!(ps._choiceFlagsSet instanceof Set) || ps._choiceFlagsSet.size !== ps.choiceFlags.length) ps._choiceFlagsSet = new Set(ps.choiceFlags);
+  static getChoiceFlagsSet(ps: PathState & { _cachedFlagsVersion?: number, _cachedFlagsArray?: string[] }): Set<string> {
+    if (!(ps._choiceFlagsSet instanceof Set) || ps._cachedFlagsArray !== ps.choiceFlags || ps._choiceFlagsSet.size !== ps.choiceFlags.length || ps._cachedFlagsVersion !== ps._choiceFlagsVersion) {
+      ps._choiceFlagsSet = new Set(ps.choiceFlags);
+      ps._cachedFlagsArray = ps.choiceFlags;
+      ps._cachedFlagsVersion = ps._choiceFlagsVersion;
+    }
     return ps._choiceFlagsSet;
   }
   static displayName(id: string): string { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
@@ -86,8 +94,8 @@ export class CivilizationPaths {
     const ps = this.ensure(civ); const deltas = choice.path_affinity ?? {}; const recent: Record<string,number> = {};
     for (const [id, raw] of Object.entries(deltas)) if (PATH_IDS.includes(id as any)) { const d=Number(raw); ps.affinity[id] = (ps.affinity[id] ?? 0)+d; recent[id]=d; }
     ps.recentDeltas = recent;
-    const flag = String(choice.path_flag_add ?? ''); if (flag && !this.getChoiceFlagsSet(ps).has(flag)) { ps.choiceFlags.push(flag); ps._choiceFlagsSet!.add(flag); }
-    const eventId = String(event.id ?? ''); if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) { ps.completedEvents.push(eventId); ps._completedEventsSet!.add(eventId); }
+    const flag = String(choice.path_flag_add ?? ''); if (flag && !this.getChoiceFlagsSet(ps).has(flag)) { ps.choiceFlags.push(flag); ps._choiceFlagsVersion = (ps._choiceFlagsVersion ?? 0) + 1; ps._choiceFlagsSet!.add(flag); }
+    const eventId = String(event.id ?? ''); if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) { ps.completedEvents.push(eventId); ps._completedEventsVersion = (ps._completedEventsVersion ?? 0) + 1; ps._completedEventsSet!.add(eventId); }
     const newDominantPath = this.resolveDominance(civ);
     let endgameState = '';
     if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {

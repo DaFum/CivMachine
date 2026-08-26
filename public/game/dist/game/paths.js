@@ -32,13 +32,19 @@ export class CivilizationPaths {
         return ps;
     }
     static getCompletedEventsSet(ps) {
-        if (!(ps._completedEventsSet instanceof Set) || ps._completedEventsSet.size !== ps.completedEvents.length)
+        if (!(ps._completedEventsSet instanceof Set) || ps._cachedEventsArray !== ps.completedEvents || ps._completedEventsSet.size !== ps.completedEvents.length || ps._cachedEventsVersion !== ps._completedEventsVersion) {
             ps._completedEventsSet = new Set(ps.completedEvents);
+            ps._cachedEventsArray = ps.completedEvents;
+            ps._cachedEventsVersion = ps._completedEventsVersion;
+        }
         return ps._completedEventsSet;
     }
     static getChoiceFlagsSet(ps) {
-        if (!(ps._choiceFlagsSet instanceof Set) || ps._choiceFlagsSet.size !== ps.choiceFlags.length)
+        if (!(ps._choiceFlagsSet instanceof Set) || ps._cachedFlagsArray !== ps.choiceFlags || ps._choiceFlagsSet.size !== ps.choiceFlags.length || ps._cachedFlagsVersion !== ps._choiceFlagsVersion) {
             ps._choiceFlagsSet = new Set(ps.choiceFlags);
+            ps._cachedFlagsArray = ps.choiceFlags;
+            ps._cachedFlagsVersion = ps._choiceFlagsVersion;
+        }
         return ps._choiceFlagsSet;
     }
     static displayName(id) { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
@@ -113,11 +119,13 @@ export class CivilizationPaths {
         const flag = String(choice.path_flag_add ?? '');
         if (flag && !this.getChoiceFlagsSet(ps).has(flag)) {
             ps.choiceFlags.push(flag);
+            ps._choiceFlagsVersion = (ps._choiceFlagsVersion ?? 0) + 1;
             ps._choiceFlagsSet.add(flag);
         }
         const eventId = String(event.id ?? '');
         if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) {
             ps.completedEvents.push(eventId);
+            ps._completedEventsVersion = (ps._completedEventsVersion ?? 0) + 1;
             ps._completedEventsSet.add(eventId);
         }
         const newDominantPath = this.resolveDominance(civ);
