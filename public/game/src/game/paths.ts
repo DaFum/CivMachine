@@ -28,6 +28,14 @@ export class CivilizationPaths {
     if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
     return ps;
   }
+  static getCompletedEventsSet(ps: PathState): Set<string> {
+    if (!(ps._completedEventsSet instanceof Set) || ps._completedEventsSet.size !== ps.completedEvents.length) ps._completedEventsSet = new Set(ps.completedEvents);
+    return ps._completedEventsSet;
+  }
+  static getChoiceFlagsSet(ps: PathState): Set<string> {
+    if (!(ps._choiceFlagsSet instanceof Set) || ps._choiceFlagsSet.size !== ps.choiceFlags.length) ps._choiceFlagsSet = new Set(ps.choiceFlags);
+    return ps._choiceFlagsSet;
+  }
   static displayName(id: string): string { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
   static affinity(civ: Civilization, id: string): number { return PATH_IDS.includes(id as any) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
   static ranked(civ: Civilization, limit = 10, excludeDominant = false): string[] {
@@ -78,8 +86,8 @@ export class CivilizationPaths {
     const ps = this.ensure(civ); const deltas = choice.path_affinity ?? {}; const recent: Record<string,number> = {};
     for (const [id, raw] of Object.entries(deltas)) if (PATH_IDS.includes(id as any)) { const d=Number(raw); ps.affinity[id] = (ps.affinity[id] ?? 0)+d; recent[id]=d; }
     ps.recentDeltas = recent;
-    const flag = String(choice.path_flag_add ?? ''); if (flag && !ps.choiceFlags.includes(flag)) ps.choiceFlags.push(flag);
-    const eventId = String(event.id ?? ''); if (eventId && !ps.completedEvents.includes(eventId)) ps.completedEvents.push(eventId);
+    const flag = String(choice.path_flag_add ?? ''); if (flag && !this.getChoiceFlagsSet(ps).has(flag)) { ps.choiceFlags.push(flag); ps._choiceFlagsSet!.add(flag); }
+    const eventId = String(event.id ?? ''); if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) { ps.completedEvents.push(eventId); ps._completedEventsSet!.add(eventId); }
     const newDominantPath = this.resolveDominance(civ);
     let endgameState = '';
     if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {
@@ -99,10 +107,12 @@ export class CivilizationPaths {
     if (req.min_development != null && civ.development < Number(req.min_development)) return false;
     if (req.requires_dominant_path != null && ps.dominantPath !== String(req.requires_dominant_path)) return false;
     if (req.requires_secondary_path != null && !this.secondaryPaths(civ,3).includes(String(req.requires_secondary_path))) return false;
-    const any = req.completed_any ?? []; if (any.length && !any.some((x:string)=>ps.completedEvents.includes(String(x)))) return false;
-    const all = req.completed_all ?? []; if (all.some((x:string)=>!ps.completedEvents.includes(String(x)))) return false;
-    if (req.requires_path_flag != null && !ps.choiceFlags.includes(String(req.requires_path_flag))) return false;
-    if (req.excludes_path_flag != null && ps.choiceFlags.includes(String(req.excludes_path_flag))) return false;
+    const completedSet = this.getCompletedEventsSet(ps);
+    const any = req.completed_any ?? []; if (any.length && !any.some((x:string)=>completedSet.has(String(x)))) return false;
+    const all = req.completed_all ?? []; if (all.some((x:string)=>!completedSet.has(String(x)))) return false;
+    const flagSet = this.getChoiceFlagsSet(ps);
+    if (req.requires_path_flag != null && !flagSet.has(String(req.requires_path_flag))) return false;
+    if (req.excludes_path_flag != null && flagSet.has(String(req.excludes_path_flag))) return false;
     return true;
   }
   static eventWeightMultiplier(event: any, civ: Civilization): number {

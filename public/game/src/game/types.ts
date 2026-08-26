@@ -17,6 +17,8 @@ export interface PathState {
   dominantPath: string;
   completedEvents: string[];
   choiceFlags: string[];
+  _completedEventsSet?: Set<string>;
+  _choiceFlagsSet?: Set<string>;
   recentPaths: string[];
   recentDeltas: Record<string, number>;
   endgameState: string;
