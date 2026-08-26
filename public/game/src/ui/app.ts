@@ -26,13 +26,19 @@ function sanitizeHTML(html:string){
   const walker=document.createTreeWalker(doc.body,NodeFilter.SHOW_ELEMENT);
   let node=walker.nextNode() as Element;
   const toRemove: Element[] = [];
+  const tagNameGetter = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName')!.get!;
+  const attributesGetter = Object.getOwnPropertyDescriptor(Element.prototype, 'attributes')!.get!;
+  const removeAttribute = Element.prototype.removeAttribute;
+
   while(node){
-    if(node.tagName==='SCRIPT'||node.tagName==='IFRAME'||node.tagName==='OBJECT'||node.tagName==='EMBED'){
+    const tagName = tagNameGetter.call(node) as string;
+    if(tagName==='SCRIPT'||tagName==='IFRAME'||tagName==='OBJECT'||tagName==='EMBED'){
       toRemove.push(node);
     } else {
-      for(const attr of Array.from(node.attributes)){
+      const attributes = attributesGetter.call(node) as NamedNodeMap;
+      for(const attr of Array.from(attributes)){
         if(attr.name.toLowerCase().startsWith('on')){
-          node.removeAttribute(attr.name);
+          removeAttribute.call(node, attr.name);
           continue;
         }
         // Check for javascript: using anchor parsing to resolve protocols
@@ -40,7 +46,7 @@ function sanitizeHTML(html:string){
             const tempAnchor = document.createElement('a');
             tempAnchor.href = attr.value;
             if (tempAnchor.protocol === 'javascript:') {
-                node.removeAttribute(attr.name);
+                removeAttribute.call(node, attr.name);
             }
         }
       }
