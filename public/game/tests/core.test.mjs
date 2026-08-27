@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
 import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
+import { clampStats } from '../dist/game/effects.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
@@ -33,7 +34,7 @@ import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { applyWorldMemory, emptyWorldMemory, sanitizeWorldMemory } from '../dist/game/world-memory.js';
-import { CONSEQUENCE_PROFILES, consequenceProfileFor } from '../dist/game/consequence-profiles.js';
+import { CONSEQUENCE_PROFILES, consequenceProfileFor, consequenceProfileById } from '../dist/game/consequence-profiles.js';
 import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
 import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
@@ -2360,8 +2361,25 @@ test('the signature catalog contains exactly the required 28 profiles', () => {
   ];
   assert.equal(CONSEQUENCE_PROFILES.length, 28);
   assert.deepEqual([...new Set(ids)].sort(), [...required].sort());
+});
+
+test('consequence profiles can be retrieved by id or event and conditions', () => {
+  // consequenceProfileById
+  assert.equal(consequenceProfileById('institution:lunar_ministry')?.id, 'institution:lunar_ministry');
+  assert.equal(consequenceProfileById('path:machine_faith')?.eventId, 'synod_of_the_second_engine');
+  assert.equal(consequenceProfileById('invalid_id'), null);
+
+  // consequenceProfileFor (with additions required)
   assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
-  assert.equal(consequenceProfileFor('moon_resigns', []) ?? null, null);
+  assert.equal(consequenceProfileFor('moon_resigns', []), null);
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'trait', label: 'Lunar Ministry' }]), null); // Wrong kind
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Wrong Label' }]), null); // Wrong label
+
+  // consequenceProfileFor (without additions required)
+  assert.equal(consequenceProfileFor('synod_of_the_second_engine', [])?.id, 'path:machine_faith');
+
+  // consequenceProfileFor (non-existent)
+  assert.equal(consequenceProfileFor('invalid_event_id', []), null);
 });
 
 test('generic consequence thresholds are deterministic, deduplicated, and ordered by precedence', () => {
@@ -2627,4 +2645,50 @@ test('objectiveForDirective and evaluateDirectiveObjective resolve correctly', (
   civ.elapsedSeconds = 300;
   civ.eventChoices = 8;
   assert.equal(evaluateDirectiveObjective(civ), true);
+});
+
+test('clampStats enforces boundaries on civilization stats', () => {
+  const engine = freshEngine();
+  engine.startCivilization(42);
+  const civ = engine.state.civilization;
+  civ.stats.stabilityMax = 100;
+
+  // Below bounds
+  civ.stats.stability = -10;
+  civ.stats.awareness = -20;
+  civ.stats.sanity = -30;
+  civ.stats.attention = -40;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 0);
+  assert.equal(civ.stats.awareness, 0);
+  assert.equal(civ.stats.sanity, 0);
+  assert.equal(civ.stats.attention, 0);
+
+  // Above bounds
+  civ.stats.stability = 150;
+  civ.stats.awareness = 150;
+  civ.stats.sanity = 150;
+  civ.stats.attention = 150;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 100);
+  assert.equal(civ.stats.awareness, 100);
+  assert.equal(civ.stats.sanity, 100);
+  assert.equal(civ.stats.attention, 100);
+
+  // Within bounds
+  civ.stats.stability = 50;
+  civ.stats.awareness = 50;
+  civ.stats.sanity = 50;
+  civ.stats.attention = 50;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 50);
+  assert.equal(civ.stats.awareness, 50);
+  assert.equal(civ.stats.sanity, 50);
+  assert.equal(civ.stats.attention, 50);
+
+  // stabilityMax dynamically changes the cap
+  civ.stats.stabilityMax = 120;
+  civ.stats.stability = 130;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 120);
 });
