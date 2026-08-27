@@ -16,6 +16,24 @@ export const SUCCESSION_INTERVAL = 4;
 export const SUCCESSION_MAX = 3;
 const DEFINITIONS = CONTENT.path_definitions as unknown as Record<string, any>;
 
+interface PathCache {
+  completedEventsSet?: Set<string>;
+  cachedEventsArray?: string[];
+
+  choiceFlagsSet?: Set<string>;
+  cachedFlagsArray?: string[];
+}
+const CACHES = new WeakMap<PathState, PathCache>();
+
+function getCache(ps: PathState): PathCache {
+  let cache = CACHES.get(ps);
+  if (!cache) {
+    cache = {};
+    CACHES.set(ps, cache);
+  }
+  return cache;
+}
+
 export class CivilizationPaths {
   static newState(): PathState {
     return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '', endgameStates: [], successions: 0, successionAtChoice: 0 };
@@ -29,21 +47,21 @@ export class CivilizationPaths {
     if (typeof ps.successionAtChoice !== 'number') ps.successionAtChoice = 0;
     return ps;
   }
-  static getCompletedEventsSet(ps: PathState & { _cachedEventsVersion?: number, _cachedEventsArray?: string[] }): Set<string> {
-    if (!(ps._completedEventsSet instanceof Set) || ps._cachedEventsArray !== ps.completedEvents || ps._completedEventsSet.size !== ps.completedEvents.length || ps._cachedEventsVersion !== ps._completedEventsVersion) {
-      ps._completedEventsSet = new Set(ps.completedEvents);
-      ps._cachedEventsArray = ps.completedEvents;
-      ps._cachedEventsVersion = ps._completedEventsVersion;
+  static getCompletedEventsSet(ps: PathState): Set<string> {
+    const cache = getCache(ps);
+    if (!(cache.completedEventsSet instanceof Set) || cache.cachedEventsArray !== ps.completedEvents || cache.completedEventsSet.size !== ps.completedEvents.length) {
+      cache.completedEventsSet = new Set(ps.completedEvents);
+      cache.cachedEventsArray = ps.completedEvents;
     }
-    return ps._completedEventsSet;
+    return cache.completedEventsSet;
   }
-  static getChoiceFlagsSet(ps: PathState & { _cachedFlagsVersion?: number, _cachedFlagsArray?: string[] }): Set<string> {
-    if (!(ps._choiceFlagsSet instanceof Set) || ps._cachedFlagsArray !== ps.choiceFlags || ps._choiceFlagsSet.size !== ps.choiceFlags.length || ps._cachedFlagsVersion !== ps._choiceFlagsVersion) {
-      ps._choiceFlagsSet = new Set(ps.choiceFlags);
-      ps._cachedFlagsArray = ps.choiceFlags;
-      ps._cachedFlagsVersion = ps._choiceFlagsVersion;
+  static getChoiceFlagsSet(ps: PathState): Set<string> {
+    const cache = getCache(ps);
+    if (!(cache.choiceFlagsSet instanceof Set) || cache.cachedFlagsArray !== ps.choiceFlags || cache.choiceFlagsSet.size !== ps.choiceFlags.length) {
+      cache.choiceFlagsSet = new Set(ps.choiceFlags);
+      cache.cachedFlagsArray = ps.choiceFlags;
     }
-    return ps._choiceFlagsSet;
+    return cache.choiceFlagsSet;
   }
   static displayName(id: string): string { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_',' '); }
   static affinity(civ: Civilization, id: string): number { return PATH_IDS_SET.has(id as any) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
@@ -95,8 +113,8 @@ export class CivilizationPaths {
     const ps = this.ensure(civ); const deltas = choice.path_affinity ?? {}; const recent: Record<string,number> = {};
     for (const [id, raw] of Object.entries(deltas)) if (PATH_IDS_SET.has(id as any)) { const d=Number(raw); ps.affinity[id] = (ps.affinity[id] ?? 0)+d; recent[id]=d; }
     ps.recentDeltas = recent;
-    const flag = String(choice.path_flag_add ?? ''); if (flag && !this.getChoiceFlagsSet(ps).has(flag)) { ps.choiceFlags.push(flag); ps._choiceFlagsVersion = (ps._choiceFlagsVersion ?? 0) + 1; ps._choiceFlagsSet!.add(flag); }
-    const eventId = String(event.id ?? ''); if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) { ps.completedEvents.push(eventId); ps._completedEventsVersion = (ps._completedEventsVersion ?? 0) + 1; ps._completedEventsSet!.add(eventId); }
+    const flag = String(choice.path_flag_add ?? ''); if (flag && !this.getChoiceFlagsSet(ps).has(flag)) { ps.choiceFlags.push(flag); getCache(ps).choiceFlagsSet!.add(flag); }
+    const eventId = String(event.id ?? ''); if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) { ps.completedEvents.push(eventId); getCache(ps).completedEventsSet!.add(eventId); }
     const newDominantPath = this.resolveDominance(civ);
     let endgameState = '';
     if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {
