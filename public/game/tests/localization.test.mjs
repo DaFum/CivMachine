@@ -402,10 +402,15 @@ test('engine initialization catches and ignores storage errors when restoring lo
     return originalGetItem(key);
   };
 
-  assert.doesNotThrow(() => {
-    const engine = new GameEngine({ storage, autosave: false });
-    assert.equal(engine.locale(), DEFAULT_LOCALE);
-  });
+  // A locale other than the default, so the assertion below distinguishes "the failed read left the
+  // active locale alone" from "it reset the language to English".
+  setActiveLocale('de');
+  try {
+    assert.doesNotThrow(() => {
+      const engine = new GameEngine({ storage, autosave: false });
+      assert.equal(engine.locale(), 'de');
+    });
+  } finally { setActiveLocale(DEFAULT_LOCALE); }
 });
 
 test('erasing the save keeps the language the player reads the game in', () => {

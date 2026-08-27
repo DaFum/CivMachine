@@ -50,18 +50,33 @@ const event = {
 
 const ITERATIONS = 1000000;
 
+const BASE_AFFINITY = { ...civ.pathState.affinity };
+
+// Every iteration has to start from the same state, or the benchmark stops measuring one call:
+// `applyChoice` accumulates affinity, appends to `completedEvents` / `choiceFlags` / `endgameStates`
+// and can set `dominantPath`, so an unreset run would time a civilization with a million-point
+// affinity score instead of a fresh one. Replacing the two arrays (rather than emptying them) is
+// deliberate: `paths.ts` keys its lookup sets on array identity, so a new array is also the
+// cold-cache setup each timed call needs.
+function resetState() {
+  const ps = civ.pathState;
+  ps.affinity = { ...BASE_AFFINITY };
+  ps.recentDeltas = {};
+  ps.choiceFlags = [];
+  ps.completedEvents = [];
+  ps.recentPaths = [];
+  ps.dominantPath = 'temporal_dominion';
+  ps.endgameState = '';
+  ps.endgameStates = [];
+  ps.successions = 0;
+  ps.successionAtChoice = 0;
+  civ.flags = [];
+}
+
 function runBenchmark() {
   const start = performance.now();
   for (let i = 0; i < ITERATIONS; i++) {
-    // Reset mutated properties to keep object sizes from growing endlessly
-    civ.pathState.recentDeltas = {};
-    civ.pathState.choiceFlags = [];
-    civ.pathState._choiceFlagsVersion = 0;
-    if (civ.pathState._choiceFlagsSet) civ.pathState._choiceFlagsSet.clear();
-    civ.pathState.completedEvents = [];
-    civ.pathState._completedEventsVersion = 0;
-    if (civ.pathState._completedEventsSet) civ.pathState._completedEventsSet.clear();
-
+    resetState();
     CivilizationPaths.applyChoice(civ, event, choice);
   }
   const end = performance.now();
@@ -70,6 +85,7 @@ function runBenchmark() {
 
 // Warmup
 for (let i = 0; i < 10000; i++) {
+  resetState();
   CivilizationPaths.applyChoice(civ, event, choice);
 }
 
