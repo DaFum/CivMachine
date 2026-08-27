@@ -251,12 +251,14 @@ export class GameEngine {
   private mutationsMap: Map<string, any>;
   private directivesMap: Map<string, any>;
   private matricesMap: Map<string, any>;
+  private eventsMap: Map<string, any>;
   private eventsByEra: Map<number, any[]> = new Map();
   constructor(options: EngineOptions = {}) {
     this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
     this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
     this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
     this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
+    this.eventsMap = new Map(this.events.map((e) => [e.id, e]));
 
     for (const e of this.events) {
       const minEra = Number(e.min_era ?? 0);
@@ -509,7 +511,7 @@ export class GameEngine {
   // in the player's language everywhere it is shown. Only `title`, `body` and the per-choice copy are
   // swapped: effects, flags, follow-ups and era ceilings are rules, and rules are not translated.
   eventById(id: string) {
-    const event = this.events.find((e) => e.id === id) ?? null;
+    const event = this.eventsMap.get(id) ?? null;
     return event ? this.localizeEvent(event) : null;
   }
   private localizeEvent(event: any) {
