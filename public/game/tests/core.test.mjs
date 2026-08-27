@@ -23,7 +23,7 @@ import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/dec
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
 import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
-import { buildDirectiveOffers } from '../dist/game/run-directives.js';
+import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS, accelerateEntropyCost, tacticalRisk } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
@@ -2525,4 +2525,106 @@ test('an old v4 save without visualMemory remains loadable and gains memory only
   engine.forceEvent('synthetic_saint'); engine.chooseEvent(0);
   assert.equal(engine.state.civilization.visualMemory.version, 1);
   assert.equal(engine.state.saveVersion, oldState.saveVersion);
+});
+
+test('objectiveForDirective and evaluateDirectiveObjective resolve correctly', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.unlockedSystems.push('directives');
+  engine.startCivilization(1);
+  const civ = engine.state.civilization;
+
+  // Unknown directive id
+  assert.equal(objectiveForDirective('unknown_directive_id'), null);
+  civ.directiveId = 'unknown_directive_id';
+  assert.equal(evaluateDirectiveObjective(civ), false);
+
+  // accelerated_development
+  const accelDev = objectiveForDirective('accelerated_development');
+  assert.ok(accelDev);
+  assert.equal(accelDev.id, 'objective_accelerated_development');
+
+  civ.directiveId = 'accelerated_development';
+  civ.development = 259;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.development = 260;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // cognitive_extraction
+  assert.ok(objectiveForDirective('cognitive_extraction'));
+  civ.directiveId = 'cognitive_extraction';
+  civ.stats.awareness = 44;
+  civ.stats.sanity = 45;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.awareness = 45;
+  civ.stats.sanity = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.awareness = 45;
+  civ.stats.sanity = 45;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // stable_cultivation
+  assert.ok(objectiveForDirective('stable_cultivation'));
+  civ.directiveId = 'stable_cultivation';
+  civ.stats.stability = 74;
+  civ.tactical.entropy = 74;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.stability = 75;
+  civ.tactical.entropy = 75;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.stability = 75;
+  civ.tactical.entropy = 74;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // paradox_prospecting
+  assert.ok(objectiveForDirective('paradox_prospecting'));
+  civ.directiveId = 'paradox_prospecting';
+  civ.tactical.entropy = 49;
+  civ.stats.stability = 1;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.tactical.entropy = 50;
+  civ.stats.stability = 0;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.tactical.entropy = 50;
+  civ.stats.stability = 1;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // quiet_machine
+  assert.ok(objectiveForDirective('quiet_machine'));
+  civ.directiveId = 'quiet_machine';
+  civ.era = 1;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 45;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 45;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // temporal_pressure
+  assert.ok(objectiveForDirective('temporal_pressure'));
+  civ.directiveId = 'temporal_pressure';
+  civ.era = 1;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 301;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 7;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), true);
 });
