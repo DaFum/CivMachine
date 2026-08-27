@@ -33,7 +33,7 @@ import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { applyWorldMemory, emptyWorldMemory, sanitizeWorldMemory } from '../dist/game/world-memory.js';
-import { CONSEQUENCE_PROFILES, consequenceProfileFor } from '../dist/game/consequence-profiles.js';
+import { CONSEQUENCE_PROFILES, consequenceProfileFor, consequenceProfileById } from '../dist/game/consequence-profiles.js';
 import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
 import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
@@ -2360,8 +2360,24 @@ test('the signature catalog contains exactly the required 28 profiles', () => {
   ];
   assert.equal(CONSEQUENCE_PROFILES.length, 28);
   assert.deepEqual([...new Set(ids)].sort(), [...required].sort());
+});
+
+test('consequence profiles can be retrieved by id or event and conditions', () => {
+  // consequenceProfileById
+  assert.equal(consequenceProfileById('institution:lunar_ministry')?.id, 'institution:lunar_ministry');
+  assert.equal(consequenceProfileById('path:machine_faith')?.eventId, 'synod_of_the_second_engine');
+  assert.equal(consequenceProfileById('invalid_id'), null);
+
+  // consequenceProfileFor (with additions required)
   assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
-  assert.equal(consequenceProfileFor('moon_resigns', []) ?? null, null);
+  assert.equal(consequenceProfileFor('moon_resigns', []), null);
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'trait', label: 'Lunar Ministry' }]), null); // Wrong kind
+
+  // consequenceProfileFor (without additions required)
+  assert.equal(consequenceProfileFor('synod_of_the_second_engine', [])?.id, 'path:machine_faith');
+
+  // consequenceProfileFor (non-existent)
+  assert.equal(consequenceProfileFor('invalid_event_id', []), null);
 });
 
 test('generic consequence thresholds are deterministic, deduplicated, and ordered by precedence', () => {
