@@ -2372,6 +2372,7 @@ test('consequence profiles can be retrieved by id or event and conditions', () =
   assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
   assert.equal(consequenceProfileFor('moon_resigns', []), null);
   assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'trait', label: 'Lunar Ministry' }]), null); // Wrong kind
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Wrong Label' }]), null); // Wrong label
 
   // consequenceProfileFor (without additions required)
   assert.equal(consequenceProfileFor('synod_of_the_second_engine', [])?.id, 'path:machine_faith');
