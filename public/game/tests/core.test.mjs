@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
 import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
+import { clampStats } from '../dist/game/effects.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
@@ -2525,4 +2526,50 @@ test('an old v4 save without visualMemory remains loadable and gains memory only
   engine.forceEvent('synthetic_saint'); engine.chooseEvent(0);
   assert.equal(engine.state.civilization.visualMemory.version, 1);
   assert.equal(engine.state.saveVersion, oldState.saveVersion);
+});
+
+test('clampStats enforces boundaries on civilization stats', () => {
+  const engine = freshEngine();
+  engine.startCivilization(42);
+  const civ = engine.state.civilization;
+  civ.stats.stabilityMax = 100;
+
+  // Below bounds
+  civ.stats.stability = -10;
+  civ.stats.awareness = -20;
+  civ.stats.sanity = -30;
+  civ.stats.attention = -40;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 0);
+  assert.equal(civ.stats.awareness, 0);
+  assert.equal(civ.stats.sanity, 0);
+  assert.equal(civ.stats.attention, 0);
+
+  // Above bounds
+  civ.stats.stability = 150;
+  civ.stats.awareness = 150;
+  civ.stats.sanity = 150;
+  civ.stats.attention = 150;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 100);
+  assert.equal(civ.stats.awareness, 100);
+  assert.equal(civ.stats.sanity, 100);
+  assert.equal(civ.stats.attention, 100);
+
+  // Within bounds
+  civ.stats.stability = 50;
+  civ.stats.awareness = 50;
+  civ.stats.sanity = 50;
+  civ.stats.attention = 50;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 50);
+  assert.equal(civ.stats.awareness, 50);
+  assert.equal(civ.stats.sanity, 50);
+  assert.equal(civ.stats.attention, 50);
+
+  // stabilityMax dynamically changes the cap
+  civ.stats.stabilityMax = 120;
+  civ.stats.stability = 130;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 120);
 });
