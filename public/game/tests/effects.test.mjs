@@ -1,32 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyEffects, clampStats } from '../dist/game/effects.js';
+import { freshEngine, runCivilization } from './balance-harness.mjs';
 
 test('effects module tests', async (t) => {
 
-    function createMockCiv() {
-        return {
-            stats: {
-                stabilityMax: 100,
-                stability: 50,
-                awareness: 50,
-                sanity: 50,
-                attention: 50
-            },
-            tactical: {
-                entropy: 50,
-                controlCapacity: 2
-            },
-            development: 10,
-            developmentMultiplier: 1.0,
-            eventDelayBonus: 0,
-            stabilityDecayMult: 1.0,
-            flags: [],
-            institutions: [],
-            traits: [],
-            harvestMult: { metal: 1.0, magic: 1.0 },
-            harvestBonus: { metal: 0, magic: 0 }
-        };
+    function getCiv() {
+        const engine = freshEngine();
+        runCivilization(engine, { maxSeconds: 0 }); // starts civ, gets past machine phase
+        return engine.state.civilization;
     }
 
     const defaultBonuses = {
@@ -37,7 +19,7 @@ test('effects module tests', async (t) => {
     };
 
     await t.test('clampStats clamps stats correctly', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
         civ.stats.stabilityMax = 80;
         civ.stats.stability = 90;
         civ.stats.awareness = 110;
@@ -53,14 +35,23 @@ test('effects module tests', async (t) => {
     });
 
     await t.test('applyEffects handles basic stats', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        // Setup initial stats for deterministic test
+        civ.stats.stabilityMax = 100;
+        civ.stats.stability = 50;
+        civ.stats.awareness = 50;
         applyEffects(civ, { stability: 10, awareness: -5 }, false, defaultBonuses);
         assert.equal(civ.stats.stability, 60);
         assert.equal(civ.stats.awareness, 45);
     });
 
     await t.test('applyEffects handles resilience and bonuses', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        civ.stats.stabilityMax = 100;
+        civ.stats.stability = 50;
+        civ.stats.awareness = 50;
+        civ.stats.sanity = 50;
+        civ.stats.attention = 50;
         const bonuses = { ...defaultBonuses, stabilityLossMult: 0.5, awarenessGainMult: 2.0, sanityLossMult: 0.5, attentionGainMult: 2.0 };
 
         // Loss and gain when resilient
@@ -73,14 +64,22 @@ test('effects module tests', async (t) => {
     });
 
     await t.test('applyEffects applies tactical properties', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        civ.tactical.entropy = 50;
+        civ.tactical.controlCapacity = 2;
         applyEffects(civ, { entropy: 10, control_capacity: 1 }, false, defaultBonuses);
         assert.equal(civ.tactical.entropy, 60);
         assert.equal(civ.tactical.controlCapacity, 3);
     });
 
     await t.test('applyEffects applies additional game properties', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        civ.stats.stabilityMax = 100;
+        civ.development = 10;
+        civ.developmentMultiplier = 1.0;
+        civ.eventDelayBonus = 0;
+        civ.stabilityDecayMult = 1.0;
+
         applyEffects(civ, {
             stability_max: 20,
             development: 5,
@@ -97,7 +96,7 @@ test('effects module tests', async (t) => {
     });
 
     await t.test('applyEffects applies flags and institutions', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
         applyEffects(civ, {
             flag_add: 'test_flag',
             institution_add: 'test_inst',
@@ -108,24 +107,30 @@ test('effects module tests', async (t) => {
 
         assert.ok(civ.flags.includes('test_flag'));
         assert.ok(civ.flags.includes('flag2'));
+        assert.ok(civ.flags.includes('flag3'));
         assert.ok(civ.institutions.includes('test_inst'));
         assert.ok(civ.institutions.includes('inst2'));
+        assert.ok(civ.institutions.includes('inst3'));
         assert.ok(civ.traits.includes('test_trait'));
     });
 
     await t.test('applyEffects handles harvest modifiers', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        civ.harvestMult.causal_mass = 1.0;
+        civ.harvestBonus.causal_mass = 0;
+
         applyEffects(civ, {
-            harvest_mult_metal: 2.0,
-            harvest_magic: 5
+            harvest_mult_causal_mass: 2.0,
+            harvest_causal_mass: 5
         }, false, defaultBonuses);
 
-        assert.equal(civ.harvestMult.metal, 2.0);
-        assert.equal(civ.harvestBonus.magic, 5);
+        assert.equal(civ.harvestMult.causal_mass, 2.0);
+        assert.equal(civ.harvestBonus.causal_mass, 5);
     });
 
     await t.test('applyEffects handles invalid effects safely', () => {
-        const civ = createMockCiv();
+        const civ = getCiv();
+        civ.stats.stability = 50;
         applyEffects(civ, null, false, defaultBonuses);
         applyEffects(civ, undefined, false, defaultBonuses);
         applyEffects(civ, "not an object", false, defaultBonuses);
