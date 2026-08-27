@@ -94,6 +94,18 @@ class SeededRng {
         return Math.floor(this.range(min, max + 1));
     }
 }
+const RUNTIME_BONUS_MAP = {
+    development_mult: "developmentMult",
+    causal_mass_mult: "causal_massMult",
+    cognition_mult: "cognitionMult",
+    paradox_mult: "paradoxMult",
+    existence_mult: "existenceMult",
+    awareness_gain_mult: "awarenessGainMult",
+    sanity_loss_mult: "sanityLossMult",
+    attention_gain_mult: "attentionGainMult",
+    stability_decay_mult: "stabilityDecayMult",
+    all_harvest_mult: "allHarvestMult",
+};
 export class GameEngine {
     constructor(options = {}) {
         this.messages = [];
@@ -652,19 +664,7 @@ export class GameEngine {
             for (const [key, val] of Object.entries(def?.effects ?? {})) {
                 if (key === "trait_bias")
                     continue;
-                const map = {
-                    development_mult: "developmentMult",
-                    causal_mass_mult: "causal_massMult",
-                    cognition_mult: "cognitionMult",
-                    paradox_mult: "paradoxMult",
-                    existence_mult: "existenceMult",
-                    awareness_gain_mult: "awarenessGainMult",
-                    sanity_loss_mult: "sanityLossMult",
-                    attention_gain_mult: "attentionGainMult",
-                    stability_decay_mult: "stabilityDecayMult",
-                    all_harvest_mult: "allHarvestMult",
-                };
-                const target = map[key];
+                const target = RUNTIME_BONUS_MAP[key];
                 if (target)
                     b[target] = b[target] * Number(val);
             }
