@@ -4,6 +4,7 @@ export const PATH_IDS = [
     'machine_faith', 'collective_mind', 'temporal_dominion', 'reality_engineering', 'biological_transcendence',
     'cosmic_resistance', 'bureaucratic_singularity', 'post_mortal_civilization', 'void_communion', 'recursive_simulation'
 ];
+export const PATH_IDS_SET = new Set(PATH_IDS);
 export const DOMINANCE_MIN_AFFINITY = 5;
 export const DOMINANCE_MIN_LEAD = 2;
 // From Transcendence onward dominance can change hands. Without this, 18 written path events -- the
@@ -12,6 +13,15 @@ export const SUCCESSION_MIN_ERA = 2;
 export const SUCCESSION_INTERVAL = 4;
 export const SUCCESSION_MAX = 3;
 const DEFINITIONS = CONTENT.path_definitions;
+const CACHES = new WeakMap();
+function getCache(ps) {
+    let cache = CACHES.get(ps);
+    if (!cache) {
+        cache = {};
+        CACHES.set(ps, cache);
+    }
+    return cache;
+}
 export class CivilizationPaths {
     static newState() {
         return { affinity: Object.fromEntries(PATH_IDS.map(id => [id, 0])), dominantPath: '', completedEvents: [], choiceFlags: [], recentPaths: [], recentDeltas: {}, endgameState: '', endgameStates: [], successions: 0, successionAtChoice: 0 };
@@ -31,8 +41,24 @@ export class CivilizationPaths {
             ps.successionAtChoice = 0;
         return ps;
     }
+    static getCompletedEventsSet(ps) {
+        const cache = getCache(ps);
+        if (!(cache.completedEventsSet instanceof Set) || cache.cachedEventsArray !== ps.completedEvents || cache.completedEventsSet.size !== ps.completedEvents.length) {
+            cache.completedEventsSet = new Set(ps.completedEvents);
+            cache.cachedEventsArray = ps.completedEvents;
+        }
+        return cache.completedEventsSet;
+    }
+    static getChoiceFlagsSet(ps) {
+        const cache = getCache(ps);
+        if (!(cache.choiceFlagsSet instanceof Set) || cache.cachedFlagsArray !== ps.choiceFlags || cache.choiceFlagsSet.size !== ps.choiceFlags.length) {
+            cache.choiceFlagsSet = new Set(ps.choiceFlags);
+            cache.cachedFlagsArray = ps.choiceFlags;
+        }
+        return cache.choiceFlagsSet;
+    }
     static displayName(id) { return pathName(id) ?? DEFINITIONS[id]?.name ?? id.replaceAll('_', ' '); }
-    static affinity(civ, id) { return PATH_IDS.includes(id) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
+    static affinity(civ, id) { return PATH_IDS_SET.has(id) ? Number(this.ensure(civ).affinity[id] ?? 0) : 0; }
     static ranked(civ, limit = 10, excludeDominant = false) {
         const dominant = this.ensure(civ).dominantPath;
         return [...PATH_IDS].filter(id => (!excludeDominant || id !== dominant) && this.affinity(civ, id) > 0)
@@ -78,7 +104,7 @@ export class CivilizationPaths {
         });
     }
     static mergedChoiceEffects(civ, choice) {
-        const merged = structuredClone(choice.effects ?? {});
+        const merged = { ...(choice.effects ?? {}) };
         const secondary = choice.secondary_effects ?? {};
         for (const id of this.secondaryPaths(civ, 3)) {
             if (!secondary[id])
@@ -94,18 +120,22 @@ export class CivilizationPaths {
         const deltas = choice.path_affinity ?? {};
         const recent = {};
         for (const [id, raw] of Object.entries(deltas))
-            if (PATH_IDS.includes(id)) {
+            if (PATH_IDS_SET.has(id)) {
                 const d = Number(raw);
                 ps.affinity[id] = (ps.affinity[id] ?? 0) + d;
                 recent[id] = d;
             }
         ps.recentDeltas = recent;
         const flag = String(choice.path_flag_add ?? '');
-        if (flag && !ps.choiceFlags.includes(flag))
+        if (flag && !this.getChoiceFlagsSet(ps).has(flag)) {
             ps.choiceFlags.push(flag);
+            getCache(ps).choiceFlagsSet.add(flag);
+        }
         const eventId = String(event.id ?? '');
-        if (eventId && !ps.completedEvents.includes(eventId))
+        if (eventId && !this.getCompletedEventsSet(ps).has(eventId)) {
             ps.completedEvents.push(eventId);
+            getCache(ps).completedEventsSet.add(eventId);
+        }
         const newDominantPath = this.resolveDominance(civ);
         let endgameState = '';
         if (event.path_phase === 'endgame' && event.path_id === ps.dominantPath) {
@@ -122,7 +152,7 @@ export class CivilizationPaths {
     }
     static eventIsEligible(event, civ) {
         const id = String(event.path_id ?? '');
-        if (!id || !PATH_IDS.includes(id))
+        if (!id || !PATH_IDS_SET.has(id))
             return true;
         const req = event.requirements ?? {};
         const ps = this.ensure(civ);
@@ -134,21 +164,23 @@ export class CivilizationPaths {
             return false;
         if (req.requires_secondary_path != null && !this.secondaryPaths(civ, 3).includes(String(req.requires_secondary_path)))
             return false;
+        const completedSet = this.getCompletedEventsSet(ps);
         const any = req.completed_any ?? [];
-        if (any.length && !any.some((x) => ps.completedEvents.includes(String(x))))
+        if (any.length && !any.some((x) => completedSet.has(String(x))))
             return false;
         const all = req.completed_all ?? [];
-        if (all.some((x) => !ps.completedEvents.includes(String(x))))
+        if (all.some((x) => !completedSet.has(String(x))))
             return false;
-        if (req.requires_path_flag != null && !ps.choiceFlags.includes(String(req.requires_path_flag)))
+        const flagSet = this.getChoiceFlagsSet(ps);
+        if (req.requires_path_flag != null && !flagSet.has(String(req.requires_path_flag)))
             return false;
-        if (req.excludes_path_flag != null && ps.choiceFlags.includes(String(req.excludes_path_flag)))
+        if (req.excludes_path_flag != null && flagSet.has(String(req.excludes_path_flag)))
             return false;
         return true;
     }
     static eventWeightMultiplier(event, civ) {
         const id = String(event.path_id ?? '');
-        if (!id || !PATH_IDS.includes(id))
+        if (!id || !PATH_IDS_SET.has(id))
             return 1;
         const ps = this.ensure(civ);
         const recent = ps.recentPaths;
@@ -162,7 +194,7 @@ export class CivilizationPaths {
             return 1 + Math.min(2, Math.max(0, this.affinity(civ, id)) * 0.45);
         return 0.65;
     }
-    static recordSelectedEvent(civ, event) { const ps = this.ensure(civ); const id = String(event.path_id ?? ''); ps.recentPaths.push(PATH_IDS.includes(id) ? id : 'neutral'); while (ps.recentPaths.length > 6)
+    static recordSelectedEvent(civ, event) { const ps = this.ensure(civ); const id = String(event.path_id ?? ''); ps.recentPaths.push(PATH_IDS_SET.has(id) ? id : 'neutral'); while (ps.recentPaths.length > 6)
         ps.recentPaths.shift(); }
     static dominanceEffects(id) { return structuredClone(DEFINITIONS[id]?.dominance_effects ?? {}); }
     static simulationModifier(civ, key) { const id = this.ensure(civ).dominantPath; return id ? Number(DEFINITIONS[id]?.simulation?.[key] ?? 1) : 1; }

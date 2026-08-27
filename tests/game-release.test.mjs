@@ -146,11 +146,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.16.0', async () => {
+test('release metadata identifies browser app v1.17.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.16.0');
+  assert.equal(rootPackage.version, '1.17.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 
@@ -170,6 +170,9 @@ test('release metadata identifies browser app v1.16.0', async () => {
     assert.equal(parsed.packages[''].version, version, `${lock} packages[""] must ship the shell version`);
   }
   assert.match(html, new RegExp(`Browser v${escaped}`));
+  // `main.ts` reads the footer's `data-version` and fills the localized footer string with it, so this
+  // -- not the English text beside it -- is the version a booted game actually shows.
+  assert.match(html, new RegExp(`data-version="${escaped}"`));
   assert.match(html, /v4 save/);
   // Both README titles, not merely a mention anywhere in the file: the release notes for older
   // versions stay in place, so a loose match would pass on a stale title.

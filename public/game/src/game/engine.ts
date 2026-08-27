@@ -215,6 +215,19 @@ export interface EngineOptions {
   storage?: StorageLike;
   autosave?: boolean;
 }
+const RUNTIME_BONUS_MAP: Record<string, keyof RuntimeBonuses> = {
+  development_mult: "developmentMult",
+  causal_mass_mult: "causal_massMult",
+  cognition_mult: "cognitionMult",
+  paradox_mult: "paradoxMult",
+  existence_mult: "existenceMult",
+  awareness_gain_mult: "awarenessGainMult",
+  sanity_loss_mult: "sanityLossMult",
+  attention_gain_mult: "attentionGainMult",
+  stability_decay_mult: "stabilityDecayMult",
+  all_harvest_mult: "allHarvestMult",
+};
+
 export class GameEngine {
   state: GameState;
   storage: StorageLike;
@@ -251,11 +264,28 @@ export class GameEngine {
   private mutationsMap: Map<string, any>;
   private directivesMap: Map<string, any>;
   private matricesMap: Map<string, any>;
+  private eventsMap: Map<string, any>;
+  private eventsByEra: Map<number, any[]> = new Map();
   constructor(options: EngineOptions = {}) {
     this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
     this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
     this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
     this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
+    this.eventsMap = new Map(this.events.map((e) => [e.id, e]));
+
+    for (const e of this.events) {
+      const minEra = Number(e.min_era ?? 0);
+      const maxEra = Number(e.max_era ?? 2);
+      for (let era = minEra; era <= maxEra; era++) {
+        let list = this.eventsByEra.get(era);
+        if (!list) {
+          list = [];
+          this.eventsByEra.set(era, list);
+        }
+        list.push(e);
+      }
+    }
+
     this.storage = options.storage ?? (globalThis.localStorage as StorageLike);
     this.autosave = options.autosave ?? true;
     this.restoreLocale();
@@ -494,7 +524,7 @@ export class GameEngine {
   // in the player's language everywhere it is shown. Only `title`, `body` and the per-choice copy are
   // swapped: effects, flags, follow-ups and era ceilings are rules, and rules are not translated.
   eventById(id: string) {
-    const event = this.events.find((e) => e.id === id) ?? null;
+    const event = this.eventsMap.get(id) ?? null;
     return event ? this.localizeEvent(event) : null;
   }
   private localizeEvent(event: any) {
@@ -778,19 +808,7 @@ export class GameEngine {
         this.matricesMap.get(id);
       for (const [key, val] of Object.entries(def?.effects ?? {})) {
         if (key === "trait_bias") continue;
-        const map: Record<string, keyof RuntimeBonuses> = {
-          development_mult: "developmentMult",
-          causal_mass_mult: "causal_massMult",
-          cognition_mult: "cognitionMult",
-          paradox_mult: "paradoxMult",
-          existence_mult: "existenceMult",
-          awareness_gain_mult: "awarenessGainMult",
-          sanity_loss_mult: "sanityLossMult",
-          attention_gain_mult: "attentionGainMult",
-          stability_decay_mult: "stabilityDecayMult",
-          all_harvest_mult: "allHarvestMult",
-        };
-        const target = map[key];
+        const target = RUNTIME_BONUS_MAP[key];
         if (target) (b[target] as number) = (b[target] as number) * Number(val);
       }
     }
@@ -1771,7 +1789,7 @@ export class GameEngine {
         return scheduled;
       }
     }
-    const eligible = this.events.filter((event: any) =>
+    const eligible = (this.eventsByEra.get(civ.era) ?? []).filter((event: any) =>
       this.eventEligible(event, civ),
     );
     const stateMultiplier = (event: any) => {
@@ -1829,8 +1847,6 @@ export class GameEngine {
     return selected;
   }
   private eventEligible(e: any, civ: Civilization) {
-    if (civ.era < Number(e.min_era ?? 0) || civ.era > Number(e.max_era ?? 2))
-      return false;
     const r = e.requirements ?? {};
     if (r.scheduled_only) return false;
     if (!CivilizationPaths.eventIsEligible(e, civ)) return false;

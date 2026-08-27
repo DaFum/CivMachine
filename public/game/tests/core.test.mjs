@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
 import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
+import { clampStats } from '../dist/game/effects.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
 import { applyEraCeiling, applyInterventionCopy, INTERVENTION_COPY } from '../dist/data/intervention-copy.js';
@@ -23,7 +24,7 @@ import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/dec
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
 import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
-import { buildDirectiveOffers } from '../dist/game/run-directives.js';
+import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
 import { TACTICAL_ACTIONS, accelerateEntropyCost, tacticalRisk } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
@@ -33,7 +34,7 @@ import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js
 import { convergenceBonuses, convergenceRequirements, convergenceTargets, convergenceUnlocked, evaluateConvergence, terminalCivilizationSetup, CONVERGENCE_ASCENDANT_INDEX } from '../dist/game/convergence.js';
 import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { applyWorldMemory, emptyWorldMemory, sanitizeWorldMemory } from '../dist/game/world-memory.js';
-import { CONSEQUENCE_PROFILES, consequenceProfileFor } from '../dist/game/consequence-profiles.js';
+import { CONSEQUENCE_PROFILES, consequenceProfileFor, consequenceProfileById } from '../dist/game/consequence-profiles.js';
 import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
 import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
@@ -2360,8 +2361,25 @@ test('the signature catalog contains exactly the required 28 profiles', () => {
   ];
   assert.equal(CONSEQUENCE_PROFILES.length, 28);
   assert.deepEqual([...new Set(ids)].sort(), [...required].sort());
+});
+
+test('consequence profiles can be retrieved by id or event and conditions', () => {
+  // consequenceProfileById
+  assert.equal(consequenceProfileById('institution:lunar_ministry')?.id, 'institution:lunar_ministry');
+  assert.equal(consequenceProfileById('path:machine_faith')?.eventId, 'synod_of_the_second_engine');
+  assert.equal(consequenceProfileById('invalid_id'), null);
+
+  // consequenceProfileFor (with additions required)
   assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Lunar Ministry' }])?.id, 'institution:lunar_ministry');
-  assert.equal(consequenceProfileFor('moon_resigns', []) ?? null, null);
+  assert.equal(consequenceProfileFor('moon_resigns', []), null);
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'trait', label: 'Lunar Ministry' }]), null); // Wrong kind
+  assert.equal(consequenceProfileFor('moon_resigns', [{ kind: 'institution', label: 'Wrong Label' }]), null); // Wrong label
+
+  // consequenceProfileFor (without additions required)
+  assert.equal(consequenceProfileFor('synod_of_the_second_engine', [])?.id, 'path:machine_faith');
+
+  // consequenceProfileFor (non-existent)
+  assert.equal(consequenceProfileFor('invalid_event_id', []), null);
 });
 
 test('generic consequence thresholds are deterministic, deduplicated, and ordered by precedence', () => {
@@ -2525,4 +2543,152 @@ test('an old v4 save without visualMemory remains loadable and gains memory only
   engine.forceEvent('synthetic_saint'); engine.chooseEvent(0);
   assert.equal(engine.state.civilization.visualMemory.version, 1);
   assert.equal(engine.state.saveVersion, oldState.saveVersion);
+});
+
+test('objectiveForDirective and evaluateDirectiveObjective resolve correctly', () => {
+  const engine = freshEngine();
+  engine.state.meta.progression.unlockedSystems.push('directives');
+  engine.startCivilization(1);
+  const civ = engine.state.civilization;
+
+  // Unknown directive id
+  assert.equal(objectiveForDirective('unknown_directive_id'), null);
+  civ.directiveId = 'unknown_directive_id';
+  assert.equal(evaluateDirectiveObjective(civ), false);
+
+  // accelerated_development
+  const accelDev = objectiveForDirective('accelerated_development');
+  assert.ok(accelDev);
+  assert.equal(accelDev.id, 'objective_accelerated_development');
+
+  civ.directiveId = 'accelerated_development';
+  civ.development = 259;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.development = 260;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // cognitive_extraction
+  assert.ok(objectiveForDirective('cognitive_extraction'));
+  civ.directiveId = 'cognitive_extraction';
+  civ.stats.awareness = 44;
+  civ.stats.sanity = 45;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.awareness = 45;
+  civ.stats.sanity = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.awareness = 45;
+  civ.stats.sanity = 45;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // stable_cultivation
+  assert.ok(objectiveForDirective('stable_cultivation'));
+  civ.directiveId = 'stable_cultivation';
+  civ.stats.stability = 74;
+  civ.tactical.entropy = 74;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.stability = 75;
+  civ.tactical.entropy = 75;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.stats.stability = 75;
+  civ.tactical.entropy = 74;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // paradox_prospecting
+  assert.ok(objectiveForDirective('paradox_prospecting'));
+  civ.directiveId = 'paradox_prospecting';
+  civ.tactical.entropy = 49;
+  civ.stats.stability = 1;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.tactical.entropy = 50;
+  civ.stats.stability = 0;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.tactical.entropy = 50;
+  civ.stats.stability = 1;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // quiet_machine
+  assert.ok(objectiveForDirective('quiet_machine'));
+  civ.directiveId = 'quiet_machine';
+  civ.era = 1;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 45;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 45;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.stats.awareness = 44;
+  civ.stats.attention = 44;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+
+  // temporal_pressure
+  assert.ok(objectiveForDirective('temporal_pressure'));
+  civ.directiveId = 'temporal_pressure';
+  civ.era = 1;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 301;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 7;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
+  civ.elapsedSeconds = 300;
+  civ.eventChoices = 8;
+  assert.equal(evaluateDirectiveObjective(civ), true);
+});
+
+test('clampStats enforces boundaries on civilization stats', () => {
+  const engine = freshEngine();
+  engine.startCivilization(42);
+  const civ = engine.state.civilization;
+  civ.stats.stabilityMax = 100;
+
+  // Below bounds
+  civ.stats.stability = -10;
+  civ.stats.awareness = -20;
+  civ.stats.sanity = -30;
+  civ.stats.attention = -40;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 0);
+  assert.equal(civ.stats.awareness, 0);
+  assert.equal(civ.stats.sanity, 0);
+  assert.equal(civ.stats.attention, 0);
+
+  // Above bounds
+  civ.stats.stability = 150;
+  civ.stats.awareness = 150;
+  civ.stats.sanity = 150;
+  civ.stats.attention = 150;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 100);
+  assert.equal(civ.stats.awareness, 100);
+  assert.equal(civ.stats.sanity, 100);
+  assert.equal(civ.stats.attention, 100);
+
+  // Within bounds
+  civ.stats.stability = 50;
+  civ.stats.awareness = 50;
+  civ.stats.sanity = 50;
+  civ.stats.attention = 50;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 50);
+  assert.equal(civ.stats.awareness, 50);
+  assert.equal(civ.stats.sanity, 50);
+  assert.equal(civ.stats.attention, 50);
+
+  // stabilityMax dynamically changes the cap
+  civ.stats.stabilityMax = 120;
+  civ.stats.stability = 130;
+  clampStats(civ);
+  assert.equal(civ.stats.stability, 120);
 });

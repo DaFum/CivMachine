@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.16.0
+# Reality Consumption Engine — App Edition v1.17.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,52 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.17.0 fewer lookups per tick, and a sanitizer that cannot be clobbered
+
+v1.17.0 is security and performance only. `SAVE_VERSION` stays at 4, `rules.ts` and `types.ts` are
+untouched, no balance number moved, and every player-facing string reads exactly as it did in
+v1.16.0. What changed is how often the engine walks a list, and what the panel sanitizer trusts.
+
+The sanitizer in `ui/app.ts` read `node.tagName`, `node.attributes` and `node.removeAttribute` off
+each element it was inspecting. Those are the names a DOM-clobbering payload can shadow: an element
+that carries `name="tagName"` hands the sanitizer its own attribute node instead of the tag name, and
+the `SCRIPT` comparison quietly stops matching. All three now come from `Element.prototype` --
+the two getters captured with `getOwnPropertyDescriptor`, `removeAttribute` called through `.call()`
+-- so what the sanitizer checks is the element's real tag and the element's real attributes, whatever
+the markup calls itself.
+
+Four lookups that ran on the hot path became indexed:
+
+- events are indexed by id at construction, so `eventById` is a `Map.get` rather than a scan of 75
+  events -- and the run report resolves every event it names through it
+- events are also bucketed by the eras they are valid in, so event selection filters the bucket for
+  the civilization's era instead of the whole catalog and the per-event era check disappears from
+  `eventEligible` (the bucket already answers it)
+- the runtime bonus key map was rebuilt inside the effect loop, once per effect per contributor, on
+  every recalculation; it is a module constant now
+- `PATH_IDS.includes` in the path membership checks is a `Set.has`, and `completedEvents` /
+  `choiceFlags` are checked through cached `Set`s rather than `Array.includes`, which is what
+  `eventIsEligible` spends its time on when a run has accumulated a few dozen of each
+
+Those two `Set`s live in a `WeakMap` keyed on the path state, not on the path state itself. That is
+the point: a cache stored on the state would be serialized into the save, and the save is meant to
+record what was played and nothing else. Keyed weakly, it is rebuilt when the array it mirrors is
+replaced -- which is also what makes a restored save arrive with a cold cache and no stale entries.
+
+`mergedChoiceEffects` copied the choice's effects with `structuredClone` and now spreads them. All
+478 effect entries in the shipped catalog are scalars, and the merge writes numbers, so the shallow
+copy leaves the catalog as untouched as the deep one did.
+
+The bundled dev server (`server.mjs`, which serves the folder locally and ships no code to the
+browser) got the same treatment twice. It joined the request path onto the root and compared the
+result as a string, so `..` segments were the only escape it could see; the root is resolved once and
+the target is resolved again immediately before the read, so a symlink inside the served tree
+pointing out of it is refused like any other escape.
+
+The suite grew with the change rather than after it: `applyEffects`, `clampStats`, the consequence
+profile accessors, `evaluateDirectiveObjective` and `objectiveForDirective` now have direct coverage,
+and the engine's locale restore has a test for the storage-error path it always handled.
 
 ## v1.16.0 the game speaks German
 
