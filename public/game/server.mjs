@@ -10,6 +10,7 @@ createServer(async (req, res) => {
   try {
     const path = normalize(decodeURIComponent((req.url || '/').split('?')[0]));
     let target = join(root, path === '/' ? 'index.html' : path.replace(/^\/+/, ''));
+    if (!target.startsWith(root)) throw new Error('Forbidden');
     const info = await stat(target).catch(() => null);
     if (info?.isDirectory()) target = join(target, 'index.html');
     const body = await readFile(target);
