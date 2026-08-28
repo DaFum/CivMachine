@@ -45,8 +45,12 @@ export const CONSEQUENCE_PROFILES: ReadonlyArray<ConsequenceProfile> = [
   { id:'apotheosis:recursive_audit', eventId:'apotheosis_recursive_audit', tags:['apotheosis_contact','surveillance','reality_damage'], significance:'turning_point', impactVariant:'recursive-audit', scar:{domain:'reality',motif:'recursive_audit_breach',strength:3} },
 ];
 
+const CONSEQUENCE_PROFILES_BY_ID = new Map<string, ConsequenceProfile>(
+  CONSEQUENCE_PROFILES.map(profile => [profile.id, profile])
+);
+
 export function consequenceProfileById(id: string): ConsequenceProfile | null {
-  return CONSEQUENCE_PROFILES.find(profile => profile.id === id) ?? null;
+  return CONSEQUENCE_PROFILES_BY_ID.get(id) ?? null;
 }
 
 export function consequenceProfileFor(eventId: string, additions: ReadonlyArray<DecisionAddition>): ConsequenceProfile | null {

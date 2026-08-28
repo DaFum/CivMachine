@@ -140,6 +140,9 @@ export class GameEngine {
         this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
         this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
         this.eventsMap = new Map(this.events.map((e) => [e.id, e]));
+        this.machineUpgradesMap = new Map(this.machineUpgrades.map((u) => [u.id, u]));
+        this.universeUpgradesMap = new Map(this.universeUpgrades.map((u) => [u.id, u]));
+        this.axiomUpgradesMap = new Map(this.axiomUpgrades.map((u) => [u.id, u]));
         for (const e of this.events) {
             const minEra = Number(e.min_era ?? 0);
             const maxEra = Number(e.max_era ?? 2);
@@ -452,7 +455,12 @@ export class GameEngine {
         return objective ? (objectiveCopy(String(directiveId))?.title ?? objective.title) : "";
     }
     upgradeById(layer, id) {
-        return this.catalog(layer).find((u) => u.id === id) ?? null;
+        const map = layer === "machine"
+            ? this.machineUpgradesMap
+            : layer === "universe"
+                ? this.universeUpgradesMap
+                : this.axiomUpgradesMap;
+        return map.get(id) ?? null;
     }
     catalog(layer) {
         return layer === "machine"

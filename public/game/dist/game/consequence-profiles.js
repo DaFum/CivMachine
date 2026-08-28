@@ -28,8 +28,9 @@ export const CONSEQUENCE_PROFILES = [
     { id: 'apotheosis:replacement', eventId: 'apotheosis_the_replacement_part', tags: ['apotheosis_contact', 'technological_growth'], significance: 'turning_point', impactVariant: 'replacement-surge', scar: { domain: 'identity', motif: 'replacement_monument', strength: 3 } },
     { id: 'apotheosis:recursive_audit', eventId: 'apotheosis_recursive_audit', tags: ['apotheosis_contact', 'surveillance', 'reality_damage'], significance: 'turning_point', impactVariant: 'recursive-audit', scar: { domain: 'reality', motif: 'recursive_audit_breach', strength: 3 } },
 ];
+const CONSEQUENCE_PROFILES_BY_ID = new Map(CONSEQUENCE_PROFILES.map(profile => [profile.id, profile]));
 export function consequenceProfileById(id) {
-    return CONSEQUENCE_PROFILES.find(profile => profile.id === id) ?? null;
+    return CONSEQUENCE_PROFILES_BY_ID.get(id) ?? null;
 }
 export function consequenceProfileFor(eventId, additions) {
     return CONSEQUENCE_PROFILES.find(profile => {

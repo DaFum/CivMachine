@@ -25,8 +25,12 @@ export const RUN_INTERVENTIONS: readonly RunInterventionDefinition[] = [
   { id: 'temporal_graft', title: 'Temporal Graft', label: 'Graft borrowed centuries', summary: '+600 years and +30 Development', currency: 'existence', baseCost: 220, maxUses: 3, insight: 9 },
 ];
 
+const RUN_INTERVENTIONS_BY_ID = new Map<string, RunInterventionDefinition>(
+  RUN_INTERVENTIONS.map(definition => [definition.id, definition])
+);
+
 export function runInterventionById(id: string): RunInterventionDefinition | null {
-  return RUN_INTERVENTIONS.find(definition => definition.id === id) ?? null;
+  return RUN_INTERVENTIONS_BY_ID.get(id) ?? null;
 }
 
 export function runInterventionUses(civ: Civilization, id: string): number {

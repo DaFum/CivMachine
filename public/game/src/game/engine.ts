@@ -265,6 +265,9 @@ export class GameEngine {
   private directivesMap: Map<string, any>;
   private matricesMap: Map<string, any>;
   private eventsMap: Map<string, any>;
+  private machineUpgradesMap: Map<string, any>;
+  private universeUpgradesMap: Map<string, any>;
+  private axiomUpgradesMap: Map<string, any>;
   private eventsByEra: Map<number, any[]> = new Map();
   constructor(options: EngineOptions = {}) {
     this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
@@ -272,6 +275,9 @@ export class GameEngine {
     this.directivesMap = new Map(this.directives.map((d) => [d.id, d]));
     this.matricesMap = new Map(this.matrices.map((m) => [m.id, m]));
     this.eventsMap = new Map(this.events.map((e) => [e.id, e]));
+    this.machineUpgradesMap = new Map(this.machineUpgrades.map((u) => [u.id, u]));
+    this.universeUpgradesMap = new Map(this.universeUpgrades.map((u) => [u.id, u]));
+    this.axiomUpgradesMap = new Map(this.axiomUpgrades.map((u) => [u.id, u]));
 
     for (const e of this.events) {
       const minEra = Number(e.min_era ?? 0);
@@ -565,7 +571,13 @@ export class GameEngine {
     return objective ? (objectiveCopy(String(directiveId))?.title ?? objective.title) : "";
   }
   upgradeById(layer: Layer, id: string) {
-    return this.catalog(layer).find((u: any) => u.id === id) ?? null;
+    const map =
+      layer === "machine"
+        ? this.machineUpgradesMap
+        : layer === "universe"
+          ? this.universeUpgradesMap
+          : this.axiomUpgradesMap;
+    return map.get(id) ?? null;
   }
   catalog(layer: Layer) {
     return layer === "machine"
