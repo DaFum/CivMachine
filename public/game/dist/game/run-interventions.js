@@ -10,8 +10,9 @@ export const RUN_INTERVENTIONS = [
     { id: 'emergency_lattice', title: 'Emergency Lattice', label: 'Force the lattice back up', summary: 'Stability to 60% of maximum', currency: 'cognition', baseCost: 200, maxUses: 3, insight: 6 },
     { id: 'temporal_graft', title: 'Temporal Graft', label: 'Graft borrowed centuries', summary: '+600 years and +30 Development', currency: 'existence', baseCost: 220, maxUses: 3, insight: 9 },
 ];
+const RUN_INTERVENTIONS_BY_ID = new Map(RUN_INTERVENTIONS.map(definition => [definition.id, definition]));
 export function runInterventionById(id) {
-    return RUN_INTERVENTIONS.find(definition => definition.id === id) ?? null;
+    return RUN_INTERVENTIONS_BY_ID.get(id) ?? null;
 }
 export function runInterventionUses(civ, id) {
     if (!civ.runInterventionUses)
