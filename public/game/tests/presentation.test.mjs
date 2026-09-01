@@ -272,6 +272,7 @@ test('canvas surface translates the drawing vocabulary into 2D context calls', (
     set fillStyle(value) { canvasCalls.push(['fillStyle', value]); },
     set strokeStyle(value) { canvasCalls.push(['strokeStyle', value]); },
     set lineWidth(value) { canvasCalls.push(['lineWidth', value]); },
+    set globalCompositeOperation(value) { canvasCalls.push(['globalCompositeOperation', value]); },
     fillRect: (...args) => canvasCalls.push(['fillRect', ...args]),
     beginPath: () => canvasCalls.push(['beginPath']),
     moveTo: (...args) => canvasCalls.push(['moveTo', ...args]),
@@ -280,14 +281,67 @@ test('canvas surface translates the drawing vocabulary into 2D context calls', (
     fill: () => canvasCalls.push(['fill']),
     stroke: () => canvasCalls.push(['stroke']),
     closePath: () => canvasCalls.push(['closePath']),
+    createLinearGradient: (...args) => {
+      canvasCalls.push(['createLinearGradient', ...args]);
+      return { addColorStop: (off, col) => canvasCalls.push(['addColorStop', off, col]) };
+    },
+    createRadialGradient: (...args) => {
+      canvasCalls.push(['createRadialGradient', ...args]);
+      return { addColorStop: (off, col) => canvasCalls.push(['addColorStop', off, col]) };
+    },
   };
   const toColor = (value, alpha = 1) => `#${value.toString(16)}@${alpha}`;
-  canvasSurface(context, toColor).fillStyle(0x112233, .5).fillRect(1, 2, 3, 4).line(5, 6, 7, 8);
-  assert.deepEqual(canvasCalls, [
-    ['fillStyle', '#112233@0.5'],
-    ['fillRect', 1, 2, 3, 4],
-    ['beginPath'], ['moveTo', 5, 6], ['lineTo', 7, 8], ['stroke'],
-  ]);
+  canvasSurface(context, toColor)
+    .fillStyle(0x112233, .5)
+    .fillRect(1, 2, 3, 4)
+    .line(5, 6, 7, 8)
+    .fillLinearGradientRect(0, 0, 10, 20, [{ offset: 0, color: 0xff0000 }, { offset: 1, color: 0x000011 }])
+    .fillRadialGlow(50, 50, 0, 30, [{ offset: 0, color: 0xffffff, alpha: 0.5 }])
+    .setCompositeOperation('lighter');
+
+  assert.ok(canvasCalls.length >= 17);
+  assert.deepEqual(canvasCalls[0], ['fillStyle', '#112233@0.5']);
+  assert.deepEqual(canvasCalls[1], ['fillRect', 1, 2, 3, 4]);
+  assert.deepEqual(canvasCalls[2], ['beginPath']);
+  assert.deepEqual(canvasCalls[3], ['moveTo', 5, 6]);
+  assert.deepEqual(canvasCalls[4], ['lineTo', 7, 8]);
+  assert.deepEqual(canvasCalls[5], ['stroke']);
+  assert.deepEqual(canvasCalls[6], ['createLinearGradient', 0, 0, 0, 20]);
+  assert.deepEqual(canvasCalls[7], ['addColorStop', 0, '#ff0000@1']);
+  assert.deepEqual(canvasCalls[8], ['addColorStop', 1, '#11@1']);
+  assert.equal(canvasCalls[9][0], 'fillStyle');
+  assert.deepEqual(canvasCalls[10], ['fillRect', 0, 0, 10, 20]);
+  assert.deepEqual(canvasCalls[11], ['createRadialGradient', 50, 50, 0, 50, 50, 30]);
+  assert.deepEqual(canvasCalls[12], ['addColorStop', 0, '#ffffff@0.5']);
+  assert.equal(canvasCalls[13][0], 'fillStyle');
+  assert.deepEqual(canvasCalls[14], ['beginPath']);
+  assert.deepEqual(canvasCalls[15], ['arc', 50, 50, 30, 0, Math.PI * 2]);
+  assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'lighter']);
+});
+
+test('canvas surface resetState restores context globalCompositeOperation and clears cache', () => {
+  const canvasCalls = [];
+  const context = {
+    set fillStyle(value) { canvasCalls.push(['fillStyle', value]); },
+    set strokeStyle(value) { canvasCalls.push(['strokeStyle', value]); },
+    set lineWidth(value) { canvasCalls.push(['lineWidth', value]); },
+    set globalCompositeOperation(value) { canvasCalls.push(['globalCompositeOperation', value]); },
+  };
+  const toColor = (value, alpha = 1) => `#${value.toString(16)}@${alpha}`;
+  const surface = canvasSurface(context, toColor);
+  surface.setCompositeOperation('lighter');
+  assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'lighter']);
+
+  surface.resetState();
+  assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'source-over']);
+
+  // Setting source-over after resetState should trigger context update because resetState set both cache and context
+  canvasCalls.length = 0;
+  surface.setCompositeOperation('source-over');
+  assert.equal(canvasCalls.length, 0, 'setting source-over after resetState requires no additional context change');
+
+  surface.setCompositeOperation('lighter');
+  assert.deepEqual(canvasCalls[0], ['globalCompositeOperation', 'lighter']);
 });
 
 test('canvas surface never emits a negative radius', () => {

@@ -60,47 +60,60 @@ export function drawIdentityLandmarks(surface, civ, settlements, ground, accent,
         const x = capital.centerX;
         const top = ground - 70 - identity.tier * 12;
         if (identity.pathId === 'machine_faith') {
-            surface.lineStyle(2, accent, .8).line(x, ground - 6, x, top);
-            surface.fillStyle(accent, .65).fillCircle(x, top - 7, 6 + identity.tier);
+            surface.lineStyle(2.5, accent, .85).line(x, ground - 6, x, top);
+            surface.fillStyle(accent, .75).fillCircle(x, top - 8, 8 + identity.tier * 2);
+            surface.lineStyle(1.2, accent, .45).strokeCircle(x, top - 8, 16 + identity.tier * 3);
+            for (let g = 0; g < 3; g++)
+                surface.lineStyle(1.4, accent, .6).line(x - 12 + g * 12, ground - 18, x - 12 + g * 12, top + 15);
         }
         else if (identity.pathId === 'collective_mind') {
             for (let i = -2; i <= 2; i++) {
-                surface.fillStyle(accent, .55).fillCircle(x + i * 14, top + Math.abs(i) * 6, 4);
+                const nodeY = top + Math.abs(i) * 7;
+                surface.fillStyle(accent, .65).fillCircle(x + i * 16, nodeY, 5);
+                surface.lineStyle(1, accent, .35).line(x + i * 16, ground - 6, x + i * 16, nodeY);
                 if (i < 2)
-                    surface.lineStyle(1.4, accent, .5).line(x + i * 14, top + Math.abs(i) * 6, x + (i + 1) * 14, top + Math.abs(i + 1) * 6);
+                    surface.lineStyle(1.6, accent, .55).line(x + i * 16, nodeY, x + (i + 1) * 16, top + Math.abs(i + 1) * 7);
             }
         }
         else if (identity.pathId === 'temporal_dominion') {
-            for (let r = 0; r < 3; r++)
-                surface.lineStyle(1.5, accent, .6).strokeCircle(x, top, 10 + r * 8);
+            for (let r = 0; r < 3; r++) {
+                surface.lineStyle(1.8, accent, .65).strokeCircle(x, top, 12 + r * 10);
+                surface.lineStyle(1.2, accent, .4).strokeRect(x - (12 + r * 10), top - (12 + r * 10), (12 + r * 10) * 2, (12 + r * 10) * 2);
+            }
         }
         else if (identity.pathId === 'reality_engineering') {
-            surface.lineStyle(1.8, accent, .65).strokeRect(x - 22, top - 20, 44, 44);
-            surface.line(x - 22, top + 24, x + 22, top - 20);
+            surface.lineStyle(2, accent, .7).strokeRect(x - 24, top - 22, 48, 48);
+            surface.lineStyle(1.4, accent, .5).line(x - 24, top + 26, x + 24, top - 22).line(x - 24, top - 22, x + 24, top + 26);
+            surface.fillStyle(accent, .25).fillRect(x - 12, top - 10, 24, 24);
         }
         else if (identity.pathId === 'biological_transcendence') {
-            for (let i = -2; i <= 2; i++)
-                surface.lineStyle(2, accent, .55).line(x, ground - 5, x + i * 13, top + Math.abs(i) * 6);
+            for (let i = -2; i <= 2; i++) {
+                const branchTop = top + Math.abs(i) * 8;
+                surface.lineStyle(2.2, accent, .6).line(x, ground - 5, x + i * 15, branchTop);
+                surface.fillStyle(accent, .45).fillCircle(x + i * 15, branchTop, 4 + Math.abs(i));
+            }
         }
         else if (identity.pathId === 'cosmic_resistance') {
-            surface.fillStyle(accent, .38).fillTriangle(x - 28, top + 28, x, top - 18, x + 28, top + 28);
-            surface.lineStyle(2, accent, .7).line(x - 34, top + 34, x + 34, top + 34);
+            surface.fillStyle(accent, .45).fillTriangle(x - 30, top + 30, x, top - 20, x + 30, top + 30);
+            surface.lineStyle(2.2, accent, .75).line(x - 36, top + 36, x + 36, top + 36).line(x - 24, top + 18, x + 24, top + 18);
         }
         else if (identity.pathId === 'bureaucratic_singularity') {
-            for (let row = 0; row < 3; row++)
-                surface.lineStyle(1.4, accent, .55).strokeRect(x - 24 + row * 5, top - 18 + row * 8, 48 - row * 10, 20);
+            for (let row = 0; row < 4; row++)
+                surface.lineStyle(1.5, accent, .6).strokeRect(x - 26 + row * 4, top - 20 + row * 10, 52 - row * 8, 22);
         }
         else if (identity.pathId === 'post_mortal_civilization') {
-            surface.lineStyle(2, accent, .7).strokeCircle(x, top, 24);
-            surface.fillStyle(accent, .3).fillRect(x - 12, top - 34, 24, 68);
+            surface.lineStyle(2.2, accent, .75).strokeCircle(x, top, 26);
+            surface.fillStyle(accent, .35).fillRect(x - 14, top - 36, 28, 72);
+            surface.lineStyle(1.2, accent, .5).strokeCircle(x, top, 36);
         }
         else if (identity.pathId === 'void_communion') {
-            surface.fillStyle(0x03040a, .9).fillCircle(x, top, 28);
-            surface.lineStyle(2, accent, .65).strokeCircle(x, top, 34);
+            surface.fillStyle(0x02040a, .95).fillCircle(x, top, 30);
+            surface.lineStyle(2.2, accent, .7).strokeCircle(x, top, 36);
+            surface.lineStyle(1.2, accent, .35).strokeCircle(x, top, 44);
         }
         else if (identity.pathId === 'recursive_simulation') {
             for (let r = 0; r < 4; r++)
-                surface.lineStyle(1.2, accent, .5 + .08 * r).strokeRect(x - 28 + r * 6, top - 24 + r * 5, 56 - r * 12, 48 - r * 10);
+                surface.lineStyle(1.4, accent, .55 + .08 * r).strokeRect(x - 30 + r * 6, top - 26 + r * 6, 60 - r * 12, 52 - r * 12);
         }
     }
     for (const landmark of institutionLandmarks(civ)) {

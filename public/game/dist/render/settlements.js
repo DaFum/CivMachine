@@ -2,6 +2,16 @@ import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
+export function depthLaneYOffset(lane) {
+    if (lane === 'back')
+        return -8;
+    if (lane === 'front')
+        return 8;
+    return 0;
+}
+export function structureEffectiveGround(groundY, lane) {
+    return groundY + depthLaneYOffset(lane);
+}
 export function settlementClassFor(structureCount, stage, era) {
     if (stage === 0)
         return structureCount >= 4 ? 'village' : 'camp';
@@ -87,17 +97,42 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
             const level = stage === 0
                 ? (hash01(civ.seed * 37 + globalIndex * 7) < .82 ? 0 : 1)
                 : Math.min(6, Math.max(1, stage - 1 + Math.trunc(civ.development / 180) + civ.era + Math.trunc(hash01(civ.seed * 13 + globalIndex * 19) * 1.6)));
-            const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08);
-            const structureHeight = Math.max(18, Math.min(height * .64, (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale));
+            // Deterministic depth lane
+            const laneVal = hash01(civ.seed * 41 + globalIndex * 17);
+            const depthLane = laneVal < 0.28 ? 'back' : laneVal > 0.72 ? 'front' : 'mid';
+            const laneScale = depthLane === 'back' ? 0.85 : depthLane === 'front' ? 1.12 : 1.0;
+            // Skyline hierarchy & class-differentiated spatial composition
+            const distFromCenter = count <= 1 ? 0 : Math.abs((i + 0.5) / count - 0.5) * 2;
+            let classScale = 1.0;
+            if (settlementClass === 'camp')
+                classScale = 0.5;
+            else if (settlementClass === 'village')
+                classScale = 0.7;
+            else if (settlementClass === 'town')
+                classScale = 0.9;
+            else if (settlementClass === 'city')
+                classScale = 1.15;
+            else if (settlementClass === 'metropolis')
+                classScale = 1.35;
+            else if (settlementClass === 'arcology')
+                classScale = distFromCenter < 0.25 ? 1.85 : 0.85;
+            const heightDensityMult = Math.max(0.5, (1.25 - distFromCenter * 0.55) * classScale);
+            const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale;
+            const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale;
+            const structureHeight = Math.max(18, Math.min(height * .68, baseHeight));
             structures.push({
                 id: `s${index}:${i}`,
                 x: centerX - radius + radius * 2 * (i + .5) / count,
                 width, height: structureHeight,
                 kind: kindFor(i, count, settlementClass, civ.era, stage, civ.seed + index * 101, allowed),
                 level,
+                depthLane,
             });
             globalIndex++;
         }
+        // Sort structures deterministically by depth lane (back -> mid -> front) so front buildings overlap back buildings cleanly
+        const laneWeight = { back: 0, mid: 1, front: 2 };
+        structures.sort((a, b) => (laneWeight[a.depthLane || 'mid'] - laneWeight[b.depthLane || 'mid']) || (a.x - b.x));
         settlements.push({ id: `s${index}`, centerX, radius, settlementClass, factionIndex: -1, structures });
     }
     if (roster.length) {
