@@ -329,22 +329,36 @@ test('consequence impacts remain bounded, visible, and finite when panning', asy
       assert.ok(calls.length > 0, `consequence impact profile '${profile}' must draw primitives`);
       assertFiniteGeometry(calls, `consequence profile '${profile}' scroll ${scroll}`);
 
+      let visibleCount = 0;
       for (const [name, ...args] of calls) {
+        let minX = Number.NaN, maxX = Number.NaN;
         if (name === 'line') {
-          const [x1, y1, x2, y2] = args;
-          assert.ok(x1 >= -VIEWPORT_WIDTH && x1 <= VIEWPORT_WIDTH * 2, `profile '${profile}' scroll ${scroll}: ${name} x1=${x1} out of bounds`);
-          assert.ok(x2 >= -VIEWPORT_WIDTH && x2 <= VIEWPORT_WIDTH * 2, `profile '${profile}' scroll ${scroll}: ${name} x2=${x2} out of bounds`);
+          const [x1, , x2] = args;
+          minX = Math.min(x1, x2);
+          maxX = Math.max(x1, x2);
         } else if (name === 'strokeCircle' || name === 'fillCircle') {
-          const [cx, cy, radius] = args;
-          assert.ok(cx >= -VIEWPORT_WIDTH && cx <= VIEWPORT_WIDTH * 2, `profile '${profile}' scroll ${scroll}: ${name} cx=${cx} out of bounds`);
+          const [cx, , radius] = args;
           assert.ok(Number.isFinite(radius) && radius > 0, `profile '${profile}' scroll ${scroll}: ${name} radius=${radius} invalid`);
-          // Verify bounding extent cx +/- radius is finite and visible/bounded
-          assert.ok(cx - radius >= -VIEWPORT_WIDTH && cx + radius <= VIEWPORT_WIDTH * 2, `profile '${profile}' scroll ${scroll}: ${name} extent [${cx - radius}, ${cx + radius}] out of bounds`);
+          minX = cx - radius;
+          maxX = cx + radius;
         } else if (name === 'fillRect' || name === 'strokeRect') {
-          const [x, y, w, h] = args;
-          assert.ok(x >= -VIEWPORT_WIDTH && x <= VIEWPORT_WIDTH * 2, `profile '${profile}' scroll ${scroll}: ${name} x=${x} out of bounds`);
+          const [x, , w] = args;
+          minX = x;
+          maxX = x + w;
+        } else if (name === 'fillTriangle') {
+          const [x1, , x2, , x3] = args;
+          minX = Math.min(x1, x2, x3);
+          maxX = Math.max(x1, x2, x3);
+        }
+        if (Number.isFinite(minX) && Number.isFinite(maxX)) {
+          // Check each primitive stays near the viewport canvas boundary (within slack margin)
+          assert.ok(minX >= -VIEWPORT_WIDTH * 0.5 && maxX <= VIEWPORT_WIDTH * 1.5, `profile '${profile}' scroll ${scroll}: ${name} extent [${minX}, ${maxX}] placed far outside viewport`);
+          if (maxX >= 0 && minX <= VIEWPORT_WIDTH) {
+            visibleCount++;
+          }
         }
       }
+      assert.ok(visibleCount > 0, `profile '${profile}' scroll ${scroll}: impact must have at least one visible primitive inside viewport [0, ${VIEWPORT_WIDTH}]`);
     }
   }
 });
