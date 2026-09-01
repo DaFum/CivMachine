@@ -146,7 +146,7 @@ test('world surface is larger across desktop, portrait and landscape layouts', a
   assert.match(styles, /decision-impact/);
   assert.match(styles, /tone-positive/);
   assert.match(styles, /tone-negative/);
-  assert.match(mobile, /62dvh/);
+  assert.match(mobile, /42dvh/);
   assert.match(mobile, /74dvh/);
   assert.match(mobile, /orientation:\s*landscape\)[\s\S]{0,180}min-height:\s*360px/);
 });
@@ -488,4 +488,11 @@ test('reduced motion silences every decorative animation the shell adds', async 
     /@media\(prefers-reduced-motion:no-preference\) and \(min-width:761px\)\{\s*\.background-noise::after\{animation:silk-aurora/,
     'the ambient drift must be gated to pointer-width viewports',
   );
+});
+
+test('mobile UX consolidates decision surface and groups secondary records', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.match(app, /class="records-intel-panel"/, 'secondary records must be grouped under a single disclosure container');
+  assert.match(app, /harvest-actions-secondary/, 'pressure harvest must structure chaotic and abandon actions under primary harvest');
+  assert.match(app, /situation-card/, 'intervention and situation must be consolidated');
 });

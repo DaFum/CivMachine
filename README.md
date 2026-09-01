@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.18.0
+# Reality Consumption Engine — App Edition v1.19.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,10 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.19.0 mobile UX & game-focus pass
+
+v1.19.0 improves CivMachine's mobile player experience with enlarged, readable typography, responsive single-line HUDs, a consolidated situation and decision surface, 1-column tactical actions with touch targets, enhanced settlement visibility, and grouped secondary records.
 
 ## v1.18.0 visual renderer release
 

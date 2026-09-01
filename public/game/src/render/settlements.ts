@@ -92,6 +92,7 @@ export function settlementLayout(civ: Civilization, worldWidth: number, height: 
   const sizes = settlementSizes(civ, snapshot);
   const roster = factionRoster(civ);
   const scale = [.24, .46, .7, .96, 1.28][stage] ?? .24;
+  const mobileScale = worldWidth < 800 ? 1.25 : (worldWidth < 1200 ? 1.12 : 1.0);
   const allowed = new Set<StructureKind>(structureKindsForEra(civ.era, stage));
   const settlements: Settlement[] = [];
   let globalIndex = 0;
@@ -126,8 +127,8 @@ export function settlementLayout(civ: Civilization, worldWidth: number, height: 
 
       const heightDensityMult = Math.max(0.5, (1.25 - distFromCenter * 0.55) * classScale);
 
-      const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale;
-      const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale;
+      const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * mobileScale;
+      const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * mobileScale;
       const structureHeight = Math.max(18, Math.min(height * .68, baseHeight));
 
       structures.push({
