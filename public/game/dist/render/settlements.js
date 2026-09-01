@@ -1,6 +1,7 @@
 import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
+import { worldWidthMultiplier } from './world-model.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
 export function depthLaneYOffset(lane) {
     if (lane === 'back')
@@ -84,7 +85,8 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
     const sizes = settlementSizes(civ, snapshot);
     const roster = factionRoster(civ);
     const scale = [.24, .46, .7, .96, 1.28][stage] ?? .24;
-    const mobileScale = worldWidth < 800 ? 1.25 : (worldWidth < 1200 ? 1.12 : 1.0);
+    const viewportWidth = worldWidth / worldWidthMultiplier(civ);
+    const mobileScale = viewportWidth < 800 ? 1.25 : (viewportWidth < 1200 ? 1.12 : 1.0);
     const allowed = new Set(structureKindsForEra(civ.era, stage));
     const settlements = [];
     let globalIndex = 0;
