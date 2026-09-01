@@ -188,6 +188,8 @@ export function createGameUI(engine, world) {
         }
         const logItems = vm.messages.length ? vm.messages.map(x => `<li>${esc(x)}</li>`).join('') : `<li>${esc(t.machineRecordAwaitingActivity)}</li>`;
         replaceIfChanged(log, logItems);
+        if (log && log.parentElement)
+            log.parentElement.classList.toggle('is-hidden', vm.phase !== 'machine');
         const civLog = civPanels.querySelector('#machine-log-civ');
         if (civLog)
             replaceIfChanged(civLog, logItems);
@@ -406,7 +408,7 @@ export function createGameUI(engine, world) {
         const harvestMeter = civPanels.querySelector('[data-live="harvest-meter"]');
         if (harvestMeter)
             harvestMeter.style.width = pct(vm.harvest.bandProgress);
-        setText('[data-live="harvest-call"]', urgencyText(vm.harvest));
+        civPanels.querySelectorAll('[data-live="harvest-call"]').forEach(el => { el.textContent = urgencyText(vm.harvest); });
         // The situation is selected in part by the harvest call, whose two sides move continuously, so
         // neither its id nor its severity may enter the structural key. Sentences and severity band are
         // both rewritten here instead, exactly like the readout below.
