@@ -533,6 +533,9 @@ class WorldRenderer {
         this.resizeCanvas(this.staticCanvas);
         this.resizeCanvas(this.sceneryCanvas);
         this.resizeCanvas(this.dynamicCanvas);
+        this.staticSurface.resetState();
+        this.scenerySurface.resetState();
+        this.dynamicSurface.resetState();
         this.invalidateScenery();
     }
     /** Drops the reuse of the scenery canvas: the next paint redraws the whole visible slice. */
@@ -717,7 +720,7 @@ class CanvasWorld {
             if (!civ)
                 return;
             const fastKey = fastPrimitiveKey(civ, this.renderer.width, this.renderer.height);
-            if (this.engineDirty || fastKey !== this.lastFastKey || !this.scene) {
+            if (!this.scene || fastKey !== this.lastFastKey || (this.engineDirty && fastKey !== this.lastFastKey)) {
                 this.engineDirty = false;
                 this.lastFastKey = fastKey;
                 const key = `${structuralWorldKey(civ, this.renderer.width)}|${Math.round(this.renderer.height / 40)}|${civ.traits.join(',')}`;
@@ -769,8 +772,13 @@ class CanvasWorld {
         this.input = new WorldInput(this.renderer.sceneryCanvas, () => this.renderer.width);
         this.unsubscribeEngine = this.engine.onChange(() => { this.engineDirty = true; });
         this.mediaQueryList = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
-        if (this.mediaQueryList?.addEventListener) {
-            this.mediaQueryList.addEventListener('change', this.onReducedMotionChange);
+        if (this.mediaQueryList) {
+            currentReducedMotion = this.mediaQueryList.matches;
+            currentConstructionDuration = currentReducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
+            this.tracker.setDuration(currentConstructionDuration);
+            if (this.mediaQueryList.addEventListener) {
+                this.mediaQueryList.addEventListener('change', this.onReducedMotionChange);
+            }
         }
         if (globalThis.ResizeObserver) {
             this.resizeObserver = new ResizeObserver(entries => {
