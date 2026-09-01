@@ -160,11 +160,10 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(app, /data-action="tactical"/);
   assert.match(app, /aria-describedby/);
   saysThrough(app, 'tacticalActions', 'TACTICAL ACTIONS');
-  // Both rails are rendered before the first accordion: what the run asks of the player is never
-  // behind a summary they have to open mid-run.
+  // Both primary action rails are rendered before secondary disclosures.
   const panels = app.slice(app.indexOf('replaceIfChanged(civPanels,'));
-  assert.ok(panels.indexOf('commandRail(vm)') < panels.indexOf('<details>'));
-  assert.ok(panels.indexOf('pressureRail(vm)') < panels.indexOf('<details>'));
+  assert.ok(panels.indexOf('harvestActionSurface(vm)') < panels.indexOf('commandRail(vm)'));
+  assert.ok(panels.indexOf('commandRail(vm)') < panels.indexOf('records-intel-panel'));
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /entropyBand/);
@@ -214,15 +213,33 @@ test('the civilization view is ordered by what it asks of the player', async () 
   // The intervention is the one thing the run asks the player to answer, so it sits directly under
   // the world it is asking about -- ahead of every readout, control and accordion.
   assert.match(panels, /\$\{terminalBanner\}\$\{eventCard\}/);
-  assert.ok(at('${eventCard}') < at('run-controls'), 'the intervention comes before the rails');
-  assert.ok(at('run-controls') < at('t.strategicOverview'), 'the rails come before the run context');
-  assert.ok(at('t.strategicOverview') < at('<details>'), 'reference material comes last');
+  assert.ok(at('${eventCard}') < at('harvestActionSurface(vm)'), 'the intervention comes before harvest actions');
+  assert.ok(at('harvestActionSurface(vm)') < at('commandRail(vm)'), 'harvest actions come before tactical actions');
+  assert.ok(at('commandRail(vm)') < at('pressureRail(vm)'), 'tactical actions come before pressure details disclosure');
+  assert.ok(at('pressureRail(vm)') < at('records-intel-panel'), 'pressure details comes before reference disclosures');
 
   // Simulation speed is a pacing control used mid-run; it belongs with the actions, not behind an
   // accordion that was misleadingly called Intervention Control next to the actual interventions.
   assert.doesNotMatch(app, /Intervention Control/);
   const command = app.slice(app.indexOf('const commandRail='), app.indexOf('const pressureRail='));
   assert.match(command, /speedRow\(vm\)/);
+});
+
+test('mobile UI hierarchy features collapsible event details, high harvest actions, and closed disclosures by default', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  // Event details use native disclosure and choices sit outside it
+  assert.match(app, /data-disclosure="situation-details"/);
+  const eventSlice = app.slice(app.indexOf('const eventCard='), app.indexOf('const tendencies='));
+  assert.ok(eventSlice.indexOf('</details>') < eventSlice.indexOf('choice-list'), 'event choice buttons must be outside the situation details disclosure');
+
+  // Secondary information disclosures default to closed (using disclosureAttr)
+  assert.match(app, /data-disclosure="pressure-details"/);
+  assert.match(app, /data-disclosure="directive-objective"/);
+  assert.match(app, /data-disclosure="machine-reserve"/);
+  assert.match(app, /data-disclosure="strategic-overview"/);
+  assert.match(app, /data-disclosure="records-intel"/);
+  assert.match(app, /data-disclosure="machine-record"/);
+  assert.match(app, /openDisclosures/);
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {

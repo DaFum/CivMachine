@@ -159,18 +159,16 @@ main{padding:var(--space-xl)}
 .world-chip span,.world-chip b{display:block}
 .world-chip span{color:var(--muted)}
 .path-chip{left:auto;right:12px;color:#d9c9ff}
-.world-state-strip{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:var(--space-xs);flex-wrap:wrap;justify-content:center;max-width:58%;padding:var(--space-xs);background:#05090db8;border:1px solid #263f4c;backdrop-filter:blur(8px)}
-.world-state-strip span{padding:var(--space-2xs) var(--space-xs);color:var(--muted);font-size:var(--text-3xs);letter-spacing:.06em}
-.world-state-strip b{color:var(--text)}
-.swipe-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:var(--text-2xs);letter-spacing:.08em;color:#9ab1bd;background:#05090dbf;border:1px solid #2d424d;padding:var(--space-xs) var(--space-sm)}
-/* Shown only on touch widths, where the tactical rail sits below the fold. See mobile.css. */
-.world-mobile-strip{display:none;position:absolute;left:8px;right:8px;bottom:8px;gap:var(--space-sm);align-items:center;justify-content:space-between;padding:var(--space-xs) var(--space-sm);background:#05090de6;border:1px solid var(--strip-color,#2d424d);font-size:var(--text-3xs);letter-spacing:.06em;backdrop-filter:blur(8px)}
-.world-mobile-strip span{color:var(--muted)}
-.world-mobile-strip b{color:var(--strip-color,var(--text))}
-.world-mobile-strip .strip-call{flex:1 1 auto;text-align:right;color:var(--strip-color,#9fb3bc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.world-mobile-strip.urgency-closing{--strip-color:var(--amber)}
-.world-mobile-strip.urgency-harvest{--strip-color:var(--mint)}
-.world-mobile-strip.urgency-cascading{--strip-color:var(--danger)}
+.world-status-dock{margin-top:var(--space-sm);margin-bottom:var(--space-md)}
+.world-status-strip{display:flex;align-items:center;justify-content:space-between;gap:var(--space-xs) var(--space-md);flex-wrap:wrap;padding:var(--space-sm) var(--space-md);background:linear-gradient(180deg,var(--panel-hi),var(--panel-lo));border:1px solid #263f4c;box-shadow:0 6px 18px #0004}
+.world-status-strip .status-group{display:flex;align-items:center;gap:var(--space-xs) var(--space-sm);flex-wrap:wrap}
+.world-status-strip span{padding:var(--space-2xs) var(--space-xs);color:var(--muted);font-size:var(--text-3xs);letter-spacing:.06em}
+.world-status-strip b{color:var(--text)}
+.world-status-strip .cascade-group{display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-2xs) var(--space-sm);background:var(--surface-1);border-left:2px solid var(--strip-color,#2d424d);border-radius:var(--radius-xs)}
+.world-status-strip .cascade-group.urgency-closing{--strip-color:var(--amber)}
+.world-status-strip .cascade-group.urgency-harvest{--strip-color:var(--mint)}
+.world-status-strip .cascade-group.urgency-cascading{--strip-color:var(--danger)}
+.world-status-strip .strip-call{color:var(--strip-color,#9fb3bc);font-weight:700}
 .world-arrow{pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);border-radius:50%;width:38px;height:38px;padding:0;background:#071016b8;font-size:var(--text-glyph)}
 .world-arrow.left{left:10px}
 .world-arrow.right{right:10px}
@@ -282,7 +280,7 @@ main{padding:var(--space-xl)}
 .overview-line{display:flex;gap:var(--space-xl);flex-wrap:wrap;border-top:1px solid var(--line-soft);margin-top:var(--space-xl);padding-top:var(--space-lg);color:var(--muted)}
 .overview-line b{color:var(--text)}
 details{border:1px solid var(--line-soft);background:var(--surface-sunken);margin-bottom:var(--space-sm)}
-summary{cursor:pointer;padding:var(--space-lg) var(--space-xl);color:#adc0ca;text-transform:uppercase;letter-spacing:.06em;font-size:var(--text-md)}
+summary{cursor:pointer;padding:var(--space-lg) var(--space-xl);color:#adc0ca;text-transform:uppercase;letter-spacing:.06em;font-size:var(--text-md);min-height:44px;display:flex;align-items:center;justify-content:space-between}
 details .panel{margin:0;border:0;border-top:1px solid var(--line-soft);box-shadow:none}
 .records-intel-panel{border:1px solid #233a46;background:linear-gradient(180deg,#0a141c,#06090d);border-radius:var(--radius-md);margin-top:var(--space-xl)}
 .records-intel-panel>summary{font-weight:700;color:var(--cyan);letter-spacing:.08em;padding:var(--space-lg) var(--space-xl)}
@@ -349,7 +347,7 @@ footer{display:flex;justify-content:space-between;gap:var(--space-xl);flex-wrap:
 .upgrade button{min-width:88px}
 .choice-list{grid-template-columns:1fr}
 .rail-keys{display:none}
-/* .tactical-actions keeps its 2x2 grid here: mobile.css states why four stacked buttons are wrong. */
+/* On narrow viewports, tactical actions use a single-column layout for touch target size and readability. See mobile.css. */
 .harvest-actions{grid-template-columns:1fr}
 .tactical-action-wrap button{min-height:88px}
 .start-run{width:100%;min-width:0}

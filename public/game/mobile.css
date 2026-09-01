@@ -82,17 +82,6 @@ summary:focus-visible {
     color: var(--muted);
   }
 
-  /* The cascade clock and the harvest call belong on top of the world, not below the fold. The HUD
-     already sits over the canvas and is pointer-events: none, so this steals no touch target. */
-  .world-hud .world-mobile-strip {
-    display: flex;
-  }
-
-  /* The strip takes the bottom of the world, so the swipe hint would sit on top of it. The pan
-     arrows carry the same message and stay. */
-  .swipe-hint {
-    display: none;
-  }
 
   .tactical-rail .cascade-eta {
     display: none;
