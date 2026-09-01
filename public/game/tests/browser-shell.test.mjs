@@ -177,10 +177,10 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(app, /class="harvest-readout /);
   const rail = app.slice(app.indexOf('const pressureRail='), app.indexOf('function renderCivilization'));
   assert.match(rail, /harvestReadout\(vm\)/, 'the pressure rail must render the harvest readout');
-  // And the buttons that end the run sit in the same rail as the readout that says whether to press
-  // them, instead of at the bottom of the view behind every accordion.
-  assert.match(rail, /data-action="harvest"/);
-  assert.match(rail, /data-action="chaos"/);
+  // And the buttons that end the run sit in harvestActionSurface ahead of pressure details.
+  const harvestSurface = app.slice(app.indexOf('const harvestActionSurface='), app.indexOf('const commandRail='));
+  assert.match(harvestSurface, /data-action="harvest"/);
+  assert.match(harvestSurface, /data-action="chaos"/);
   const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const speedRow='));
   saysThrough(readout, 'harvestGrade', 'HARVEST GRADE');
   assert.match(readout, /data-live="depth"/);
@@ -512,4 +512,7 @@ test('mobile UX consolidates decision surface and groups secondary records', asy
   assert.match(app, /class="records-intel-panel"/, 'secondary records must be grouped under a single disclosure container');
   assert.match(app, /harvest-actions-secondary/, 'pressure harvest must structure chaotic and abandon actions under primary harvest');
   assert.match(app, /situation-card/, 'intervention and situation must be consolidated');
+  // Ensure harvest actions are not duplicated in pressure rail
+  const pressureRail = app.slice(app.indexOf('const pressureRail='), app.indexOf('function renderCivilization'));
+  assert.doesNotMatch(pressureRail, /data-action="harvest"/, 'pressureRail must not duplicate harvest buttons');
 });

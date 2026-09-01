@@ -130,7 +130,7 @@ export const TUTORIAL_STEPS: ReadonlyArray<TutorialStep> = [
     where: 'The HARVEST GRADE readout, with the next band and the computed stay-or-harvest call under it.',
     why: 'Premature pays a flat 0.2 and no Cultivation Credits. Leaving Premature is the first real goal of every run.',
     action: '',
-    anchor: '.harvest-readout',
+    anchor: '.harvest-surface',
     phase: 'civilization',
     requires: '',
   },

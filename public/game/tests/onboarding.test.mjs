@@ -634,9 +634,8 @@ test('the guided run highlight is rendered into the panel, never bolted on after
   assert.doesNotMatch(app, /classList\.add\(['"]tutorial-focus/);
   const anchors = new Set(TUTORIAL_STEPS.map(step => step.anchor).filter(Boolean));
   for (const anchor of anchors) {
-    const searchAnchor = anchor === '.world-status-strip' ? '.world-state-strip' : anchor;
     assert.ok(
-      app.includes(`focusClass(vm,'${searchAnchor}')`),
+      app.includes(`focusClass(vm,'${anchor}')`),
       `no panel renders the highlight for ${anchor}`,
     );
   }
