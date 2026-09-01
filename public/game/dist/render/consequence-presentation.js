@@ -55,7 +55,7 @@ function roleColor(feedback, kind, accent) {
     return feedback.tone === 'positive' ? 0x73e6bd : feedback.tone === 'negative' ? 0xee6973 : 0xb68cff;
 }
 /** Drawn on the dynamic layer only; the caller owns clearing it. */
-export function drawConsequenceImpact(surface, feedback, startTime, time, width, height, accent, reducedMotion) {
+export function drawConsequenceImpact(surface, feedback, startTime, time, width, height, accent, reducedMotion, scroll = 0, worldWidth = width, settlements = []) {
     if (!feedback || startTime <= 0)
         return;
     const impact = consequenceImpact(feedback, reducedMotion);
@@ -66,8 +66,15 @@ export function drawConsequenceImpact(surface, feedback, startTime, time, width,
     const fade = impact.staticOnly ? .48 : (1 - progress) * (.38 + impact.intensity * .34);
     const color = roleColor(feedback, impact.kind, accent);
     const radius = Math.min(width, height) * (.14 + impact.intensity * .12 + progress * .28);
-    const anchorOffset = (hash01(feedback.sequence * 37) - 0.5) * width * 0.35;
-    const cx = width * 0.5 + anchorOffset;
+    let anchorWorldX = worldWidth * 0.5;
+    if (settlements.length > 0) {
+        const idx = Math.floor(hash01(feedback.sequence * 37) * settlements.length);
+        anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+    }
+    else {
+        anchorWorldX = worldWidth * (0.3 + hash01(feedback.sequence * 37) * 0.4);
+    }
+    const cx = anchorWorldX - scroll;
     const cy = height * 0.54;
     if (impact.kind === 'containment') {
         for (let ring = 0; ring < 3; ring++)

@@ -83,7 +83,7 @@ test('reduced-motion mode freezes ambient movement and uses a static decision si
   assert.match(world, /drawPathAmbience\([^;]+animationTime/);
   // The decision impact moved into its own module, so reduced motion is now a parameter world.ts
   // forwards rather than a branch it owns.
-  assert.match(world, /drawConsequenceImpact\([^;]+currentReducedMotion\)/);
+  assert.match(world, /drawConsequenceImpact\([^;]+currentReducedMotion/);
   const impact = await readFile(new URL('../src/render/consequence-presentation.ts', import.meta.url), 'utf8');
   assert.match(impact, /staticOnly: reducedMotion/);
   assert.match(impact, /impact\.staticOnly \? 0 :/);

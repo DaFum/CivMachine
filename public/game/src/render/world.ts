@@ -793,7 +793,7 @@ class WorldRenderer {
       this.feedbackStartTime = time;
     }
     if (feedback && this.feedbackStartTime > 0) {
-      drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion);
+      drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion, scroll, scene.snapshot.worldWidth, scene.settlements);
     }
     context.setTransform(1, 0, 0, 1, 0, 0);
   }
