@@ -280,6 +280,48 @@ test('dragging repaints only the strip the scroll exposed', async () => {
   });
 });
 
+test('depth lanes provide spatial Y-offsets and deterministic ordering', async () => {
+  const { depthLaneYOffset, structureEffectiveGround } = await import('../dist/render/settlements.js');
+  assert.equal(depthLaneYOffset('back'), -8);
+  assert.equal(depthLaneYOffset('mid'), 0);
+  assert.equal(depthLaneYOffset('front'), 8);
+
+  const ground = 400;
+  assert.equal(structureEffectiveGround(ground, 'back'), 392);
+  assert.equal(structureEffectiveGround(ground, 'mid'), 400);
+  assert.equal(structureEffectiveGround(ground, 'front'), 408);
+});
+
+test('consequence impacts remain bounded, visible, and finite when panning', async () => {
+  const { drawConsequenceImpact } = await import('../dist/render/consequence-presentation.js');
+  const calls = [];
+  const surface = {
+    lineStyle: () => surface,
+    fillStyle: () => surface,
+    line: (...args) => calls.push(['line', ...args]),
+    strokeCircle: (...args) => calls.push(['strokeCircle', ...args]),
+    fillCircle: (...args) => calls.push(['fillCircle', ...args]),
+    fillRect: (...args) => calls.push(['fillRect', ...args]),
+    strokeRect: (...args) => calls.push(['strokeRect', ...args]),
+    fillTriangle: (...args) => calls.push(['fillTriangle', ...args]),
+  };
+
+  const feedback = {
+    sequence: 42,
+    eventId: 'tactical:stabilize',
+    consequence: { significance: 'turning_point', tags: ['containment'], signatureProfile: 'containment' },
+  };
+
+  const settlements = [{ centerX: 1200, structures: [] }];
+  // Test panning across a 3600px wide world
+  for (const scroll of [0, 800, 1600, 2400]) {
+    calls.length = 0;
+    drawConsequenceImpact(surface, feedback, 100, 200, 900, 520, 0x00ff00, false, scroll, 3600, settlements);
+    assert.ok(calls.length > 0, 'consequence impact must draw primitives');
+    assertFiniteGeometry(calls, `consequence scroll ${scroll}`);
+  }
+});
+
 // Replays a drag script against a fresh renderer and returns the settlement-layer primitives of the
 // last frame, positioned in screen coordinates.
 async function sceneryAfterDrags(seed, drags, tag, { makeCiv = developedCivilization, viewport = { width: 900, height: 520 } } = {}) {
@@ -334,6 +376,27 @@ test('a strip redraw paints the exposed slice exactly as a full redraw would', a
 
   assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the strip');
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
+});
+
+test('continuous terrain polygon ridgelines render deterministically without NaNs', async () => {
+  const staticCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(staticCalls), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(1234) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?terrain=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    assert.ok(staticCalls.length > 0, 'static layer must render terrain');
+    assertFiniteGeometry(staticCalls, 'terrain static layer');
+    controller.destroy();
+  });
 });
 
 test('subpixel and boundary pointer drag does not trigger unnecessary static redraws', async () => {

@@ -96,6 +96,7 @@ export class CachedCanvasSurface implements DrawSurface {
     x1?: number,
     y1?: number
   ): DrawSurface {
+    if (width <= 0 || height <= 0 || !stops.length) return this;
     if (typeof this.context.createLinearGradient === 'function') {
       const gx0 = x0 ?? x;
       const gy0 = y0 ?? y;
@@ -103,7 +104,8 @@ export class CachedCanvasSurface implements DrawSurface {
       const gy1 = y1 ?? (y + height);
       const grad = this.context.createLinearGradient(gx0, gy0, gx1, gy1);
       for (const stop of stops) {
-        grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+        const offset = Math.max(0, Math.min(1, Number.isFinite(stop.offset) ? stop.offset : 0));
+        grad.addColorStop(offset, this.toColor(stop.color, stop.alpha ?? 1));
       }
       this.context.fillStyle = grad;
       this.lastFillStyle = '';
@@ -126,11 +128,12 @@ export class CachedCanvasSurface implements DrawSurface {
   ): DrawSurface {
     const rIn = Math.max(0, innerRadius);
     const rOut = Math.max(0, outerRadius);
-    if (rOut <= 0) return this;
+    if (rOut <= 0 || !stops.length) return this;
     if (typeof this.context.createRadialGradient === 'function') {
       const grad = this.context.createRadialGradient(cx, cy, rIn, cx, cy, rOut);
       for (const stop of stops) {
-        grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+        const offset = Math.max(0, Math.min(1, Number.isFinite(stop.offset) ? stop.offset : 0));
+        grad.addColorStop(offset, this.toColor(stop.color, stop.alpha ?? 1));
       }
       this.context.fillStyle = grad;
       this.lastFillStyle = '';
