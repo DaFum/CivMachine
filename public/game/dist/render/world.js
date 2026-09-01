@@ -4,7 +4,7 @@ import { qualityFactors, RenderQualityController } from './quality.js';
 import { structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { drawConsequenceImpact, drawPhaseTransitionImpact } from './consequence-presentation.js';
 import { hash01, mixColor } from './primitives.js';
-import { canvasSurface } from './draw-surface.js';
+import { CachedCanvasSurface, canvasSurface } from './draw-surface.js';
 import { settlementLayout } from './settlements.js';
 import { bannerGeometry, drawBanner, drawStructure } from './structures.js';
 import { casteFor, drawCreature, speciesProfile } from './species.js';
@@ -14,9 +14,11 @@ import { factionRoster, UNALIGNED_COLOR } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identity.js';
 const DYNAMIC_FRAME_MS = 33;
-const devicePixelRatio = Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
-const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-const CONSTRUCTION_DURATION = reducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
+function getDevicePixelRatio() {
+    return Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
+}
+let currentReducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+let currentConstructionDuration = currentReducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
 // Ground sits low enough that the strip below it stays a framed foreground band rather than
 // a quarter of the viewport filled with nothing.
 const GROUND_RATIO = .78;
@@ -55,6 +57,15 @@ function visibleBand(worldWidth, width, scroll, parallax) {
         from: Math.max(0, offset - CULL_MARGIN),
         to: Math.min(worldWidth, offset + width + CULL_MARGIN),
     };
+}
+function fastPrimitiveKey(civ, width, height) {
+    const vm = civ.visualMemory;
+    const memSeq = vm ? `${vm.sequence}:${vm.marks?.length || 0}:${vm.scars?.length || 0}` : '0';
+    const aff = civ.pathState?.affinity;
+    const affKey = aff ? Object.values(aff).join(',') : '';
+    const instKey = civ.institutions ? civ.institutions.join(',') : '';
+    const traitsKey = civ.traits ? civ.traits.join(',') : '';
+    return `${civ.seed}|${civ.terminal ? 1 : 0}|${width}|${height}|${civ.era}|${(civ.development / 25) | 0}|${traitsKey}|${instKey}|${civ.eventChoices || 0}|${civ.pathState?.dominantPath || ''}|${civ.pathState?.completedEvents?.length || 0}|${memSeq}|${affKey}|${(civ.stats?.stability / 25) | 0}|${(civ.stats?.sanity / 25) | 0}|${(civ.stats?.awareness / 25) | 0}|${(civ.stats?.attention / 25) | 0}|${(civ.tactical?.entropy / 25) | 0}`;
 }
 function buildScene(civ, width, height) {
     const snapshot = worldSnapshot(civ, width);
@@ -216,7 +227,7 @@ function drawParticles(surface, civ, snapshot, presentation, height, view) {
             .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
     }
 }
-function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view) {
+function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
     for (let i = 0; i < snapshot.hazeBands; i++) {
         const drift = (animationTime * (.002 + i * .00035)) % (width * .6);
@@ -248,9 +259,11 @@ function cosmeticAgents(agents, fraction) {
 }
 // `agentFraction` is the adaptive-quality lever: a slow device draws fewer cosmetic inhabitants,
 // never fewer fractures, beacons, landmarks, scars or construction cues.
-function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction) {
+function drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction, reducedMotion) {
     const { settlements, plan, species } = scene;
-    for (const pedestrian of cosmeticAgents(plan.pedestrians, agentFraction)) {
+    const maxPedestrians = Math.ceil(plan.pedestrians.length * Math.max(0, agentFraction));
+    for (let i = 0; i < maxPedestrians && i < plan.pedestrians.length; i++) {
+        const pedestrian = plan.pedestrians[i];
         const settlement = settlements[pedestrian.settlementIndex];
         if (!settlement)
             continue;
@@ -266,11 +279,13 @@ function drawInhabitants(surface, scene, snapshot, presentation, ground, animati
         drawCreature(surface, species, casteFor(settlement.settlementClass), x, ground + 2 + pedestrian.lane * 3, .8 + snapshot.stage * .12, phase, presentation.accent);
     }
 }
-function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction) {
+function drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction, reducedMotion) {
     const { civ, plan } = scene;
     const worldWidth = snapshot.worldWidth;
     // Road traffic.
-    for (const vehicle of cosmeticAgents(plan.vehicles, agentFraction)) {
+    const maxVehicles = Math.ceil(plan.vehicles.length * Math.max(0, agentFraction));
+    for (let i = 0; i < maxVehicles && i < plan.vehicles.length; i++) {
+        const vehicle = plan.vehicles[i];
         const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
         const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
         if (x < view.from || x > view.to)
@@ -282,7 +297,9 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
             surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
     }
     // Air corridors.
-    for (const aircraft of cosmeticAgents(plan.aircraft, agentFraction)) {
+    const maxAircraft = Math.ceil(plan.aircraft.length * Math.max(0, agentFraction));
+    for (let i = 0; i < maxAircraft && i < plan.aircraft.length; i++) {
+        const aircraft = plan.aircraft[i];
         const travel = reducedMotion ? aircraft.phase : (aircraft.phase + animationTime * .00032 * aircraft.speed) % 1;
         const x = aircraft.fromX + (aircraft.toX - aircraft.fromX) * travel;
         if (x < view.from - 10 || x > view.to + 10)
@@ -291,7 +308,9 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
         surface.lineStyle(1.5, presentation.accent, .62).line(x - 10, y, x + 10, y);
         surface.fillStyle(0xffffff, .82).fillCircle(x, y, 1.5);
     }
-    for (const orbital of cosmeticAgents(plan.orbital, agentFraction)) {
+    const maxOrbital = Math.ceil(plan.orbital.length * Math.max(0, agentFraction));
+    for (let i = 0; i < maxOrbital && i < plan.orbital.length; i++) {
+        const orbital = plan.orbital[i];
         const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
         if (x < view.from || x > view.to)
             continue;
@@ -308,7 +327,7 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
         surface.fillStyle(0xffd9a0, .5 * (1 - rise)).fillTriangle(launch.x - 3, y + 9, launch.x, y + 9 + 16 * (1 - rise), launch.x + 3, y + 9);
     }
 }
-function drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view) {
+function drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view, reducedMotion) {
     const { settlements } = scene;
     for (const settlement of settlements) {
         if (snapshot.stage === 0)
@@ -341,7 +360,7 @@ function drawBannersAndConstruction(surface, scene, snapshot, presentation, grou
         }
     }
 }
-function drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view) {
+function drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view, reducedMotion) {
     const { civ } = scene;
     const worldWidth = snapshot.worldWidth;
     for (let i = 0; i < snapshot.fractureCount; i++) {
@@ -366,7 +385,7 @@ function drawAnomalies(surface, scene, snapshot, presentation, ground, height, a
 }
 function drawDynamicContent(surface, scene, snapshot, presentation, width, height, time, tracker, view, tier) {
     const { agentFraction } = qualityFactors(tier);
-    const animationTime = reducedMotion ? 0 : time;
+    const animationTime = currentReducedMotion ? 0 : time;
     const ground = height * GROUND_RATIO;
     // The hash decides where a particle lands, so the loop still visits every index; only the draw is
     // skipped. Iterating is free next to filling a circle.
@@ -377,7 +396,7 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // wash mixed from the *live* presentation, drawn over the cached scenery, so the world keeps
     // sliding between the steps. Structure stays cached; only the mood moves.
     drawMoodWash(surface, scene, presentation, view, height);
-    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view);
+    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
     // Lit windows keep flickering across the settlement skyline.
     drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
     // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible
@@ -396,16 +415,16 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
         }
     }
     // Inhabitants.
-    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction);
+    drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction, currentReducedMotion);
     // Road traffic, air corridors, orbital, launches.
-    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction);
+    drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction, currentReducedMotion);
     // Banners and construction.
-    drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view);
+    drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view, currentReducedMotion);
     // Fractures, beacons, sanity distortion.
-    drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view);
+    drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view, currentReducedMotion);
     drawPathAmbience(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view, pathIdentity(scene.civ).tier, qualityFactors(tier).ambientLoopFraction);
     // Only the halo over a scar animates; the scar geometry itself stays on the cached scenery layer.
-    drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, reducedMotion);
+    drawWorldMemoryAccents(surface, scene.civ, snapshot.worldWidth, ground, scene.settlements, presentation.accent, view, animationTime, currentReducedMotion);
 }
 class WorldInput {
     constructor(target, getWidth) {
@@ -425,7 +444,6 @@ class WorldInput {
                 return;
             this.scroll -= event.clientX - this.lastX;
             this.lastX = event.clientX;
-            this.lastStaticScroll = Number.NaN;
         };
         this.onPointerUp = () => { this.dragging = false; };
         this.onPointerCancel = () => { this.dragging = false; };
@@ -436,7 +454,6 @@ class WorldInput {
     }
     nudge(direction) {
         this.scroll += direction * Math.max(220, this.getWidth() * .65);
-        this.lastStaticScroll = Number.NaN;
     }
     destroy() {
         this.target.removeEventListener?.('pointerdown', this.onPointerDown);
@@ -459,10 +476,12 @@ class WorldInput {
  * shared canvas the slow layers would be dragged along at the wrong rate and the parallax would die.
  */
 class WorldRenderer {
-    constructor(host) {
+    constructor(host, onContextRestoredCallback) {
         this.host = host;
+        this.onContextRestoredCallback = onContextRestoredCallback;
         this.width = 0;
         this.height = 0;
+        this.dpr = getDevicePixelRatio();
         this.staticRedraws = 0;
         this.sceneryFullRedraws = 0;
         this.sceneryStripRedraws = 0;
@@ -470,6 +489,16 @@ class WorldRenderer {
         this.sceneryScroll = Number.NaN;
         this.feedbackSequence = 0;
         this.feedbackStartTime = 0;
+        this.handleContextLost = (event) => {
+            event.preventDefault();
+        };
+        this.handleContextRestored = () => {
+            this.staticSurface.resetState();
+            this.scenerySurface.resetState();
+            this.dynamicSurface.resetState();
+            this.invalidateScenery();
+            this.onContextRestoredCallback?.();
+        };
         this.staticCanvas = document.createElement('canvas');
         this.sceneryCanvas = document.createElement('canvas');
         this.dynamicCanvas = document.createElement('canvas');
@@ -478,14 +507,27 @@ class WorldRenderer {
         this.dynamicCanvas.className = 'fallback-canvas fallback-dynamic';
         // Three unlabelled canvases would each present as an empty node. The host carries the name and
         // the world strip carries the numbers, so these are decoration to a screen reader.
-        for (const canvas of [this.staticCanvas, this.sceneryCanvas, this.dynamicCanvas])
+        for (const canvas of [this.staticCanvas, this.sceneryCanvas, this.dynamicCanvas]) {
             canvas.setAttribute('aria-hidden', 'true');
+            canvas.addEventListener?.('contextlost', this.handleContextLost);
+            canvas.addEventListener?.('contextrestored', this.handleContextRestored);
+        }
         this.staticContext = this.staticCanvas.getContext('2d');
         this.sceneryContext = this.sceneryCanvas.getContext('2d');
         this.dynamicContext = this.dynamicCanvas.getContext('2d');
+        const colorFn = (value, alpha = 1) => this.color(value, alpha);
+        this.staticSurface = new CachedCanvasSurface(this.staticContext, colorFn);
+        this.scenerySurface = new CachedCanvasSurface(this.sceneryContext, colorFn);
+        this.dynamicSurface = new CachedCanvasSurface(this.dynamicContext, colorFn);
         host.appendChild(this.staticCanvas);
         host.appendChild(this.sceneryCanvas);
         host.appendChild(this.dynamicCanvas);
+    }
+    setDpr(dpr) {
+        if (this.dpr === dpr)
+            return;
+        this.dpr = dpr;
+        this.resize(this.width, this.height);
     }
     resize(width, height) {
         this.width = width;
@@ -493,13 +535,16 @@ class WorldRenderer {
         this.resizeCanvas(this.staticCanvas);
         this.resizeCanvas(this.sceneryCanvas);
         this.resizeCanvas(this.dynamicCanvas);
+        this.staticSurface.resetState();
+        this.scenerySurface.resetState();
+        this.dynamicSurface.resetState();
         this.invalidateScenery();
     }
     /** Drops the reuse of the scenery canvas: the next paint redraws the whole visible slice. */
     invalidateScenery() { this.sceneryScroll = Number.NaN; }
     resizeCanvas(canvas) {
-        canvas.width = Math.max(1, Math.round(this.width * devicePixelRatio));
-        canvas.height = Math.max(1, Math.round(this.height * devicePixelRatio));
+        canvas.width = Math.max(1, Math.round(this.width * this.dpr));
+        canvas.height = Math.max(1, Math.round(this.height * this.dpr));
         canvas.style.width = `${this.width}px`;
         canvas.style.height = `${this.height}px`;
     }
@@ -510,6 +555,12 @@ class WorldRenderer {
         return `rgba(${red},${green},${blue},${alpha})`;
     }
     surface(context) {
+        if (context === this.staticContext)
+            return this.staticSurface;
+        if (context === this.sceneryContext)
+            return this.scenerySurface;
+        if (context === this.dynamicContext)
+            return this.dynamicSurface;
         return canvasSurface(context, (value, alpha = 1) => this.color(value, alpha));
     }
     /** The two slow parallax layers. Small enough that a scroll simply repaints them. */
@@ -517,12 +568,12 @@ class WorldRenderer {
         const context = this.staticContext;
         const surface = this.surface(context);
         const worldWidth = scene.snapshot.worldWidth;
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         // Each layer paints only the slice its own parallax puts on screen.
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * SKY_PARALLAX * devicePixelRatio, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * SKY_PARALLAX * this.dpr, 0);
         drawSkyContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, SKY_PARALLAX));
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * TERRAIN_PARALLAX * devicePixelRatio, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * TERRAIN_PARALLAX * this.dpr, 0);
         drawTerrainContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, TERRAIN_PARALLAX));
         context.setTransform(1, 0, 0, 1, 0, 0);
         this.staticRedraws++;
@@ -541,7 +592,7 @@ class WorldRenderer {
         const worldWidth = scene.snapshot.worldWidth;
         const deviceWidth = this.sceneryCanvas.width;
         const deviceHeight = this.sceneryCanvas.height;
-        const shift = Number.isFinite(this.sceneryScroll) ? Math.round((this.sceneryScroll - scroll) * devicePixelRatio) : Number.NaN;
+        const shift = Number.isFinite(this.sceneryScroll) ? Math.round((this.sceneryScroll - scroll) * this.dpr) : Number.NaN;
         const reusable = Number.isFinite(shift) && Math.abs(shift) < deviceWidth;
         if (reusable && shift === 0)
             return;
@@ -558,49 +609,55 @@ class WorldRenderer {
             context.globalCompositeOperation = 'copy';
             context.drawImage(this.sceneryCanvas, shift, 0);
             context.globalCompositeOperation = 'source-over';
-            const exposedFrom = shift > 0 ? 0 : this.width + shift / devicePixelRatio;
-            const exposedSpan = Math.abs(shift) / devicePixelRatio;
+            const exposedFrom = shift > 0 ? 0 : this.width + shift / this.dpr;
+            const exposedSpan = Math.abs(shift) / this.dpr;
             band = {
                 from: Math.max(0, scroll + exposedFrom - SCENERY_SLACK),
                 to: Math.min(worldWidth, scroll + exposedFrom + exposedSpan + SCENERY_SLACK),
             };
             context.save();
             context.beginPath();
-            context.rect(exposedFrom * devicePixelRatio, 0, exposedSpan * devicePixelRatio, deviceHeight);
+            context.rect(exposedFrom * this.dpr, 0, exposedSpan * this.dpr, deviceHeight);
             context.clip();
             this.sceneryStripRedraws++;
         }
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * this.dpr, 0);
         drawSettlementContent(surface, scene, this.height, band);
         context.setTransform(1, 0, 0, 1, 0, 0);
-        if (reusable)
+        if (reusable) {
             context.restore();
+            this.scenerySurface.resetState();
+        }
         this.sceneryScroll = scroll;
     }
     drawDynamic(time, scene, civ, scroll, tracker, engine, tier, phase) {
         const context = this.dynamicContext;
         const surface = this.surface(context);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         context.clearRect(0, 0, this.width, this.height);
         // Only the stat-driven counts are resampled per frame; the structural geometry is whatever the
         // cached scene already resolved, so a frame no longer rebuilds settlement and agent budgets.
         const dynamicSnapshot = applyQualityToLiveSample({ ...scene.snapshot, ...liveWorldSample(civ, scene.snapshot.stage) }, tier);
         const dynamicPresentation = worldPresentation(civ);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, -scroll * devicePixelRatio, 0);
+        context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * this.dpr, 0);
         drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1), tier);
-        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
+        context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion);
         const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
             this.feedbackSequence = feedback.sequence;
             this.feedbackStartTime = time;
         }
         if (feedback && this.feedbackStartTime > 0) {
-            drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, reducedMotion);
+            drawConsequenceImpact(surface, feedback, this.feedbackStartTime, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion);
         }
         context.setTransform(1, 0, 0, 1, 0, 0);
     }
     destroy() {
+        for (const canvas of [this.staticCanvas, this.sceneryCanvas, this.dynamicCanvas]) {
+            canvas.removeEventListener?.('contextlost', this.handleContextLost);
+            canvas.removeEventListener?.('contextrestored', this.handleContextRestored);
+        }
         this.staticCanvas.remove();
         this.sceneryCanvas.remove();
         this.dynamicCanvas.remove();
@@ -610,56 +667,91 @@ class CanvasWorld {
     constructor(engine, host) {
         this.engine = engine;
         this.host = host;
+        this.mediaQueryList = null;
+        this.unsubscribeEngine = null;
+        this.resizeObserver = null;
+        this.hostWidth = 0;
+        this.hostHeight = 0;
+        this.engineDirty = true;
+        this.lastFastKey = '';
         this.raf = 0;
         this.lastFrame = 0;
         this.lastStructuralKey = '';
         this.scene = null;
-        this.tracker = new ConstructionTracker(CONSTRUCTION_DURATION);
+        this.tracker = new ConstructionTracker(currentConstructionDuration);
         this.quality = new RenderQualityController();
         this.lastDramaPhaseId = -1;
         this.phaseTransitionFrom = -1;
         this.phaseTransitionTo = -1;
         this.phaseTransitionStart = 0;
         this.sceneRebuilds = 0;
+        this.onReducedMotionChange = (e) => {
+            currentReducedMotion = e.matches;
+            currentConstructionDuration = currentReducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
+            this.tracker.setDuration(currentConstructionDuration);
+        };
         this.loop = (time) => {
             this.raf = requestAnimationFrame(this.loop);
-            if (time - this.lastFrame < (reducedMotion ? 180 : DYNAMIC_FRAME_MS))
+            if (time - this.lastFrame < (currentReducedMotion ? 180 : DYNAMIC_FRAME_MS))
                 return;
             this.lastFrame = time;
-            const rect = this.host.getBoundingClientRect();
-            const resized = rect.width !== this.renderer.width || rect.height !== this.renderer.height;
-            if (resized) {
-                this.renderer.resize(Math.max(1, rect.width), Math.max(1, rect.height));
+            const currentDpr = getDevicePixelRatio();
+            if (currentDpr !== this.renderer.dpr) {
+                this.renderer.setDpr(currentDpr);
                 this.lastStructuralKey = '';
+                this.lastFastKey = '';
+                this.input.lastStaticScroll = Number.NaN;
+            }
+            let width = this.hostWidth;
+            let height = this.hostHeight;
+            // Reveal check: if recorded dimensions were zero or host changed from zero to visible
+            if (width === 0 || height === 0 || this.renderer.width === 0 || this.renderer.height === 0) {
+                const rect = this.host.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
+                this.hostWidth = width;
+                this.hostHeight = height;
+            }
+            const resized = width !== this.renderer.width || height !== this.renderer.height;
+            if (resized) {
+                this.renderer.resize(Math.max(1, width), Math.max(1, height));
+                this.lastStructuralKey = '';
+                this.lastFastKey = '';
             }
             const civ = this.engine.state.civilization;
             if (!civ)
                 return;
-            const key = `${structuralWorldKey(civ, this.renderer.width)}|${Math.round(this.renderer.height / 40)}|${civ.traits.join(',')}`;
-            if (key !== this.lastStructuralKey) {
-                this.lastStructuralKey = key;
-                this.scene = buildScene(civ, this.renderer.width, this.renderer.height);
-                // Read off the scene the rebuild just resolved, so the cue and the world it describes belong to
-                // the same frame. Nothing is written back to the engine: a phase reached by surviving is
-                // presented, never recorded.
-                const nextPhase = this.scene.snapshot.stage ?? civilizationDramaPhase(civ).id;
-                if (this.lastDramaPhaseId >= 0 && nextPhase !== this.lastDramaPhaseId) {
-                    this.phaseTransitionFrom = this.lastDramaPhaseId;
-                    this.phaseTransitionTo = nextPhase;
-                    this.phaseTransitionStart = time;
+            const fastKey = fastPrimitiveKey(civ, this.renderer.width, this.renderer.height);
+            if (!this.scene || fastKey !== this.lastFastKey || (this.engineDirty && fastKey !== this.lastFastKey)) {
+                this.engineDirty = false;
+                this.lastFastKey = fastKey;
+                const key = `${structuralWorldKey(civ, this.renderer.width)}|${Math.round(this.renderer.height / 40)}|${civ.traits.join(',')}`;
+                if (key !== this.lastStructuralKey) {
+                    this.lastStructuralKey = key;
+                    this.scene = buildScene(civ, this.renderer.width, this.renderer.height);
+                    // Read off the scene the rebuild just resolved, so the cue and the world it describes belong to
+                    // the same frame. Nothing is written back to the engine: a phase reached by surviving is
+                    // presented, never recorded.
+                    const nextPhase = this.scene.snapshot.stage ?? civilizationDramaPhase(civ).id;
+                    if (this.lastDramaPhaseId >= 0 && nextPhase !== this.lastDramaPhaseId) {
+                        this.phaseTransitionFrom = this.lastDramaPhaseId;
+                        this.phaseTransitionTo = nextPhase;
+                        this.phaseTransitionStart = time;
+                    }
+                    this.lastDramaPhaseId = nextPhase;
+                    this.tracker.sync(this.scene.structures, time);
+                    this.sceneRebuilds++;
+                    this.input.lastStaticScroll = Number.NaN;
+                    this.renderer.invalidateScenery();
                 }
-                this.lastDramaPhaseId = nextPhase;
-                this.tracker.sync(this.scene.structures, time);
-                this.sceneRebuilds++;
-                this.input.lastStaticScroll = Number.NaN;
-                this.renderer.invalidateScenery();
             }
             if (!this.scene)
                 return;
             this.input.scroll = Math.max(0, Math.min(this.scene.snapshot.worldWidth - this.renderer.width, this.input.scroll));
             // Every layer paints at the same device-pixel-aligned scroll: the scenery layer moves by copying
             // itself, and a fractional move would resample -- and blur -- it once per drag frame.
-            const scroll = Math.round(this.input.scroll * devicePixelRatio) / devicePixelRatio;
+            const dpr = this.renderer.dpr;
+            const scroll = Math.round(this.input.scroll * dpr) / dpr;
             if (scroll !== this.input.lastStaticScroll) {
                 this.input.lastStaticScroll = scroll;
                 this.renderer.drawStatic(this.scene, scroll);
@@ -673,9 +765,36 @@ class CanvasWorld {
             const drawEnd = globalThis.performance?.now?.() ?? drawStart;
             this.quality.update(Math.max(0, drawEnd - drawStart), time);
         };
-        this.renderer = new WorldRenderer(host);
+        this.renderer = new WorldRenderer(host, () => {
+            this.lastStructuralKey = '';
+            this.lastFastKey = '';
+            this.input.lastStaticScroll = Number.NaN;
+        });
         // The topmost canvas that still takes pointer events; the dynamic layer above it is inert.
         this.input = new WorldInput(this.renderer.sceneryCanvas, () => this.renderer.width);
+        this.unsubscribeEngine = this.engine.onChange(() => { this.engineDirty = true; });
+        this.mediaQueryList = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
+        if (this.mediaQueryList) {
+            currentReducedMotion = this.mediaQueryList.matches;
+            currentConstructionDuration = currentReducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
+            this.tracker.setDuration(currentConstructionDuration);
+            if (this.mediaQueryList.addEventListener) {
+                this.mediaQueryList.addEventListener('change', this.onReducedMotionChange);
+            }
+        }
+        if (globalThis.ResizeObserver) {
+            this.resizeObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const rect = entry.contentRect || entry.target.getBoundingClientRect();
+                    this.hostWidth = rect.width;
+                    this.hostHeight = rect.height;
+                }
+            });
+            this.resizeObserver.observe(host);
+        }
+        const initialRect = host.getBoundingClientRect();
+        this.hostWidth = initialRect.width;
+        this.hostHeight = initialRect.height;
         this.loop(0);
     }
     nudge(direction) { this.input.nudge(direction); }
@@ -690,6 +809,17 @@ class CanvasWorld {
     }
     destroy() {
         cancelAnimationFrame(this.raf);
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+        if (this.mediaQueryList?.removeEventListener) {
+            this.mediaQueryList.removeEventListener('change', this.onReducedMotionChange);
+        }
+        if (this.unsubscribeEngine) {
+            this.unsubscribeEngine();
+            this.unsubscribeEngine = null;
+        }
         this.tracker.reset();
         this.quality.reset();
         this.lastDramaPhaseId = -1;

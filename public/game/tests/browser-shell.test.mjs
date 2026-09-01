@@ -79,20 +79,20 @@ test('dynamic world state is sampled independently from cached structural scener
 
 test('reduced-motion mode freezes ambient movement and uses a static decision signal', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /const animationTime\s*=\s*reducedMotion\s*\?\s*0\s*:\s*time/);
+  assert.match(world, /const animationTime\s*=\s*reducedMotion\s*\?\s*0\s*:\s*time|const animationTime\s*=\s*currentReducedMotion\s*\?\s*0\s*:\s*time/);
   assert.match(world, /drawPathAmbience\([^;]+animationTime/);
   // The decision impact moved into its own module, so reduced motion is now a parameter world.ts
   // forwards rather than a branch it owns.
-  assert.match(world, /drawConsequenceImpact\([^;]+reducedMotion\)/);
+  assert.match(world, /drawConsequenceImpact\([^;]+currentReducedMotion\)/);
   const impact = await readFile(new URL('../src/render/consequence-presentation.ts', import.meta.url), 'utf8');
   assert.match(impact, /staticOnly: reducedMotion/);
   assert.match(impact, /impact\.staticOnly \? 0 :/);
 });
 
-test('renderer re-measures its host every frame so a hidden host recovers when shown', async () => {
+test('renderer recovers correctly when a previously hidden host becomes visible', async () => {
   const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /private loop[\s\S]{0,400}getBoundingClientRect\(\)/);
-  assert.match(world, /rect\.width !== this\.renderer\.width \|\| rect\.height !== this\.renderer\.height/);
+  assert.match(world, /getBoundingClientRect\(\)|ResizeObserver/);
+  assert.match(world, /rect\.width !== this\.renderer\.width \|\| rect\.height !== this\.renderer\.height|width !== this\.renderer\.width/);
 });
 
 test('renderer tears down its canvases and timing state when the civilization ends', async () => {

@@ -28,6 +28,9 @@ export class ConstructionTracker {
         this.seenEver = new Set();
         this.seeded = false;
     }
+    setDuration(duration) {
+        this.duration = duration;
+    }
     sync(structures, now) {
         // Drop structures the world no longer contains first. Without this both maps grow for the whole
         // run, and an id that vanishes and later returns at a higher level animates a build that never
