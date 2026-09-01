@@ -262,16 +262,19 @@ function drawMoodWash(surface, scene, live, view, height) {
     const span = view.to - view.from;
     if (span <= 0)
         return;
-    // Bounded vertical mood transition gradients instead of flat rectangles
-    const topAlpha = drift * 0.22;
-    const bottomAlpha = drift * 0.28;
-    surface.fillStyle(live.colors.skyBottom, topAlpha).fillRect(view.from, 0, span, height * 0.68);
-    surface.fillStyle(live.colors.nearTerrain, bottomAlpha).fillRect(view.from, height * 0.68, span, height * 0.32);
+    // Multi-zone atmospheric wash: sky zone, horizon transition zone, and near terrain zone
+    const horizonY = height * 0.68;
+    const skySpan = horizonY;
+    const groundSpan = height - horizonY;
+    surface.fillStyle(live.colors.skyBottom, drift * 0.18).fillRect(view.from, 0, span, skySpan * 0.6);
+    surface.fillStyle(live.accent, drift * 0.12).fillRect(view.from, skySpan * 0.6, span, skySpan * 0.4);
+    surface.fillStyle(live.colors.nearTerrain, drift * 0.25).fillRect(view.from, horizonY, span, groundSpan);
 }
-function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion) {
+function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion, tier = 0) {
     const worldWidth = snapshot.worldWidth;
     const loopTime = reducedMotion ? 0 : time;
-    for (let i = 0; i < snapshot.particleCount; i++) {
+    const particleCount = Math.ceil(snapshot.particleCount * qualityFactors(tier).particleFraction);
+    for (let i = 0; i < particleCount; i++) {
         const baseX = hash01(civ.seed + i * 17) * worldWidth;
         const driftX = (baseX + (reducedMotion ? 0 : Math.sin(loopTime * 0.0003 + i * 11) * 15)) % worldWidth;
         const posX = driftX < 0 ? driftX + worldWidth : driftX;
@@ -286,10 +289,11 @@ function drawParticles(surface, civ, snapshot, presentation, height, view, time,
             .fillCircle(posX, driftY, radius);
     }
 }
-function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
+function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion, tier = 0) {
     const worldWidth = snapshot.worldWidth;
-    const bandSpacing = worldWidth / Math.max(1, snapshot.hazeBands);
-    for (let i = 0; i < snapshot.hazeBands; i++) {
+    const hazeBands = Math.ceil(snapshot.hazeBands * qualityFactors(tier).hazeFraction);
+    const bandSpacing = worldWidth / Math.max(1, hazeBands);
+    for (let i = 0; i < hazeBands; i++) {
         const speed = 0.015 + (i % 3) * 0.008;
         const rawX = (i * bandSpacing + (reducedMotion ? 0 : animationTime * speed)) % worldWidth;
         const bandWidth = Math.min(worldWidth * 0.35, 450 + (i % 3) * 80);
@@ -472,9 +476,9 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // 1. Broad mood wash (underneath fine atmospheric particles and haze)
     drawMoodWash(surface, scene, presentation, view, height);
     // 2. Animated haze bands
-    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
+    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion, tier);
     // 3. Environmental particles
-    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion);
+    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion, tier);
     // Lit windows keep flickering across the settlement skyline.
     drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
     // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible

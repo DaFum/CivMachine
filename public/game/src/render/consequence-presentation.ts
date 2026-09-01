@@ -71,13 +71,28 @@ export function drawConsequenceImpact(
 
   let anchorWorldX = worldWidth * 0.5;
   if (settlements.length > 0) {
-    const idx = Math.floor(hash01(feedback.sequence * 37) * settlements.length);
-    anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+    if (impact.kind === 'identity' || impact.kind === 'growth') {
+      // Identity & growth anchor to capital (settlement 0)
+      anchorWorldX = settlements[0]?.centerX ?? (worldWidth * 0.5);
+    } else if (impact.kind === 'containment' || impact.kind === 'fracture' || impact.kind === 'unrest') {
+      // Containment, fracture, and unrest anchor to affected settlement
+      const idx = Math.floor(hash01(feedback.sequence * 37) * settlements.length);
+      anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+    } else {
+      const idx = Math.floor(hash01(feedback.sequence * 19) * settlements.length);
+      anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+    }
   } else {
     anchorWorldX = worldWidth * (0.3 + hash01(feedback.sequence * 37) * 0.4);
   }
-  const cx = anchorWorldX - scroll;
-  const cy = height * 0.54;
+
+  // Calculate raw screen X position
+  const rawCx = anchorWorldX - scroll;
+  // Ensure the impulse is visible within the current viewport slice
+  const cx = Math.max(80, Math.min(width - 80, rawCx));
+  // Y anchored to ground/skyline level
+  const groundY = height * 0.78;
+  const cy = groundY - 45;
 
   if (impact.kind === 'containment') {
     for(let ring=0;ring<3;ring++) surface.lineStyle(3-ring*.6,color,fade*(1-ring*.16)).strokeCircle(cx,cy,radius*(.72+ring*.2));
@@ -111,11 +126,20 @@ export function drawPhaseTransitionImpact(surface: DrawSurface, from: number, to
   const elapsed = time - startTime; if (elapsed < 0 || elapsed >= duration) return;
   const progress = reducedMotion ? 0 : Math.max(0,Math.min(1,elapsed/duration));
   const alpha = reducedMotion ? .42 : (1-progress)*.48;
-  const rows = Math.max(2,Math.min(6,to+2));
-  for(let row=0;row<rows;row++){
-    const y=height*(.3+row*.09);
-    const span=width*(.22+.1*to);
-    surface.lineStyle(1.4+(to-from)*.3,accent,alpha).line(width*.5-span*.5,y,width*.5+span*.5,y);
+
+  const groundY = height * 0.78;
+  const horizonY = height * 0.68;
+
+  // Horizon environmental light pulse
+  surface.lineStyle(2 + (to - from) * 0.5, accent, alpha * 0.6).line(0, horizonY, width, horizonY);
+  // Ground city lighting activation pulse
+  surface.lineStyle(1.5, accent, alpha * 0.4).line(0, groundY - 2, width, groundY - 2);
+
+  const rows = Math.max(2, Math.min(6, to + 2));
+  for(let row = 0; row < rows; row++) {
+    const y = height * (.28 + row * .08);
+    const span = width * (.24 + .12 * to);
+    surface.lineStyle(1.4 + (to - from) * .3, accent, alpha).line(width * .5 - span * .5, y, width * .5 + span * .5, y);
   }
-  surface.lineStyle(2,accent,alpha).strokeCircle(width*.5,height*.54,Math.min(width,height)*(.14+to*.035+progress*.16));
+  surface.lineStyle(2, accent, alpha).strokeCircle(width * .5, groundY - 45, Math.min(width, height) * (.14 + to * .035 + progress * .16));
 }
