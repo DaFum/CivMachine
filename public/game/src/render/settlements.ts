@@ -13,6 +13,16 @@ export const CLASS_ORDER: readonly SettlementClass[] = ['camp', 'village', 'town
 
 export type DepthLane = 'back' | 'mid' | 'front';
 
+export function depthLaneYOffset(lane?: DepthLane): number {
+  if (lane === 'back') return -8;
+  if (lane === 'front') return 8;
+  return 0;
+}
+
+export function structureEffectiveGround(groundY: number, lane?: DepthLane): number {
+  return groundY + depthLaneYOffset(lane);
+}
+
 export interface Structure {
   id: string;
   x: number;

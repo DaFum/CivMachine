@@ -2,6 +2,16 @@ import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
+export function depthLaneYOffset(lane) {
+    if (lane === 'back')
+        return -8;
+    if (lane === 'front')
+        return 8;
+    return 0;
+}
+export function structureEffectiveGround(groundY, lane) {
+    return groundY + depthLaneYOffset(lane);
+}
 export function settlementClassFor(structureCount, stage, era) {
     if (stage === 0)
         return structureCount >= 4 ? 'village' : 'camp';

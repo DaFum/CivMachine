@@ -56,21 +56,24 @@ export function drawConsequenceImpact(surface: DrawSurface, feedback: DecisionFe
   const fade = impact.staticOnly ? .48 : (1 - progress) * (.38 + impact.intensity * .34);
   const color = roleColor(feedback, impact.kind, accent);
   const radius = Math.min(width,height) * (.14 + impact.intensity*.12 + progress*.28);
-  const cx = width*.5, cy = height*.54;
+  const anchorOffset = (hash01(feedback.sequence * 37) - 0.5) * width * 0.35;
+  const cx = width * 0.5 + anchorOffset;
+  const cy = height * 0.54;
+
   if (impact.kind === 'containment') {
     for(let ring=0;ring<3;ring++) surface.lineStyle(3-ring*.6,color,fade*(1-ring*.16)).strokeCircle(cx,cy,radius*(.72+ring*.2));
   } else if (impact.kind === 'time_streak') {
-    for(let i=0;i<7;i++){ const y=height*(.24+i*.085); const shift=impact.staticOnly?0:progress*width*.22; surface.lineStyle(1.2+(i%2),color,fade).line(width*.1+shift,y,width*.72+shift,y); }
+    for(let i=0;i<7;i++){ const y=height*(.24+i*.085); const shift=impact.staticOnly?0:progress*width*.22; surface.lineStyle(1.2+(i%2),color,fade).line(cx - width*.3 + shift,y,cx + width*.3 + shift,y); }
   } else if (impact.kind === 'scan' || impact.kind === 'surveillance') {
-    const y=impact.staticOnly?cy:height*(.18+progress*.64); surface.lineStyle(2,color,fade).line(width*.12,y,width*.88,y); surface.lineStyle(1,color,fade*.75).strokeCircle(cx,cy,radius*.65);
+    const y=impact.staticOnly?cy:height*(.18+progress*.64); surface.lineStyle(2,color,fade).line(cx - width*.38,y,cx + width*.38,y); surface.lineStyle(1,color,fade*.75).strokeCircle(cx,cy,radius*.65);
   } else if (impact.kind === 'vent') {
     for(let i=0;i<6;i++){ const angle=(i/6)*Math.PI*2; surface.lineStyle(1.6,color,fade).line(cx,cy,cx+Math.cos(angle)*radius,cy+Math.sin(angle)*radius); }
   } else if (impact.kind === 'fracture') {
-    for(let i=0;i<8;i++){ const x=width*(.18+i*.085); const bend=(hash01(i*31+feedback.sequence)-.5)*width*.07; surface.lineStyle(1.2+(i%2),color,fade).line(x,height*.22,x+bend,height*.78); }
+    for(let i=0;i<8;i++){ const x=cx + (hash01(i*13 + feedback.sequence) - 0.5) * width * 0.4; const bend=(hash01(i*31+feedback.sequence)-.5)*width*.07; surface.lineStyle(1.2+(i%2),color,fade).line(x,height*.22,x+bend,height*.78); }
   } else if (impact.kind === 'unrest') {
-    for(let i=0;i<12;i++){ const x=width*(.25+hash01(feedback.sequence+i*17)*.5); const y=height*(.48+hash01(feedback.sequence+i*29)*.22); surface.fillStyle(color,fade*.72).fillCircle(x,y,2+impact.intensity*2); }
+    for(let i=0;i<12;i++){ const x=cx + (hash01(feedback.sequence+i*17) - 0.5) * width * 0.35; const y=height*(.48+hash01(feedback.sequence+i*29)*.22); surface.fillStyle(color,fade*.72).fillCircle(x,y,2+impact.intensity*2); }
   } else if (impact.kind === 'growth') {
-    for(let i=0;i<6;i++){ const x=width*(.22+i*.11); const top=height*(.58-progress*.18)-i%2*12; surface.lineStyle(1.4,color,fade).line(x,height*.72,x,top); }
+    for(let i=0;i<6;i++){ const x=cx + (i - 2.5) * 35; const top=height*(.58-progress*.18)-i%2*12; surface.lineStyle(1.4,color,fade).line(x,height*.72,x,top); }
   } else if (impact.kind === 'identity') {
     surface.lineStyle(2.4,color,fade).strokeCircle(cx,cy,radius); surface.lineStyle(1.2,color,fade*.8).strokeRect(cx-radius*.42,cy-radius*.42,radius*.84,radius*.84);
   } else {

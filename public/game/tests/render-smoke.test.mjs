@@ -336,6 +336,27 @@ test('a strip redraw paints the exposed slice exactly as a full redraw would', a
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
 });
 
+test('continuous terrain polygon ridgelines render deterministically without NaNs', async () => {
+  const staticCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(staticCalls), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(1234) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?terrain=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    assert.ok(staticCalls.length > 0, 'static layer must render terrain');
+    assertFiniteGeometry(staticCalls, 'terrain static layer');
+    controller.destroy();
+  });
+});
+
 test('subpixel and boundary pointer drag does not trigger unnecessary static redraws', async () => {
   const listeners = new Map();
   let frame = null;

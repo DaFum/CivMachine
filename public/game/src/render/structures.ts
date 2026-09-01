@@ -1,12 +1,16 @@
 import type { DrawSurface } from './draw-surface.js';
 import { hash01, mixColor, type FactionSigil } from './primitives.js';
-import type { Settlement, Structure, StructureKind } from './settlements.js';
+import { structureEffectiveGround, type Settlement, type Structure, type StructureKind } from './settlements.js';
 
 export const BANNER_CLEARANCE = 34;
 export const BANNER_POLE_MIN = 16;
 
-export function settlementCrown(settlement: Settlement): number {
-  return settlement.structures.reduce((max, structure) => Math.max(max, structure.height), 0);
+export function settlementCrown(settlement: Settlement, groundY: number = 0): number {
+  return settlement.structures.reduce((max, structure) => {
+    const effGround = structureEffectiveGround(groundY, structure.depthLane);
+    const top = effGround - structure.height;
+    return Math.max(max, groundY - top);
+  }, 0);
 }
 
 /**
@@ -15,7 +19,7 @@ export function settlementCrown(settlement: Settlement): number {
  * instead of the banner disappearing.
  */
 export function bannerGeometry(settlement: Settlement, groundY: number, height: number): { x: number; topY: number; poleHeight: number } {
-  const anchorY = groundY - settlementCrown(settlement);
+  const anchorY = groundY - settlementCrown(settlement, groundY);
   const topY = Math.max(height * .04, anchorY - BANNER_CLEARANCE);
   return { x: settlement.centerX, topY, poleHeight: Math.max(BANNER_POLE_MIN, anchorY - topY) };
 }
@@ -29,8 +33,9 @@ export function structureKindsForEra(era: number, stage: number): StructureKind[
   return kinds;
 }
 
-export function drawStructure(surface: DrawSurface, structure: Structure, groundY: number, bodyColor: number, accent: number, windowColor: number, seed: number): void {
+export function drawStructure(surface: DrawSurface, structure: Structure, baseGroundY: number, bodyColor: number, accent: number, windowColor: number, seed: number): void {
   const lane = structure.depthLane || 'mid';
+  const groundY = structureEffectiveGround(baseGroundY, lane);
   const laneColorShift = lane === 'back' ? 0x050b14 : lane === 'front' ? 0x182433 : 0x000000;
   const laneAlphaShift = lane === 'back' ? 0.88 : lane === 'front' ? 1.0 : 0.96;
   const baseColor = mixColor(bodyColor, laneColorShift, lane === 'back' ? 0.35 : 0.15);
