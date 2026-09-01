@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.17.0
+# Reality Consumption Engine — App Edition v1.18.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,10 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.18.0 visual renderer release
+
+v1.18.0 synchronizes release metadata, package versions, service worker cache, and documentation for the visual renderer release.
 
 ## v1.17.0 fewer lookups per tick, and a sanitizer that cannot be clobbered
 

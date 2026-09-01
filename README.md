@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.17.0
+# Reality Consumption Engine — App Edition v1.18.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,10 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.18.0 visual renderer release
+
+v1.18.0 synchronizes release metadata, package versions, service worker cache, and documentation for the visual renderer release.
 
 ## v1.17.0 fewer lookups per tick, and a sanitizer that cannot be clobbered
 
