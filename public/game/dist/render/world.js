@@ -13,6 +13,14 @@ import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from '.
 import { factionRoster, UNALIGNED_COLOR } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identity.js';
+/**
+ * Dynamic layer frame throttling interval (~30 FPS).
+ *
+ * Evidence-based rationale: The dynamic layer contains transient particles, inhabitants,
+ * traffic, and atmospheric effects. Throttling the dynamic repaint rate to ~30 FPS (33 ms)
+ * significantly reduces GPU/CPU draw overhead and thermal/power consumption on low-end
+ * and mobile devices, while keeping UI interaction, scrolling, and presentation responsive.
+ */
 const DYNAMIC_FRAME_MS = 33;
 function getDevicePixelRatio() {
     return Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
@@ -270,10 +278,10 @@ function drawMoodWash(surface, scene, live, view, height) {
     surface.fillStyle(live.accent, drift * 0.12).fillRect(view.from, skySpan * 0.6, span, skySpan * 0.4);
     surface.fillStyle(live.colors.nearTerrain, drift * 0.25).fillRect(view.from, horizonY, span, groundSpan);
 }
-function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion, tier = 0) {
+function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
     const loopTime = reducedMotion ? 0 : time;
-    const particleCount = Math.ceil(snapshot.particleCount * qualityFactors(tier).particleFraction);
+    const particleCount = snapshot.particleCount;
     for (let i = 0; i < particleCount; i++) {
         const baseX = hash01(civ.seed + i * 17) * worldWidth;
         const driftX = (baseX + (reducedMotion ? 0 : Math.sin(loopTime * 0.0003 + i * 11) * 15)) % worldWidth;
@@ -289,9 +297,9 @@ function drawParticles(surface, civ, snapshot, presentation, height, view, time,
             .fillCircle(posX, driftY, radius);
     }
 }
-function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion, tier = 0) {
+function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
-    const hazeBands = Math.ceil(snapshot.hazeBands * qualityFactors(tier).hazeFraction);
+    const hazeBands = snapshot.hazeBands;
     const bandSpacing = worldWidth / Math.max(1, hazeBands);
     for (let i = 0; i < hazeBands; i++) {
         const speed = 0.015 + (i % 3) * 0.008;
@@ -476,9 +484,9 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // 1. Broad mood wash (underneath fine atmospheric particles and haze)
     drawMoodWash(surface, scene, presentation, view, height);
     // 2. Animated haze bands
-    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion, tier);
+    drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
     // 3. Environmental particles
-    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion, tier);
+    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion);
     // Lit windows keep flickering across the settlement skyline.
     drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
     // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible

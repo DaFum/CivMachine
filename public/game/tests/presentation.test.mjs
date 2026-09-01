@@ -319,6 +319,31 @@ test('canvas surface translates the drawing vocabulary into 2D context calls', (
   assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'lighter']);
 });
 
+test('canvas surface resetState restores context globalCompositeOperation and clears cache', () => {
+  const canvasCalls = [];
+  const context = {
+    set fillStyle(value) { canvasCalls.push(['fillStyle', value]); },
+    set strokeStyle(value) { canvasCalls.push(['strokeStyle', value]); },
+    set lineWidth(value) { canvasCalls.push(['lineWidth', value]); },
+    set globalCompositeOperation(value) { canvasCalls.push(['globalCompositeOperation', value]); },
+  };
+  const toColor = (value, alpha = 1) => `#${value.toString(16)}@${alpha}`;
+  const surface = canvasSurface(context, toColor);
+  surface.setCompositeOperation('lighter');
+  assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'lighter']);
+
+  surface.resetState();
+  assert.deepEqual(canvasCalls[canvasCalls.length - 1], ['globalCompositeOperation', 'source-over']);
+
+  // Setting source-over after resetState should trigger context update because resetState set both cache and context
+  canvasCalls.length = 0;
+  surface.setCompositeOperation('source-over');
+  assert.equal(canvasCalls.length, 0, 'setting source-over after resetState requires no additional context change');
+
+  surface.setCompositeOperation('lighter');
+  assert.deepEqual(canvasCalls[0], ['globalCompositeOperation', 'lighter']);
+});
+
 test('canvas surface never emits a negative radius', () => {
   const radii = [];
   const context = {
