@@ -371,6 +371,35 @@ test('subpixel and boundary pointer drag does not trigger unnecessary static red
   });
 });
 
+test('secondary path affinity change rebuilds the scene correctly', async () => {
+  let frame = null;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext([]), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const civ = developedCivilization(888);
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: fn => { globalThis.__onChange = fn; return () => {}; } };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?affinitychange=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    assert.equal(controller.stats().sceneRebuilds, 1);
+
+    // Modify a secondary path affinity (e.g. recursive_simulation) which alters faction roster shares
+    civ.pathState.affinity.recursive_simulation = 8;
+    globalThis.__onChange();
+    frame(200);
+
+    assert.equal(controller.stats().sceneRebuilds, 2, 'secondary path affinity change must trigger scene rebuild');
+
+    controller.destroy();
+  });
+});
+
 test('context loss and restoration invalidates static and scenery caches', async () => {
   const canvasElements = [];
   let frame = null;

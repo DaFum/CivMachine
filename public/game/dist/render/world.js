@@ -62,8 +62,10 @@ function fastPrimitiveKey(civ, width, height) {
     const vm = civ.visualMemory;
     const memSeq = vm ? `${vm.sequence}:${vm.marks?.length || 0}:${vm.scars?.length || 0}` : '0';
     const aff = civ.pathState?.affinity;
-    const affSum = aff ? (aff.machine_faith || 0) + (aff.void_communion || 0) + (aff.collective_mind || 0) + (aff.bureaucratic_singularity || 0) + (aff.cosmic_resistance || 0) : 0;
-    return `${civ.seed}|${civ.terminal ? 1 : 0}|${width}|${height}|${civ.era}|${(civ.development / 25) | 0}|${civ.traits?.length || 0}|${civ.institutions?.length || 0}|${civ.eventChoices || 0}|${civ.pathState?.dominantPath || ''}|${civ.pathState?.completedEvents?.length || 0}|${memSeq}|${affSum}|${(civ.stats?.stability / 25) | 0}|${(civ.stats?.sanity / 25) | 0}|${(civ.stats?.awareness / 25) | 0}|${(civ.stats?.attention / 25) | 0}|${(civ.tactical?.entropy / 25) | 0}`;
+    const affKey = aff ? Object.values(aff).join(',') : '';
+    const instKey = civ.institutions ? civ.institutions.join(',') : '';
+    const traitsKey = civ.traits ? civ.traits.join(',') : '';
+    return `${civ.seed}|${civ.terminal ? 1 : 0}|${width}|${height}|${civ.era}|${(civ.development / 25) | 0}|${traitsKey}|${instKey}|${civ.eventChoices || 0}|${civ.pathState?.dominantPath || ''}|${civ.pathState?.completedEvents?.length || 0}|${memSeq}|${affKey}|${(civ.stats?.stability / 25) | 0}|${(civ.stats?.sanity / 25) | 0}|${(civ.stats?.awareness / 25) | 0}|${(civ.stats?.attention / 25) | 0}|${(civ.tactical?.entropy / 25) | 0}`;
 }
 function buildScene(civ, width, height) {
     const snapshot = worldSnapshot(civ, width);
