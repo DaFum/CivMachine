@@ -16,10 +16,10 @@ import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identit
 /**
  * Dynamic layer frame throttling interval (~30 FPS).
  *
- * Evidence-based rationale: The dynamic layer contains transient particles, inhabitants,
+ * Performance rationale: The dynamic layer contains transient particles, inhabitants,
  * traffic, and atmospheric effects. Throttling the dynamic repaint rate to ~30 FPS (33 ms)
- * significantly reduces GPU/CPU draw overhead and thermal/power consumption on low-end
- * and mobile devices, while keeping UI interaction, scrolling, and presentation responsive.
+ * reduces GPU/CPU draw overhead and thermal/power consumption on low-end and mobile devices,
+ * while keeping UI interaction, scrolling, and presentation responsive.
  */
 const DYNAMIC_FRAME_MS = 33;
 function getDevicePixelRatio() {
@@ -297,7 +297,7 @@ function drawParticles(surface, civ, snapshot, presentation, height, view, time,
             .fillCircle(posX, driftY, radius);
     }
 }
-function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
+export function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
     const hazeBands = snapshot.hazeBands;
     const bandSpacing = worldWidth / Math.max(1, hazeBands);

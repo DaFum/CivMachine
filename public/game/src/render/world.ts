@@ -23,10 +23,10 @@ export interface WorldController { nudge(direction: number): void; destroy(): vo
 /**
  * Dynamic layer frame throttling interval (~30 FPS).
  *
- * Evidence-based rationale: The dynamic layer contains transient particles, inhabitants,
+ * Performance rationale: The dynamic layer contains transient particles, inhabitants,
  * traffic, and atmospheric effects. Throttling the dynamic repaint rate to ~30 FPS (33 ms)
- * significantly reduces GPU/CPU draw overhead and thermal/power consumption on low-end
- * and mobile devices, while keeping UI interaction, scrolling, and presentation responsive.
+ * reduces GPU/CPU draw overhead and thermal/power consumption on low-end and mobile devices,
+ * while keeping UI interaction, scrolling, and presentation responsive.
  */
 const DYNAMIC_FRAME_MS = 33;
 function getDevicePixelRatio(): number {
@@ -330,7 +330,7 @@ function drawParticles(surface: DrawSurface, civ: Civilization, snapshot: Return
   }
 }
 
-function drawHazeBands(surface: DrawSurface, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean): void {
+export function drawHazeBands(surface: DrawSurface, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean): void {
   const worldWidth = snapshot.worldWidth;
   const hazeBands = snapshot.hazeBands;
   const bandSpacing = worldWidth / Math.max(1, hazeBands);

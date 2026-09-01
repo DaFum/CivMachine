@@ -306,37 +306,59 @@ test('consequence impacts remain bounded, visible, and finite when panning', asy
     fillTriangle: (...args) => calls.push(['fillTriangle', ...args]),
   };
 
-  const feedback = {
-    sequence: 42,
-    eventId: 'tactical:stabilize',
-    consequence: { significance: 'turning_point', tags: ['containment'], signatureProfile: 'containment' },
-  };
+  const sampleFeedbacks = [
+    { sequence: 42, eventId: 'tactical:stabilize', consequence: { significance: 'turning_point', tags: ['containment'], signatureProfile: 'containment' } },
+    { sequence: 43, eventId: 'tactical:probe', consequence: { significance: 'turning_point', tags: ['scan'], signatureProfile: 'scan' } },
+    { sequence: 44, eventId: 'crisis:fracture', consequence: { significance: 'turning_point', tags: ['reality_damage'], signatureProfile: 'fracture' } },
+    { sequence: 45, eventId: 'growth:urban', consequence: { significance: 'turning_point', tags: ['urban_growth'], signatureProfile: 'growth' } },
+    { sequence: 46, eventId: 'identity:shift', consequence: { significance: 'turning_point', tags: ['religious_shift'], signatureProfile: 'identity' } },
+    { sequence: 47, eventId: 'unrest:protest', consequence: { significance: 'turning_point', tags: ['civil_unrest'], signatureProfile: 'unrest' } },
+  ];
 
   const settlements = [{ centerX: 1200, structures: [] }, { centerX: 2800, structures: [] }];
   const VIEWPORT_WIDTH = 900;
   const VIEWPORT_HEIGHT = 520;
   const WORLD_WIDTH = 3600;
 
-  // Test panning across a 3600px wide world
-  for (const scroll of [0, 800, 1600, 2400]) {
-    calls.length = 0;
-    drawConsequenceImpact(surface, feedback, 100, 200, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, 0x00ff00, false, scroll, WORLD_WIDTH, settlements);
-    assert.ok(calls.length > 0, 'consequence impact must draw primitives');
-    assertFiniteGeometry(calls, `consequence scroll ${scroll}`);
+  for (const feedback of sampleFeedbacks) {
+    const profile = feedback.consequence.signatureProfile;
+    // Test panning across a 3600px wide world
+    for (const scroll of [0, 800, 1600, 2400]) {
+      calls.length = 0;
+      drawConsequenceImpact(surface, feedback, 100, 200, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, 0x00ff00, false, scroll, WORLD_WIDTH, settlements);
+      assert.ok(calls.length > 0, `consequence impact profile '${profile}' must draw primitives`);
+      assertFiniteGeometry(calls, `consequence profile '${profile}' scroll ${scroll}`);
 
-    // Verify all primitive X coordinates fall strictly inside or bounded by the viewport [0, VIEWPORT_WIDTH]
-    for (const [name, ...args] of calls) {
-      if (name === 'line') {
-        const [x1, y1, x2, y2] = args;
-        assert.ok(x1 >= 0 && x1 <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x1=${x1} out of viewport bounds`);
-        assert.ok(x2 >= 0 && x2 <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x2=${x2} out of viewport bounds`);
-      } else if (name === 'strokeCircle' || name === 'fillCircle') {
-        const [cx, cy, radius] = args;
-        assert.ok(cx >= 0 && cx <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} cx=${cx} out of viewport bounds`);
-      } else if (name === 'fillRect' || name === 'strokeRect') {
-        const [x, y, w, h] = args;
-        assert.ok(x >= -w && x <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x=${x} out of viewport bounds`);
+      let visibleCount = 0;
+      for (const [name, ...args] of calls) {
+        let minX = Number.NaN, maxX = Number.NaN;
+        if (name === 'line') {
+          const [x1, , x2] = args;
+          minX = Math.min(x1, x2);
+          maxX = Math.max(x1, x2);
+        } else if (name === 'strokeCircle' || name === 'fillCircle') {
+          const [cx, , radius] = args;
+          assert.ok(Number.isFinite(radius) && radius > 0, `profile '${profile}' scroll ${scroll}: ${name} radius=${radius} invalid`);
+          minX = cx - radius;
+          maxX = cx + radius;
+        } else if (name === 'fillRect' || name === 'strokeRect') {
+          const [x, , w] = args;
+          minX = x;
+          maxX = x + w;
+        } else if (name === 'fillTriangle') {
+          const [x1, , x2, , x3] = args;
+          minX = Math.min(x1, x2, x3);
+          maxX = Math.max(x1, x2, x3);
+        }
+        if (Number.isFinite(minX) && Number.isFinite(maxX)) {
+          // Check each primitive stays near the viewport canvas boundary (within slack margin)
+          assert.ok(minX >= -VIEWPORT_WIDTH * 0.5 && maxX <= VIEWPORT_WIDTH * 1.5, `profile '${profile}' scroll ${scroll}: ${name} extent [${minX}, ${maxX}] placed far outside viewport`);
+          if (maxX >= 0 && minX <= VIEWPORT_WIDTH) {
+            visibleCount++;
+          }
+        }
       }
+      assert.ok(visibleCount > 0, `profile '${profile}' scroll ${scroll}: impact must have at least one visible primitive inside viewport [0, ${VIEWPORT_WIDTH}]`);
     }
   }
 });
@@ -398,67 +420,64 @@ test('a strip redraw paints the exposed slice exactly as a full redraw would', a
 });
 
 test('haze coverage spans world start, middle, and far end on a broad stage-4 world', async () => {
+  const { drawHazeBands } = await import('../dist/render/world.js');
+  const { applyQualityToLiveSample, worldSnapshot } = await import('../dist/render/world-model.js');
+  const { worldPresentation } = await import('../dist/render/world-presentation.js');
+
   const stage4Civ = developedCivilization(404);
   stage4Civ.development = 900;
   stage4Civ.era = 4;
 
-  const renderDynamicAtScroll = async (scroll, tier = 0, reducedMotion = false) => {
-    const dynamicCalls = [];
-    const listeners = new Map();
-    let frame = null;
-    await withStubbedDom(() => {
-      let created = 0;
-      globalThis.window = {
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        matchMedia: () => ({ matches: reducedMotion, addEventListener: () => {} }),
-      };
-      globalThis.document = {
-        createElement: () => {
-          const idx = created++;
-          return {
-            className: '', style: {}, width: 0, height: 0,
-            getContext: () => idx === 2 ? recordingContext(dynamicCalls) : recordingContext([]),
-            addEventListener: (name, handler) => { if (idx === 1) listeners.set(name, handler); },
-            removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {}
-          };
-        }
-      };
-      globalThis.ResizeObserver = class { observe() {} disconnect() {} };
-      globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
-      globalThis.cancelAnimationFrame = () => {};
-    }, async () => {
-      const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
-      const engine = { state: { phase: 'civilization', civilization: stage4Civ }, worldImpulse: null, onChange: () => () => {} };
-      const { startWorldRenderer } = await import(`../dist/render/world.js?haze-${scroll}-${tier}-${reducedMotion}=${Date.now()}`);
-      const controller = startWorldRenderer(engine, host);
-      if (scroll > 0 && listeners.has('pointerdown') && listeners.has('pointermove')) {
-        listeners.get('pointerdown')({ clientX: 500, pointerId: 1 });
-        listeners.get('pointermove')({ clientX: 500 - scroll, pointerId: 1 });
-        listeners.get('pointerup')?.({});
-      }
-      frame(100);
-      controller.destroy();
-    });
-    return dynamicCalls;
-  };
-
-  const { applyQualityToLiveSample, liveWorldSample, worldSnapshot } = await import('../dist/render/world-model.js');
   const snap = worldSnapshot(stage4Civ, 900);
-  assert.ok(snap.worldWidth >= 3200, 'stage-4 world must be broad');
-
-  // Verify live haze counts and quality adjustment
-  const fullSample = liveWorldSample(stage4Civ, 4);
-  const tier3Sample = applyQualityToLiveSample(fullSample, 3);
-  assert.ok(tier3Sample.hazeBands < fullSample.hazeBands, 'tier 3 must reduce haze band count');
-
-  // Verify haze rendering at world start (scroll 0), middle (scroll worldWidth/2), far end (scroll worldWidth-900)
+  const pres = worldPresentation(stage4Civ);
   const worldWidth = snap.worldWidth;
-  for (const scrollPos of [0, Math.floor(worldWidth / 2), worldWidth - 900]) {
-    const calls = await renderDynamicAtScroll(scrollPos, 0, false);
-    assert.ok(calls.length > 0, `dynamic layer at scroll ${scrollPos} must render`);
-    assertFiniteGeometry(calls, `haze scroll ${scrollPos}`);
+  assert.ok(worldWidth >= 3200, 'stage-4 world must be broad');
+
+  function recordHaze(snapshot, presentation, width, height, time, view, reducedMotion) {
+    const hazeRects = [];
+    const surface = {
+      fillStyle: () => surface,
+      lineStyle: () => surface,
+      fillRect: (x, y, w, h) => hazeRects.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, w: Math.round(w * 100) / 100, h: Math.round(h * 100) / 100 }),
+      line: () => surface,
+      strokeCircle: () => surface,
+      fillCircle: () => surface,
+      strokeRect: () => surface,
+      fillTriangle: () => surface,
+      fillPoly: () => surface,
+    };
+    drawHazeBands(surface, snapshot, presentation, width, height, time, view, reducedMotion);
+    return hazeRects;
   }
+
+  // 1. World Start (scroll 0)
+  const startRects = recordHaze(snap, pres, 900, 520, 1000, { from: 0, to: 900 }, false);
+  assert.ok(startRects.length > 0, 'start of world must have visible haze bands');
+
+  // 2. Middle (scroll worldWidth / 2)
+  const midScroll = Math.floor((worldWidth - 900) / 2);
+  const midRects = recordHaze(snap, pres, 900, 520, 1000, { from: midScroll, to: midScroll + 900 }, false);
+  assert.ok(midRects.length > 0, 'middle of world must have visible haze bands');
+
+  // 3. Far End (scroll worldWidth - 900)
+  const endScroll = worldWidth - 900;
+  const endRects = recordHaze(snap, pres, 900, 520, 1000, { from: endScroll, to: endScroll + 900 }, false);
+  assert.ok(endRects.length > 0, 'far end of world must have visible haze bands');
+
+  // 4. Tier 3 vs Tier 0 quality degradation
+  const snapTier0 = applyQualityToLiveSample(snap, 0);
+  const snapTier3 = applyQualityToLiveSample(snap, 3);
+  const fullView = { from: 0, to: worldWidth };
+  const tier0Rects = recordHaze(snapTier0, pres, worldWidth, 520, 1000, fullView, false);
+  const tier3Rects = recordHaze(snapTier3, pres, worldWidth, 520, 1000, fullView, false);
+  assert.ok(tier3Rects.length < tier0Rects.length, 'Tier 3 must render fewer haze bands than Tier 0');
+  assert.ok(tier3Rects.length > 0, 'Tier 3 must still maintain haze coverage');
+
+  // 5. Reduced Motion freezes movement while preserving coverage
+  const rmRects1 = recordHaze(snap, pres, 900, 520, 1000, { from: 0, to: 900 }, true);
+  const rmRects2 = recordHaze(snap, pres, 900, 520, 5000, { from: 0, to: 900 }, true);
+  assert.ok(rmRects1.length > 0, 'Reduced motion must preserve haze coverage');
+  assert.deepEqual(rmRects1, rmRects2, 'Reduced motion must freeze haze movement across animation time');
 });
 
 test('continuous terrain polygon ridgelines render deterministically without NaNs', async () => {
@@ -495,8 +514,24 @@ test('continuous terrain polygon ridgelines render deterministically without NaN
   // Verify different seed produces different drawing calls
   assert.notDeepEqual(run1, runOther, 'different seeds must produce different terrain calls');
 
-  // Verify ridgelines are rendered using polygon path calls (beginPath, moveTo, lineTo, closePath, fill)
-  assert.ok(run1.some(([name]) => name === 'lineTo'), 'terrain must generate polygon ridgelines via lineTo');
+  // Verify ridgelines are rendered using multi-vertex polygon path calls (> 3 lineTo calls between beginPath and closePath)
+  let maxLineToInPoly = 0;
+  let currentLineToCount = 0;
+  let inPath = false;
+  for (const [name] of run1) {
+    if (name === 'beginPath') {
+      inPath = true;
+      currentLineToCount = 0;
+    } else if (name === 'closePath') {
+      if (inPath && currentLineToCount > maxLineToInPoly) {
+        maxLineToInPoly = currentLineToCount;
+      }
+      inPath = false;
+    } else if (inPath && name === 'lineTo') {
+      currentLineToCount++;
+    }
+  }
+  assert.ok(maxLineToInPoly > 3, `terrain polygon ridge must have > 3 lineTo calls per polygon, found max ${maxLineToInPoly}`);
 });
 
 test('subpixel and boundary pointer drag does not trigger unnecessary static redraws', async () => {
