@@ -404,19 +404,25 @@ test('haze coverage spans world start, middle, and far end on a broad stage-4 wo
 
   const renderDynamicAtScroll = async (scroll, tier = 0, reducedMotion = false) => {
     const dynamicCalls = [];
+    const listeners = new Map();
     let frame = null;
     await withStubbedDom(() => {
+      let created = 0;
       globalThis.window = {
         addEventListener: () => {},
         removeEventListener: () => {},
         matchMedia: () => ({ matches: reducedMotion, addEventListener: () => {} }),
       };
       globalThis.document = {
-        createElement: () => ({
-          className: '', style: {}, width: 0, height: 0,
-          getContext: () => recordingContext(dynamicCalls),
-          addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {}
-        })
+        createElement: () => {
+          const idx = created++;
+          return {
+            className: '', style: {}, width: 0, height: 0,
+            getContext: () => idx === 2 ? recordingContext(dynamicCalls) : recordingContext([]),
+            addEventListener: (name, handler) => { if (idx === 1) listeners.set(name, handler); },
+            removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {}
+          };
+        }
       };
       globalThis.ResizeObserver = class { observe() {} disconnect() {} };
       globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
@@ -426,8 +432,10 @@ test('haze coverage spans world start, middle, and far end on a broad stage-4 wo
       const engine = { state: { phase: 'civilization', civilization: stage4Civ }, worldImpulse: null, onChange: () => () => {} };
       const { startWorldRenderer } = await import(`../dist/render/world.js?haze-${scroll}-${tier}-${reducedMotion}=${Date.now()}`);
       const controller = startWorldRenderer(engine, host);
-      if (scroll > 0) {
-        // scroll is in world coordinates; set input scroll by nudging or direct property if stubbed
+      if (scroll > 0 && listeners.has('pointerdown') && listeners.has('pointermove')) {
+        listeners.get('pointerdown')({ clientX: 500, pointerId: 1 });
+        listeners.get('pointermove')({ clientX: 500 - scroll, pointerId: 1 });
+        listeners.get('pointerup')?.({});
       }
       frame(100);
       controller.destroy();
