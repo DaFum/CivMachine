@@ -2,10 +2,35 @@
  * The drawing vocabulary every world module writes against. Keeping it separate from the 2D
  * context lets the drawing code stay free of transform bookkeeping and lets tests record calls.
  */
+export interface GradientStop {
+  offset: number;
+  color: number;
+  alpha?: number;
+}
+
 export interface DrawSurface {
   fillStyle(color: number, alpha?: number): DrawSurface;
   lineStyle(width: number, color: number, alpha?: number): DrawSurface;
   fillRect(x: number, y: number, width: number, height: number): DrawSurface;
+  fillLinearGradientRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    stops: ReadonlyArray<GradientStop>,
+    x0?: number,
+    y0?: number,
+    x1?: number,
+    y1?: number
+  ): DrawSurface;
+  fillRadialGlow(
+    cx: number,
+    cy: number,
+    innerRadius: number,
+    outerRadius: number,
+    stops: ReadonlyArray<GradientStop>
+  ): DrawSurface;
+  setCompositeOperation(op: GlobalCompositeOperation): DrawSurface;
   strokeRect(x: number, y: number, width: number, height: number): DrawSurface;
   fillCircle(x: number, y: number, radius: number): DrawSurface;
   strokeCircle(x: number, y: number, radius: number): DrawSurface;
@@ -19,6 +44,7 @@ export class CachedCanvasSurface implements DrawSurface {
   private lastFillStyle = '';
   private lastStrokeStyle = '';
   private lastLineWidth = -1;
+  private lastCompositeOp = 'source-over';
 
   constructor(
     private context: any,
@@ -29,6 +55,7 @@ export class CachedCanvasSurface implements DrawSurface {
     this.lastFillStyle = '';
     this.lastStrokeStyle = '';
     this.lastLineWidth = -1;
+    this.lastCompositeOp = 'source-over';
   }
 
   fillStyle(color: number, alpha = 1): DrawSurface {
@@ -55,6 +82,77 @@ export class CachedCanvasSurface implements DrawSurface {
 
   fillRect(x: number, y: number, width: number, height: number): DrawSurface {
     this.context.fillRect(x, y, width, height);
+    return this;
+  }
+
+  fillLinearGradientRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    stops: ReadonlyArray<GradientStop>,
+    x0?: number,
+    y0?: number,
+    x1?: number,
+    y1?: number
+  ): DrawSurface {
+    if (typeof this.context.createLinearGradient === 'function') {
+      const gx0 = x0 ?? x;
+      const gy0 = y0 ?? y;
+      const gx1 = x1 ?? x;
+      const gy1 = y1 ?? (y + height);
+      const grad = this.context.createLinearGradient(gx0, gy0, gx1, gy1);
+      for (const stop of stops) {
+        grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+      }
+      this.context.fillStyle = grad;
+      this.lastFillStyle = '';
+      this.context.fillRect(x, y, width, height);
+    } else {
+      if (stops.length > 0) {
+        this.fillStyle(stops[0]!.color, stops[0]!.alpha ?? 1);
+      }
+      this.context.fillRect(x, y, width, height);
+    }
+    return this;
+  }
+
+  fillRadialGlow(
+    cx: number,
+    cy: number,
+    innerRadius: number,
+    outerRadius: number,
+    stops: ReadonlyArray<GradientStop>
+  ): DrawSurface {
+    const rIn = Math.max(0, innerRadius);
+    const rOut = Math.max(0, outerRadius);
+    if (rOut <= 0) return this;
+    if (typeof this.context.createRadialGradient === 'function') {
+      const grad = this.context.createRadialGradient(cx, cy, rIn, cx, cy, rOut);
+      for (const stop of stops) {
+        grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+      }
+      this.context.fillStyle = grad;
+      this.lastFillStyle = '';
+      this.context.beginPath();
+      this.context.arc(cx, cy, rOut, 0, Math.PI * 2);
+      this.context.fill();
+    } else {
+      if (stops.length > 0) {
+        this.fillStyle(stops[0]!.color, stops[0]!.alpha ?? 1);
+      }
+      this.context.beginPath();
+      this.context.arc(cx, cy, rOut, 0, Math.PI * 2);
+      this.context.fill();
+    }
+    return this;
+  }
+
+  setCompositeOperation(op: GlobalCompositeOperation): DrawSurface {
+    if (this.lastCompositeOp !== op) {
+      this.context.globalCompositeOperation = op;
+      this.lastCompositeOp = op;
+    }
     return this;
   }
 

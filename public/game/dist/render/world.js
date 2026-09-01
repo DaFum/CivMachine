@@ -83,16 +83,42 @@ function drawSkyContent(surface, scene, height, view) {
     const span = view.to - view.from;
     if (span <= 0)
         return;
-    surface.fillStyle(presentation.colors.skyTop, 1).fillRect(view.from, 0, span, height * .48);
-    surface.fillStyle(presentation.colors.skyBottom, 1).fillRect(view.from, height * .48, span, height * .52);
+    // Multi-stop vertical sky gradient
+    const midColor = mixColor(presentation.colors.skyTop, presentation.colors.skyBottom, 0.55);
+    surface.fillLinearGradientRect(view.from, 0, span, height * 0.72, [
+        { offset: 0, color: presentation.colors.skyTop, alpha: 1 },
+        { offset: 0.5, color: midColor, alpha: 1 },
+        { offset: 1, color: presentation.colors.skyBottom, alpha: 1 }
+    ], view.from, 0, view.from, height * 0.72);
+    // Horizon illumination light field
+    const horizonY = height * 0.68;
+    const glowColor = mixColor(presentation.colors.skyBottom, presentation.accent, 0.35 + presentation.awareness * 0.25);
+    surface.fillLinearGradientRect(view.from, horizonY - height * 0.25, span, height * 0.28, [
+        { offset: 0, color: glowColor, alpha: 0 },
+        { offset: 0.7, color: glowColor, alpha: 0.12 + presentation.attention * 0.08 },
+        { offset: 1, color: glowColor, alpha: 0.22 + presentation.awareness * 0.12 }
+    ], view.from, horizonY - height * 0.25, view.from, horizonY + height * 0.03);
+    // Soft atmospheric haze bands
     for (let band = 0; band < 5; band++) {
-        surface.fillStyle(presentation.colors.haze, .025 + presentation.attention * .018).fillRect(view.from, height * (.24 + band * .085), span, height * .08);
+        surface.fillStyle(presentation.colors.haze, 0.02 + presentation.attention * 0.015)
+            .fillRect(view.from, height * (0.22 + band * 0.085), span, height * 0.08);
     }
-    if (civ.stats.attention >= 60) {
-        const observerX = worldWidth * (.72 + hash01(civ.seed) * .12);
-        if (observerX >= view.from && observerX <= view.to) {
-            surface.fillStyle(presentation.accent, .035 + presentation.attention * .05).fillCircle(observerX, height * .18, 78);
-            surface.lineStyle(1.5, presentation.accent, .12 + presentation.attention * .16).strokeCircle(observerX, height * .18, 42);
+    // Observer presence: enhanced radial glow field
+    if (civ.stats.attention >= 50) {
+        const observerX = worldWidth * (0.72 + hash01(civ.seed) * 0.12);
+        if (observerX >= view.from - 120 && observerX <= view.to + 120) {
+            const radius = 95 + presentation.attention * 35;
+            surface.fillRadialGlow(observerX, height * 0.18, 0, radius, [
+                { offset: 0, color: presentation.accent, alpha: 0.12 + presentation.attention * 0.12 },
+                { offset: 0.45, color: presentation.accent, alpha: 0.05 + presentation.attention * 0.04 },
+                { offset: 1, color: presentation.accent, alpha: 0 }
+            ]);
+            surface.lineStyle(1.5, presentation.accent, 0.14 + presentation.attention * 0.18)
+                .strokeCircle(observerX, height * 0.18, 42);
+            if (civ.stats.attention >= 75) {
+                surface.lineStyle(1, presentation.accent, 0.1 + presentation.attention * 0.12)
+                    .strokeCircle(observerX, height * 0.18, 68);
+            }
         }
     }
 }
@@ -103,19 +129,31 @@ function drawTerrainContent(surface, scene, height, view) {
     const span = view.to - view.from;
     if (span <= 0)
         return;
-    // Triangles sit on a 160 px lattice at x = i * 160 - 80 and span 230 px, so the visible indices
-    // follow from the band directly instead of walking the whole world.
-    const last = Math.ceil(worldWidth / 160);
-    // A triangle at index i spans [i * 160 - 80, i * 160 + 150], so it is visible when its right edge
-    // clears view.from and its left edge lands before view.to. The lower bound ceils and the upper one
-    // floors; rounding either the other way draws a whole triangle nobody can see.
-    const firstIndex = Math.max(0, Math.ceil((view.from - WIDEST_STATIC_PRIMITIVE + 80) / 160));
-    const lastIndex = Math.min(last, Math.floor((view.to + 80) / 160));
-    for (let i = firstIndex; i <= lastIndex; i++) {
-        const x = i * 160 - 80;
-        surface.fillStyle(presentation.colors.farTerrain, .82).fillTriangle(x, horizon, x + 110, horizon - 60 - hash01(civ.seed * 3 + i * 29) * 100, x + 230, horizon);
+    // Far ridge: soft silhouette, lower contrast, larger geological shapes
+    const farLattice = 180;
+    const farLast = Math.ceil(worldWidth / farLattice);
+    const farFirst = Math.max(0, Math.ceil((view.from - WIDEST_STATIC_PRIMITIVE + 90) / farLattice));
+    const farEnd = Math.min(farLast, Math.floor((view.to + 90) / farLattice));
+    for (let i = farFirst; i <= farEnd; i++) {
+        const x = i * farLattice - 90;
+        const h = 70 + hash01(civ.seed * 3 + i * 29) * 110;
+        surface.fillStyle(presentation.colors.farTerrain, 0.78)
+            .fillTriangle(x, horizon, x + 115, horizon - h, x + 230, horizon);
     }
-    surface.fillStyle(presentation.colors.nearTerrain, .82).fillRect(view.from, horizon, span, height - horizon);
+    // Mid ridge: stronger contrast, tighter detail
+    const midColor = mixColor(presentation.colors.farTerrain, presentation.colors.nearTerrain, 0.55);
+    const midLattice = 140;
+    const midLast = Math.ceil(worldWidth / midLattice);
+    const midFirst = Math.max(0, Math.ceil((view.from - WIDEST_STATIC_PRIMITIVE + 70) / midLattice));
+    const midEnd = Math.min(midLast, Math.floor((view.to + 70) / midLattice));
+    for (let i = midFirst; i <= midEnd; i++) {
+        const x = i * midLattice - 50;
+        const h = 45 + hash01(civ.seed * 7 + i * 43) * 65;
+        surface.fillStyle(midColor, 0.88)
+            .fillTriangle(x, horizon, x + 85, horizon - h, x + 170, horizon);
+    }
+    // Near terrain: base ground fill
+    surface.fillStyle(presentation.colors.nearTerrain, 0.95).fillRect(view.from, horizon, span, height - horizon);
 }
 function drawSettlementContent(surface, scene, height, view) {
     const { civ, snapshot, presentation, settlements } = scene;
@@ -217,25 +255,47 @@ function drawMoodWash(surface, scene, live, view, height) {
     surface.fillStyle(live.colors.skyBottom, drift * .32).fillRect(view.from, 0, span, height * .7);
     surface.fillStyle(live.colors.nearTerrain, drift * .34).fillRect(view.from, height * .7, span, height * .3);
 }
-function drawParticles(surface, civ, snapshot, presentation, height, view) {
+function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
+    const loopTime = reducedMotion ? 0 : time;
     for (let i = 0; i < snapshot.particleCount; i++) {
-        const x = hash01(civ.seed + i * 17) * worldWidth;
-        if (x < view.from || x > view.to)
+        const baseX = hash01(civ.seed + i * 17) * worldWidth;
+        const driftX = (baseX + (reducedMotion ? 0 : Math.sin(loopTime * 0.0003 + i * 11) * 15)) % worldWidth;
+        const posX = driftX < 0 ? driftX + worldWidth : driftX;
+        if (posX < view.from || posX > view.to)
             continue;
-        surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, .18 + hash01(i * 41) * (.38 + presentation.awareness * .22))
-            .fillCircle(x, hash01(civ.seed + i * 31) * height * .58, .55 + hash01(i * 7) * 1.7);
+        const baseY = hash01(civ.seed + i * 31) * height * .58;
+        const driftY = baseY + (reducedMotion ? 0 : Math.cos(loopTime * 0.0004 + i * 7) * 8);
+        const twinkle = reducedMotion ? 1.0 : 0.75 + Math.sin(loopTime * 0.002 + i * 13) * 0.25;
+        const alpha = (.18 + hash01(i * 41) * (.38 + presentation.awareness * .22)) * twinkle;
+        const radius = (.55 + hash01(i * 7) * 1.7) * (i % 5 === 0 ? 1.25 : 1.0);
+        surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, alpha)
+            .fillCircle(posX, driftY, radius);
     }
 }
 function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
     const worldWidth = snapshot.worldWidth;
+    const bandSpacing = worldWidth / Math.max(1, snapshot.hazeBands);
     for (let i = 0; i < snapshot.hazeBands; i++) {
-        const drift = (animationTime * (.002 + i * .00035)) % (width * .6);
-        const y = height * (.28 + i * .07) + Math.sin(animationTime * .0005 + i) * (reducedMotion ? 0 : 4);
-        const from = Math.max(view.from, drift - width * .3);
-        const to = Math.min(view.to, drift - width * .3 + worldWidth * .34);
-        if (to > from)
-            surface.fillStyle(presentation.colors.haze, .02 + presentation.sanityDistortion * .025).fillRect(from, y, to - from, 22 + i * 4);
+        const speed = 0.015 + (i % 3) * 0.008;
+        const rawX = (i * bandSpacing + (reducedMotion ? 0 : animationTime * speed)) % worldWidth;
+        const bandWidth = Math.min(worldWidth * 0.35, 450 + (i % 3) * 80);
+        const y = height * (0.24 + (i % 4) * 0.08) + (reducedMotion ? 0 : Math.sin(animationTime * 0.0006 + i) * 5);
+        const h = 24 + (i % 3) * 6;
+        // Draw band with world wrapping so it covers the scrollable world seamlessly
+        for (const offset of [0, -worldWidth, worldWidth]) {
+            const bx = rawX + offset;
+            const bFrom = Math.max(view.from, bx);
+            const bTo = Math.min(view.to, bx + bandWidth);
+            if (bTo > bFrom) {
+                const opacity = 0.022 + presentation.sanityDistortion * 0.025 + (i % 2) * 0.008;
+                surface.fillLinearGradientRect(bFrom, y, bTo - bFrom, h, [
+                    { offset: 0, color: presentation.colors.haze, alpha: 0 },
+                    { offset: 0.5, color: presentation.colors.haze, alpha: opacity },
+                    { offset: 1, color: presentation.colors.haze, alpha: 0 }
+                ], bx, y, bx + bandWidth, y);
+            }
+        }
     }
 }
 function drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view) {
@@ -244,10 +304,14 @@ function drawLitWindows(surface, scene, snapshot, presentation, ground, animatio
         const structure = scene.structures[i];
         if (structure.x + structure.width < view.from || structure.x - structure.width > view.to)
             continue;
-        if (snapshot.stage === 0 || hash01(civ.seed + i * 73 + Math.trunc(animationTime / 850)) < .42)
+        if (snapshot.stage === 0)
+            continue;
+        const activityCycle = currentReducedMotion ? 0.75 : 0.5 + 0.5 * Math.sin(animationTime * 0.001 + i * 1.3);
+        if (hash01(civ.seed + i * 73) > 0.15 + activityCycle * 0.6)
             continue;
         const rows = Math.max(2, Math.min(10, Math.trunc(structure.height / 18)));
-        surface.fillStyle(presentation.colors.window, .45 + hash01(i * 9) * .32)
+        const intensity = 0.35 + activityCycle * 0.45;
+        surface.fillStyle(presentation.colors.window, intensity)
             .fillRect(structure.x - structure.width * .28 + (i % 3) * 5, ground - structure.height + 8 + (i % rows) * 13, 2.5 + snapshot.stage * .28, 3);
     }
 }
@@ -389,7 +453,7 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     const ground = height * GROUND_RATIO;
     // The hash decides where a particle lands, so the loop still visits every index; only the draw is
     // skipped. Iterating is free next to filling a circle.
-    drawParticles(surface, scene.civ, snapshot, presentation, height, view);
+    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion);
     // The cached layers below hold the palette frozen at the last structural key change, and that key
     // reads Stability, Sanity, Awareness, Attention and Entropy as 25-point bands. So the world's base
     // mood changed in four hard steps while the overlays glided. This pass closes the gap: one tinted

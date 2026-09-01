@@ -5,11 +5,13 @@ export class CachedCanvasSurface {
         this.lastFillStyle = '';
         this.lastStrokeStyle = '';
         this.lastLineWidth = -1;
+        this.lastCompositeOp = 'source-over';
     }
     resetState() {
         this.lastFillStyle = '';
         this.lastStrokeStyle = '';
         this.lastLineWidth = -1;
+        this.lastCompositeOp = 'source-over';
     }
     fillStyle(color, alpha = 1) {
         const colStr = this.toColor(color, alpha);
@@ -33,6 +35,61 @@ export class CachedCanvasSurface {
     }
     fillRect(x, y, width, height) {
         this.context.fillRect(x, y, width, height);
+        return this;
+    }
+    fillLinearGradientRect(x, y, width, height, stops, x0, y0, x1, y1) {
+        if (typeof this.context.createLinearGradient === 'function') {
+            const gx0 = x0 ?? x;
+            const gy0 = y0 ?? y;
+            const gx1 = x1 ?? x;
+            const gy1 = y1 ?? (y + height);
+            const grad = this.context.createLinearGradient(gx0, gy0, gx1, gy1);
+            for (const stop of stops) {
+                grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+            }
+            this.context.fillStyle = grad;
+            this.lastFillStyle = '';
+            this.context.fillRect(x, y, width, height);
+        }
+        else {
+            if (stops.length > 0) {
+                this.fillStyle(stops[0].color, stops[0].alpha ?? 1);
+            }
+            this.context.fillRect(x, y, width, height);
+        }
+        return this;
+    }
+    fillRadialGlow(cx, cy, innerRadius, outerRadius, stops) {
+        const rIn = Math.max(0, innerRadius);
+        const rOut = Math.max(0, outerRadius);
+        if (rOut <= 0)
+            return this;
+        if (typeof this.context.createRadialGradient === 'function') {
+            const grad = this.context.createRadialGradient(cx, cy, rIn, cx, cy, rOut);
+            for (const stop of stops) {
+                grad.addColorStop(stop.offset, this.toColor(stop.color, stop.alpha ?? 1));
+            }
+            this.context.fillStyle = grad;
+            this.lastFillStyle = '';
+            this.context.beginPath();
+            this.context.arc(cx, cy, rOut, 0, Math.PI * 2);
+            this.context.fill();
+        }
+        else {
+            if (stops.length > 0) {
+                this.fillStyle(stops[0].color, stops[0].alpha ?? 1);
+            }
+            this.context.beginPath();
+            this.context.arc(cx, cy, rOut, 0, Math.PI * 2);
+            this.context.fill();
+        }
+        return this;
+    }
+    setCompositeOperation(op) {
+        if (this.lastCompositeOp !== op) {
+            this.context.globalCompositeOperation = op;
+            this.lastCompositeOp = op;
+        }
         return this;
     }
     strokeRect(x, y, width, height) {

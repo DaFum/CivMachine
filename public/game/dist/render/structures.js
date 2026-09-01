@@ -27,64 +27,90 @@ export function structureKindsForEra(era, stage) {
     return kinds;
 }
 export function drawStructure(surface, structure, groundY, bodyColor, accent, windowColor, seed) {
+    const lane = structure.depthLane || 'mid';
+    const laneColorShift = lane === 'back' ? 0x050b14 : lane === 'front' ? 0x182433 : 0x000000;
+    const laneAlphaShift = lane === 'back' ? 0.88 : lane === 'front' ? 1.0 : 0.96;
+    const baseColor = mixColor(bodyColor, laneColorShift, lane === 'back' ? 0.35 : 0.15);
     const left = structure.x - structure.width / 2;
     const top = groundY - structure.height;
     const width = structure.width;
     const height = structure.height;
+    // Ground base shadow for 2.5D depth
+    surface.fillStyle(0x020509, 0.4).fillRect(left - width * 0.1, groundY - 2, width * 1.2, 4);
     switch (structure.kind) {
         case 'farm':
-            surface.fillStyle(mixColor(bodyColor, 0x6d8a45, .6), .95).fillRect(left, groundY - height * .34, width, height * .34);
-            surface.fillStyle(mixColor(bodyColor, 0x2f3a1c, .55), .95).fillTriangle(left - width * .12, groundY - height * .34, structure.x, groundY - height * .62, left + width * 1.12, groundY - height * .34);
+            surface.fillStyle(mixColor(baseColor, 0x6d8a45, .6), laneAlphaShift).fillRect(left, groundY - height * .34, width, height * .34);
+            // Dark side plane
+            surface.fillStyle(mixColor(baseColor, 0x000000, .4), laneAlphaShift).fillRect(left + width * 0.7, groundY - height * .34, width * 0.3, height * .34);
+            surface.fillStyle(mixColor(baseColor, 0x2f3a1c, .55), laneAlphaShift).fillTriangle(left - width * .12, groundY - height * .34, structure.x, groundY - height * .62, left + width * 1.12, groundY - height * .34);
             for (let row = 0; row < 4; row++)
                 surface.lineStyle(1, mixColor(accent, 0x8ee66b, .7), .28).line(left - width * .3, groundY + 3 + row * 4, left + width * 1.3, groundY + 3 + row * 4);
             break;
         case 'industry':
-            surface.fillStyle(mixColor(bodyColor, 0x000000, .25), .97).fillRect(left, groundY - height * .58, width, height * .58);
+            // Heavy dark main body with side shading
+            surface.fillStyle(mixColor(baseColor, 0x000000, .25), laneAlphaShift).fillRect(left, groundY - height * .58, width * 0.72, height * .58);
+            surface.fillStyle(mixColor(baseColor, 0x000000, .55), laneAlphaShift).fillRect(left + width * 0.72, groundY - height * .58, width * 0.28, height * .58);
+            // Chimneys with warm industrial emissions
             for (let stack = 0; stack < 2; stack++) {
                 const stackX = left + width * (.24 + stack * .46);
-                surface.fillStyle(mixColor(bodyColor, 0x000000, .45), .97).fillRect(stackX, top, width * .16, height);
-                surface.fillStyle(0x8f9aa6, .16).fillCircle(stackX + width * .08, top - height * .1, width * .22);
+                surface.fillStyle(mixColor(baseColor, 0x000000, .45), laneAlphaShift).fillRect(stackX, top, width * .16, height);
+                surface.fillStyle(0xff7744, .25).fillCircle(stackX + width * .08, top - height * .08, width * .18);
+                surface.fillStyle(0x8f9aa6, .18).fillCircle(stackX + width * .08, top - height * .16, width * .26);
             }
             break;
         case 'temple':
-            surface.fillStyle(mixColor(bodyColor, accent, .3), .97).fillRect(left, groundY - height * .72, width, height * .72);
-            surface.fillStyle(mixColor(bodyColor, accent, .55), .95).fillRect(left + width * .16, top, width * .68, height * .3);
+            surface.fillStyle(mixColor(baseColor, accent, .3), laneAlphaShift).fillRect(left, groundY - height * .72, width * 0.7, height * .72);
+            surface.fillStyle(mixColor(baseColor, 0x000000, .45), laneAlphaShift).fillRect(left + width * 0.7, groundY - height * .72, width * 0.3, height * .72);
+            surface.fillStyle(mixColor(baseColor, accent, .55), laneAlphaShift).fillRect(left + width * .16, top, width * .68, height * .3);
             surface.fillStyle(accent, .34).fillCircle(structure.x, top - width * .1, width * .3);
             surface.lineStyle(1.5, accent, .5).line(structure.x, top - width * .4, structure.x, top - width * .1);
             break;
         case 'academy':
-            surface.fillStyle(mixColor(bodyColor, accent, .18), .97).fillRect(left, top, width, height);
+            surface.fillStyle(mixColor(baseColor, accent, .18), laneAlphaShift).fillRect(left, top, width * 0.75, height);
+            surface.fillStyle(mixColor(baseColor, 0x000000, .4), laneAlphaShift).fillRect(left + width * 0.75, top, width * 0.25, height);
             surface.lineStyle(1, accent, .42).strokeRect(left + width * .12, top + height * .12, width * .76, height * .5);
             for (let column = 0; column < 3; column++)
                 surface.lineStyle(1.4, accent, .34).line(left + width * (.2 + column * .3), groundY - height * .3, left + width * (.2 + column * .3), groundY);
             break;
         case 'reactor':
-            surface.fillStyle(mixColor(bodyColor, 0x000000, .18), .97).fillRect(left, groundY - height * .5, width, height * .5);
-            surface.fillStyle(mixColor(bodyColor, accent, .4), .9).fillCircle(structure.x, groundY - height * .62, width * .46);
-            surface.lineStyle(2, accent, .5).strokeCircle(structure.x, groundY - height * .62, width * .62);
+            surface.fillStyle(mixColor(baseColor, 0x000000, .18), laneAlphaShift).fillRect(left, groundY - height * .5, width, height * .5);
+            // Localized core glow
+            surface.fillRadialGlow(structure.x, groundY - height * .62, 0, width * .75, [
+                { offset: 0, color: accent, alpha: 0.5 },
+                { offset: 0.5, color: accent, alpha: 0.2 },
+                { offset: 1, color: accent, alpha: 0 }
+            ]);
+            surface.fillStyle(mixColor(baseColor, accent, .4), .9).fillCircle(structure.x, groundY - height * .62, width * .46);
+            surface.lineStyle(2, accent, .6).strokeCircle(structure.x, groundY - height * .62, width * .62);
             break;
         case 'spaceport':
-            surface.fillStyle(mixColor(bodyColor, 0x000000, .3), .97).fillRect(left, groundY - height * .22, width * 1.3, height * .22);
+            surface.fillStyle(mixColor(baseColor, 0x000000, .3), laneAlphaShift).fillRect(left, groundY - height * .22, width * 1.3, height * .22);
             surface.lineStyle(2, accent, .55).line(structure.x, groundY - height * .22, structure.x, top);
             surface.lineStyle(1.4, accent, .4).line(left, groundY - height * .22, structure.x, top - height * .1);
             surface.lineStyle(1.4, accent, .4).line(left + width * 1.3, groundY - height * .22, structure.x, top - height * .1);
             surface.fillStyle(accent, .28).fillTriangle(structure.x - width * .18, top, structure.x, top - height * .3, structure.x + width * .18, top);
+            // Launch pad illumination
+            surface.fillStyle(0xffd9a0, .35).fillCircle(structure.x, groundY - height * .22, width * 0.25);
             break;
         case 'orbital_anchor':
-            surface.fillStyle(mixColor(bodyColor, accent, .45), .95).fillRect(structure.x - width * .16, top - height * .6, width * .32, height * 1.6);
+            surface.fillStyle(mixColor(baseColor, accent, .45), laneAlphaShift).fillRect(structure.x - width * .16, top - height * .6, width * .32, height * 1.6);
             surface.lineStyle(1.2, accent, .5).line(structure.x, top - height * .9, structure.x, groundY);
             for (let ring = 0; ring < 3; ring++)
                 surface.lineStyle(1, accent, .3).strokeCircle(structure.x, top - height * .1 + ring * height * .34, width * (.7 - ring * .16));
             break;
         case 'monument':
-            surface.fillStyle(mixColor(bodyColor, accent, .5), .96).fillTriangle(left + width * .1, groundY, structure.x, top - height * .25, left + width * .9, groundY);
+            surface.fillStyle(mixColor(baseColor, accent, .5), laneAlphaShift).fillTriangle(left + width * .1, groundY, structure.x, top - height * .25, left + width * .9, groundY);
             surface.lineStyle(1.4, accent, .45).strokeCircle(structure.x, top - height * .3, width * .22);
             break;
         default:
-            surface.fillStyle(bodyColor, .98).fillRect(left, top, width, height);
+            // Darker side plane for 2.5D building facade
+            surface.fillStyle(baseColor, laneAlphaShift).fillRect(left, top, width * 0.7, height);
+            surface.fillStyle(mixColor(baseColor, 0x000000, 0.4), laneAlphaShift).fillRect(left + width * 0.7, top, width * 0.3, height);
+            // Roof edge highlight
+            surface.lineStyle(1, mixColor(accent, 0xffffff, 0.4), 0.45).line(left, top, left + width, top);
             surface.lineStyle(1, accent, .28).strokeRect(left, top, width, height);
             if (structure.level >= 3)
-                surface.fillStyle(mixColor(bodyColor, accent, .35), .9).fillRect(left + width * .18, top - height * .12, width * .64, height * .12);
+                surface.fillStyle(mixColor(baseColor, accent, .35), .9).fillRect(left + width * .18, top - height * .12, width * .64, height * .12);
             break;
     }
     const rows = Math.max(1, Math.min(6, Math.trunc(structure.height / 22)));
