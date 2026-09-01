@@ -29,6 +29,10 @@ export class ConstructionTracker {
 
   constructor(private duration: number = CONSTRUCTION_MS) {}
 
+  setDuration(duration: number): void {
+    this.duration = duration;
+  }
+
   sync(structures: ReadonlyArray<{ id: string; level: number }>, now: number): void {
     // Drop structures the world no longer contains first. Without this both maps grow for the whole
     // run, and an id that vanishes and later returns at a higher level animates a build that never

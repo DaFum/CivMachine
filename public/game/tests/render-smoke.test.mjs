@@ -336,6 +336,91 @@ test('a strip redraw paints the exposed slice exactly as a full redraw would', a
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
 });
 
+test('subpixel and boundary pointer drag does not trigger unnecessary static redraws', async () => {
+  const listeners = new Map();
+  let frame = null;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => {
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext([]),
+        addEventListener: (name, handler) => { listeners.set(name, handler); },
+        removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(333) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?subpixel=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    const initialStats = controller.stats();
+    assert.equal(initialStats.staticRedraws, 1);
+
+    // Subpixel move < 1/DPR (0.1px) at scroll limit 0
+    listeners.get('pointerdown')({ clientX: 100, pointerId: 1 });
+    listeners.get('pointermove')({ clientX: 100.1, pointerId: 1 });
+    listeners.get('pointerup')({});
+    frame(200);
+
+    const afterSubpixel = controller.stats();
+    assert.equal(afterSubpixel.staticRedraws, 1, 'subpixel move beyond boundary should not trigger static redraw');
+
+    controller.destroy();
+  });
+});
+
+test('context loss and restoration invalidates static and scenery caches', async () => {
+  const canvasElements = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => {
+      const listeners = new Map();
+      const el = {
+        className: '', style: {}, width: 0, height: 0,
+        getContext: () => recordingContext([]),
+        addEventListener: (name, handler) => listeners.set(name, handler),
+        removeEventListener: (name) => listeners.delete(name),
+        setAttribute: () => {}, remove: () => {},
+        _listeners: listeners,
+      };
+      canvasElements.push(el);
+      return el;
+    } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(444) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?contextrestore=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    assert.equal(controller.stats().sceneryFullRedraws, 1);
+
+    // Simulate context loss and restoration on scenery canvas
+    const sceneryCanvas = canvasElements[1];
+    const lostHandler = sceneryCanvas._listeners.get('contextlost');
+    const restoredHandler = sceneryCanvas._listeners.get('contextrestored');
+    assert.ok(lostHandler && restoredHandler, 'context loss handlers must be registered');
+
+    let prevented = false;
+    lostHandler({ preventDefault: () => { prevented = true; } });
+    assert.ok(prevented, 'contextlost event must call preventDefault');
+
+    restoredHandler();
+    frame(200);
+
+    assert.equal(controller.stats().sceneRebuilds, 2, 'context restore must trigger scene rebuild and full redraw');
+    assert.equal(controller.stats().sceneryFullRedraws, 2, 'scenery must do a full redraw after context restore');
+
+    controller.destroy();
+  });
+});
+
 test('live stats control dynamic rendering without rebuilding the static scene', async () => {
   const staticCalls = [];
   const sceneryCalls = [];
