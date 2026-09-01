@@ -56,6 +56,9 @@ export class CachedCanvasSurface implements DrawSurface {
     this.lastStrokeStyle = '';
     this.lastLineWidth = -1;
     this.lastCompositeOp = 'source-over';
+    if (this.context && 'globalCompositeOperation' in this.context) {
+      this.context.globalCompositeOperation = 'source-over';
+    }
   }
 
   fillStyle(color: number, alpha = 1): DrawSurface {

@@ -66,24 +66,55 @@ export function drawConsequenceImpact(surface, feedback, startTime, time, width,
     const fade = impact.staticOnly ? .48 : (1 - progress) * (.38 + impact.intensity * .34);
     const color = roleColor(feedback, impact.kind, accent);
     const radius = Math.min(width, height) * (.14 + impact.intensity * .12 + progress * .28);
-    let anchorWorldX = worldWidth * 0.5;
+    let anchorWorldX = scroll + width * (0.3 + hash01(feedback.sequence * 37) * 0.4);
     if (settlements.length > 0) {
+        let targetIndex = 0;
         if (impact.kind === 'identity' || impact.kind === 'growth') {
-            // Identity & growth anchor to capital (settlement 0)
-            anchorWorldX = settlements[0]?.centerX ?? (worldWidth * 0.5);
+            targetIndex = 0;
         }
         else if (impact.kind === 'containment' || impact.kind === 'fracture' || impact.kind === 'unrest') {
-            // Containment, fracture, and unrest anchor to affected settlement
-            const idx = Math.floor(hash01(feedback.sequence * 37) * settlements.length);
-            anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+            targetIndex = Math.floor(hash01(feedback.sequence * 37) * settlements.length);
         }
         else {
-            const idx = Math.floor(hash01(feedback.sequence * 19) * settlements.length);
-            anchorWorldX = settlements[idx]?.centerX ?? (worldWidth * 0.5);
+            targetIndex = Math.floor(hash01(feedback.sequence * 19) * settlements.length);
         }
-    }
-    else {
-        anchorWorldX = worldWidth * (0.3 + hash01(feedback.sequence * 37) * 0.4);
+        const targetSettlement = settlements[targetIndex] ?? settlements[0];
+        const viewFrom = scroll;
+        const viewTo = scroll + width;
+        const isVisible = (s) => s.centerX >= viewFrom && s.centerX <= viewTo;
+        if (isVisible(targetSettlement)) {
+            anchorWorldX = targetSettlement.centerX;
+        }
+        else {
+            const visibleSettlements = settlements.filter(isVisible);
+            if (visibleSettlements.length > 0) {
+                let best = visibleSettlements[0];
+                let minDist = Math.abs(best.centerX - targetSettlement.centerX);
+                for (let i = 1; i < visibleSettlements.length; i++) {
+                    const s = visibleSettlements[i];
+                    const dist = Math.abs(s.centerX - targetSettlement.centerX);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        best = s;
+                    }
+                }
+                anchorWorldX = best.centerX;
+            }
+            else {
+                const viewCenter = scroll + width * 0.5;
+                let best = settlements[0];
+                let minDist = Math.abs(best.centerX - viewCenter);
+                for (let i = 1; i < settlements.length; i++) {
+                    const s = settlements[i];
+                    const dist = Math.abs(s.centerX - viewCenter);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        best = s;
+                    }
+                }
+                anchorWorldX = best.centerX;
+            }
+        }
     }
     // Calculate raw screen X position
     const rawCx = anchorWorldX - scroll;

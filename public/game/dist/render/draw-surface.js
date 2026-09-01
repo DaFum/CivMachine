@@ -12,6 +12,9 @@ export class CachedCanvasSurface {
         this.lastStrokeStyle = '';
         this.lastLineWidth = -1;
         this.lastCompositeOp = 'source-over';
+        if (this.context && 'globalCompositeOperation' in this.context) {
+            this.context.globalCompositeOperation = 'source-over';
+        }
     }
     fillStyle(color, alpha = 1) {
         const colStr = this.toColor(color, alpha);

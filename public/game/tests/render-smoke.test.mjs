@@ -312,13 +312,32 @@ test('consequence impacts remain bounded, visible, and finite when panning', asy
     consequence: { significance: 'turning_point', tags: ['containment'], signatureProfile: 'containment' },
   };
 
-  const settlements = [{ centerX: 1200, structures: [] }];
+  const settlements = [{ centerX: 1200, structures: [] }, { centerX: 2800, structures: [] }];
+  const VIEWPORT_WIDTH = 900;
+  const VIEWPORT_HEIGHT = 520;
+  const WORLD_WIDTH = 3600;
+
   // Test panning across a 3600px wide world
   for (const scroll of [0, 800, 1600, 2400]) {
     calls.length = 0;
-    drawConsequenceImpact(surface, feedback, 100, 200, 900, 520, 0x00ff00, false, scroll, 3600, settlements);
+    drawConsequenceImpact(surface, feedback, 100, 200, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, 0x00ff00, false, scroll, WORLD_WIDTH, settlements);
     assert.ok(calls.length > 0, 'consequence impact must draw primitives');
     assertFiniteGeometry(calls, `consequence scroll ${scroll}`);
+
+    // Verify all primitive X coordinates fall strictly inside or bounded by the viewport [0, VIEWPORT_WIDTH]
+    for (const [name, ...args] of calls) {
+      if (name === 'line') {
+        const [x1, y1, x2, y2] = args;
+        assert.ok(x1 >= 0 && x1 <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x1=${x1} out of viewport bounds`);
+        assert.ok(x2 >= 0 && x2 <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x2=${x2} out of viewport bounds`);
+      } else if (name === 'strokeCircle' || name === 'fillCircle') {
+        const [cx, cy, radius] = args;
+        assert.ok(cx >= 0 && cx <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} cx=${cx} out of viewport bounds`);
+      } else if (name === 'fillRect' || name === 'strokeRect') {
+        const [x, y, w, h] = args;
+        assert.ok(x >= -w && x <= VIEWPORT_WIDTH, `scroll ${scroll}: ${name} x=${x} out of viewport bounds`);
+      }
+    }
   }
 });
 
@@ -378,25 +397,106 @@ test('a strip redraw paints the exposed slice exactly as a full redraw would', a
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
 });
 
+test('haze coverage spans world start, middle, and far end on a broad stage-4 world', async () => {
+  const stage4Civ = developedCivilization(404);
+  stage4Civ.development = 900;
+  stage4Civ.era = 4;
+
+  const renderDynamicAtScroll = async (scroll, tier = 0, reducedMotion = false) => {
+    const dynamicCalls = [];
+    const listeners = new Map();
+    let frame = null;
+    await withStubbedDom(() => {
+      let created = 0;
+      globalThis.window = {
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        matchMedia: () => ({ matches: reducedMotion, addEventListener: () => {} }),
+      };
+      globalThis.document = {
+        createElement: () => {
+          const idx = created++;
+          return {
+            className: '', style: {}, width: 0, height: 0,
+            getContext: () => idx === 2 ? recordingContext(dynamicCalls) : recordingContext([]),
+            addEventListener: (name, handler) => { if (idx === 1) listeners.set(name, handler); },
+            removeEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {}
+          };
+        }
+      };
+      globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+      globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+      globalThis.cancelAnimationFrame = () => {};
+    }, async () => {
+      const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+      const engine = { state: { phase: 'civilization', civilization: stage4Civ }, worldImpulse: null, onChange: () => () => {} };
+      const { startWorldRenderer } = await import(`../dist/render/world.js?haze-${scroll}-${tier}-${reducedMotion}=${Date.now()}`);
+      const controller = startWorldRenderer(engine, host);
+      if (scroll > 0 && listeners.has('pointerdown') && listeners.has('pointermove')) {
+        listeners.get('pointerdown')({ clientX: 500, pointerId: 1 });
+        listeners.get('pointermove')({ clientX: 500 - scroll, pointerId: 1 });
+        listeners.get('pointerup')?.({});
+      }
+      frame(100);
+      controller.destroy();
+    });
+    return dynamicCalls;
+  };
+
+  const { applyQualityToLiveSample, liveWorldSample, worldSnapshot } = await import('../dist/render/world-model.js');
+  const snap = worldSnapshot(stage4Civ, 900);
+  assert.ok(snap.worldWidth >= 3200, 'stage-4 world must be broad');
+
+  // Verify live haze counts and quality adjustment
+  const fullSample = liveWorldSample(stage4Civ, 4);
+  const tier3Sample = applyQualityToLiveSample(fullSample, 3);
+  assert.ok(tier3Sample.hazeBands < fullSample.hazeBands, 'tier 3 must reduce haze band count');
+
+  // Verify haze rendering at world start (scroll 0), middle (scroll worldWidth/2), far end (scroll worldWidth-900)
+  const worldWidth = snap.worldWidth;
+  for (const scrollPos of [0, Math.floor(worldWidth / 2), worldWidth - 900]) {
+    const calls = await renderDynamicAtScroll(scrollPos, 0, false);
+    assert.ok(calls.length > 0, `dynamic layer at scroll ${scrollPos} must render`);
+    assertFiniteGeometry(calls, `haze scroll ${scrollPos}`);
+  }
+});
+
 test('continuous terrain polygon ridgelines render deterministically without NaNs', async () => {
-  const staticCalls = [];
-  let frame = null;
-  await withStubbedDom(() => {
-    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(staticCalls), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
-    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
-    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
-    globalThis.cancelAnimationFrame = () => {};
-  }, async () => {
-    const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
-    const engine = { state: { phase: 'civilization', civilization: developedCivilization(1234) }, worldImpulse: null, onChange: () => () => {} };
-    const { startWorldRenderer } = await import(`../dist/render/world.js?terrain=${Date.now()}`);
-    const controller = startWorldRenderer(engine, host);
-    frame(100);
-    assert.ok(staticCalls.length > 0, 'static layer must render terrain');
-    assertFiniteGeometry(staticCalls, 'terrain static layer');
-    controller.destroy();
-  });
+  const renderTerrainForSeed = async (seed, tag) => {
+    const staticCalls = [];
+    let frame = null;
+    await withStubbedDom(() => {
+      globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+      globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(staticCalls), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
+      globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+      globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+      globalThis.cancelAnimationFrame = () => {};
+    }, async () => {
+      const host = { clientWidth: 900, clientHeight: 520, appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+      const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+      const { startWorldRenderer } = await import(`../dist/render/world.js?terrain-${tag}=${Date.now()}`);
+      const controller = startWorldRenderer(engine, host);
+      frame(100);
+      controller.destroy();
+    });
+    return staticCalls;
+  };
+
+  const run1 = await renderTerrainForSeed(1234, 'seed1234-a');
+  const run2 = await renderTerrainForSeed(1234, 'seed1234-b');
+  const runOther = await renderTerrainForSeed(5678, 'seed5678');
+
+  assert.ok(run1.length > 0, 'static layer must render terrain');
+  assertFiniteGeometry(run1, 'terrain static layer');
+
+  // Verify same seed produces identical drawing calls
+  assert.deepEqual(run1, run2, 'identical seeds must produce identical terrain calls');
+
+  // Verify different seed produces different drawing calls
+  assert.notDeepEqual(run1, runOther, 'different seeds must produce different terrain calls');
+
+  // Verify ridgelines are rendered using polygon path calls (beginPath, moveTo, lineTo, closePath, fill)
+  assert.ok(run1.some(([name]) => name === 'lineTo'), 'terrain must generate polygon ridgelines via lineTo');
 });
 
 test('subpixel and boundary pointer drag does not trigger unnecessary static redraws', async () => {

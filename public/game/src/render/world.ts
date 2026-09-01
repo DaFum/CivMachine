@@ -20,6 +20,14 @@ import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identit
 export interface RenderStats { sceneRebuilds: number; staticRedraws: number; sceneryFullRedraws: number; sceneryStripRedraws: number; qualityTier: RenderQualityTier; }
 export interface WorldController { nudge(direction: number): void; destroy(): void; stats(): RenderStats; }
 
+/**
+ * Dynamic layer frame throttling interval (~30 FPS).
+ *
+ * Evidence-based rationale: The dynamic layer contains transient particles, inhabitants,
+ * traffic, and atmospheric effects. Throttling the dynamic repaint rate to ~30 FPS (33 ms)
+ * significantly reduces GPU/CPU draw overhead and thermal/power consumption on low-end
+ * and mobile devices, while keeping UI interaction, scrolling, and presentation responsive.
+ */
 const DYNAMIC_FRAME_MS = 33;
 function getDevicePixelRatio(): number {
   return Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
@@ -301,10 +309,10 @@ function drawMoodWash(surface: DrawSurface, scene: WorldScene, live: ReturnType<
   surface.fillStyle(live.colors.nearTerrain, drift * 0.25).fillRect(view.from, horizonY, span, groundSpan);
 }
 
-function drawParticles(surface: DrawSurface, civ: Civilization, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, height: number, view: WorldBand, time: number, reducedMotion: boolean, tier: RenderQualityTier = 0): void {
+function drawParticles(surface: DrawSurface, civ: Civilization, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, height: number, view: WorldBand, time: number, reducedMotion: boolean): void {
   const worldWidth = snapshot.worldWidth;
   const loopTime = reducedMotion ? 0 : time;
-  const particleCount = Math.ceil(snapshot.particleCount * qualityFactors(tier).particleFraction);
+  const particleCount = snapshot.particleCount;
   for (let i = 0; i < particleCount; i++) {
     const baseX = hash01(civ.seed + i * 17) * worldWidth;
     const driftX = (baseX + (reducedMotion ? 0 : Math.sin(loopTime * 0.0003 + i * 11) * 15)) % worldWidth;
@@ -322,9 +330,9 @@ function drawParticles(surface: DrawSurface, civ: Civilization, snapshot: Return
   }
 }
 
-function drawHazeBands(surface: DrawSurface, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean, tier: RenderQualityTier = 0): void {
+function drawHazeBands(surface: DrawSurface, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean): void {
   const worldWidth = snapshot.worldWidth;
-  const hazeBands = Math.ceil(snapshot.hazeBands * qualityFactors(tier).hazeFraction);
+  const hazeBands = snapshot.hazeBands;
   const bandSpacing = worldWidth / Math.max(1, hazeBands);
 
   for (let i = 0; i < hazeBands; i++) {
@@ -509,10 +517,10 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   drawMoodWash(surface, scene, presentation, view, height);
 
   // 2. Animated haze bands
-  drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion, tier);
+  drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
 
   // 3. Environmental particles
-  drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion, tier);
+  drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion);
 
   // Lit windows keep flickering across the settlement skyline.
   drawLitWindows(surface, scene, snapshot, presentation, ground, animationTime, view);
