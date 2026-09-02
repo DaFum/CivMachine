@@ -1,5 +1,6 @@
 import { civilizationDramaPhase, dramaPhaseLabel } from './drama.js';
 import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, HARVEST_GRADE_LABELS } from './harvest-quality.js';
+import { ventStabilityCost } from './tactical-actions.js';
 import { RESOURCE_KEYS } from './rules.js';
 import { eraName, fill, harvestGradeLabel, text } from '../data/i18n.js';
 // What a finished run says about itself. Two halves:
@@ -148,7 +149,17 @@ export function runLessons(civ, context, depth, credits) {
                 : fill(copy.prematureDepth, { depth: depth.toFixed(1) }));
     }
     if (context.reason === 'stability_collapse') {
-        lessons.push(fill(copy.stabilityCollapse, { entropy: civ.tactical.entropy.toFixed(0) }));
+        // What the vents actually cost this run, not what the first one would have: the price escalates,
+        // so a flat number would understate exactly the run that lost to it.
+        const vents = Math.max(0, Math.trunc(Number(civ.tactical.actionUsage?.vent ?? 0)));
+        let ventStability = 0;
+        for (let index = 0; index < vents; index++)
+            ventStability += ventStabilityCost(index);
+        lessons.push(fill(copy.stabilityCollapse, {
+            entropy: civ.tactical.entropy.toFixed(0),
+            vents,
+            ventStability: Math.round(ventStability),
+        }));
     }
     if (civ.tactical.entropy >= 100 && context.reason !== 'stability_collapse') {
         lessons.push(copy.entropyCascade);
@@ -165,8 +176,9 @@ export function runLessons(civ, context, depth, credits) {
     if (nextBand && grade !== 'premature' && context.reason === 'controlled_harvest') {
         lessons.push(fill(copy.nextBand, {
             grade: harvestGradeLabel(nextBand.grade) ?? HARVEST_GRADE_LABELS[nextBand.grade],
-            minDepth: nextBand.minDepth,
+            minDepth: Number(nextBand.minDepth.toFixed(2)),
             distance: (nextBand.minDepth - depth).toFixed(1),
+            credits: nextBand.credits,
         }));
     }
     if (credits >= DEPTH_CREDIT_CAP) {

@@ -50,9 +50,9 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
       {
         id: 'credits',
         term: 'Cultivation Credits',
-        what: 'A second currency paid only by a harvest of Established grade or better: floor(0.6 × Cultivation Depth), capped at 20.',
+        what: 'A second currency paid only by a harvest of Established grade or better: floor(0.6 × Cultivation Depth), capped at 10.',
         where: 'The meta bar under the top bar, as Cultivation Credits x/18.',
-        why: '18 of them consume the Universe, which is the first prestige step. Credits, not resources, are what gate progress.',
+        why: '18 of them consume the Universe, which is the first prestige step. The cap of 10 is deliberate: no single run can pay for a Universe, so a prestige is always at least two good Civilizations.',
       },
       {
         id: 'insight',
@@ -157,14 +157,14 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
         term: 'Cultivation Depth',
         what: 'Development / 80, plus 1.5 for every endgame state the civilization reached.',
         where: 'The large number in the HARVEST GRADE readout.',
-        why: 'It sets both the grade and the yield multiplier (0.25 + 0.22 × Depth), so it is the single number a run is trying to raise.',
+        why: 'It sets both the grade and the yield multiplier, which rises steeply at first and then flattens — a run twice as deep is worth clearly more, but not twice as much.',
       },
       {
         id: 'grade',
         term: 'Harvest Grade',
-        what: 'Premature below Depth 1.5, then Established, Transcendent at 4, Ascendant at 9, Singular at 16. A run is also Premature until it has resolved 3 interventions and left Emergence.',
+        what: 'Premature below Depth 1.67, then Established, Transcendent at 5, Ascendant at 10, Singular at 16.67. A run is also Premature until it has resolved 3 interventions and left Emergence.',
         where: 'HARVEST GRADE // in the Pressure & Harvest rail.',
-        why: 'Premature pays a flat 0.2 multiplier and zero Cultivation Credits, which makes leaving it the first goal of every run.',
+        why: 'Every boundary is a Cultivation Credit step — reaching a grade is the moment the credit is paid — so the loud signal and the valuable one are the same signal. Premature pays a flat 0.2 multiplier and zero Credits, which makes leaving it the first goal of every run.',
       },
       {
         id: 'call',

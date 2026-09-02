@@ -348,7 +348,9 @@ test('the lessons are derived from the run rather than picked from a list of tip
     details: { grade: 'established', depth: 2, credits: 1, rewardMultiplier: 0.69, objectiveCompleted: false, rewards: {} },
   }, 2, 1);
   assert.ok(missedObjective.some(lesson => /Reach Transcendence/.test(lesson)));
-  assert.ok(missedObjective.some(lesson => /Transcendent begins at Depth 4/.test(lesson)));
+  assert.ok(missedObjective.some(lesson => /Transcendent begins at Depth 5/.test(lesson)));
+  // and says what arriving there is worth, in the currency the player is actually saving up.
+  assert.ok(missedObjective.some(lesson => /Cultivation Credit 3/.test(lesson)), missedObjective.join(' | '));
 });
 
 test('the report is built from the same numbers the payout used', () => {

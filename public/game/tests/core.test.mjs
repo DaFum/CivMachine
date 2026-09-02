@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS } from '../dist/game/rules.js';
+import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS, SAVE_VERSION } from '../dist/game/rules.js';
 import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
 import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
 import { clampStats } from '../dist/game/effects.js';
@@ -22,11 +22,11 @@ import {
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
-import { calculateCultivationCredits, cultivationDepth, depthBand, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
+import { calculateCultivationCredits, cultivationDepth, depthBand, depthForCredit, depthYieldMultiplier, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from '../dist/game/run-directives.js';
 import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
-import { TACTICAL_ACTIONS, accelerateEntropyCost, tacticalRisk } from '../dist/game/tactical-actions.js';
+import { TACTICAL_ACTIONS, VENT_COST_ESCALATION, VENT_PARADOX_BASE, VENT_PARADOX_PER_ERA, VENT_STABILITY_COST, accelerateEntropyCost, maxSimulationSpeed, tacticalRisk, ventStabilityCost } from '../dist/game/tactical-actions.js';
 import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
 import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
 import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, stabilityDecayPerSecond, statDrift } from '../dist/game/stat-drift.js';
@@ -457,9 +457,9 @@ test('new browser save starts with layered progression', () => {
   assert.equal(Progression.canUseUpgrade(state, 'machine', 'prediction_core'), false);
 });
 
-test('new saves initialize the tactical v4 civilization contract', () => {
+test('new saves initialize the tactical civilization contract at the current save version', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 4);
+  assert.equal(state.saveVersion, SAVE_VERSION);
   assert.equal(state.machine.cultivationCreditsThisUniverse, 0);
   assert.deepEqual(state.machine.runBuild.directiveOfferIds, []);
   assert.equal(state.machine.runBuild.nextCivilizationSeed, 0);
@@ -486,7 +486,7 @@ test('v4 intentionally ignores the legacy v1 save key', () => {
     setItem: (key, value) => storage.set(key, value),
     removeItem: key => storage.delete(key),
   }});
-  assert.equal(engine.state.saveVersion, 4);
+  assert.equal(engine.state.saveVersion, SAVE_VERSION);
   assert.equal(engine.state.machine.civilizationsTotal, 0);
 });
 
@@ -785,21 +785,34 @@ test('cultivation depth derives from development and completed path arcs', () =>
   assert.equal(cultivationDepth(civ), 8);
 });
 
-test('depth bands cover the five grades at their published boundaries', () => {
+test('v1.20.0 every grade boundary is a Cultivation Credit step', () => {
   assert.equal(depthBand(0), 'premature');
-  assert.equal(depthBand(1.49), 'premature');
-  assert.equal(depthBand(1.5), 'established');
-  assert.equal(depthBand(3.99), 'established');
-  assert.equal(depthBand(4), 'transcendent');
-  assert.equal(depthBand(8.99), 'transcendent');
-  assert.equal(depthBand(9), 'ascendant');
-  assert.equal(depthBand(15.99), 'ascendant');
-  assert.equal(depthBand(16), 'singular');
+  assert.equal(depthBand(1.66), 'premature');
+  assert.equal(depthBand(depthForCredit(1)), 'established');
+  assert.equal(depthBand(4.99), 'established');
+  assert.equal(depthBand(depthForCredit(3)), 'transcendent');
+  assert.equal(depthBand(9.99), 'transcendent');
+  assert.equal(depthBand(depthForCredit(6)), 'ascendant');
+  assert.equal(depthBand(16.66), 'ascendant');
+  assert.equal(depthBand(depthForCredit(DEPTH_CREDIT_CAP)), 'singular');
   assert.equal(depthBand(40), 'singular');
   assert.equal(HARVEST_GRADE_LABELS.singular, 'Singular');
+
+  // The whole point of the v1.20.0 realignment: arriving at a band is arriving at a Credit, so the
+  // loud signal and the valuable one are the same signal. A band whose minimum did not pay its own
+  // Credit is the bug this test exists to catch.
+  for (const band of DEPTH_BANDS) {
+    const civ = GameEngine.createCivilizationForTest(4242);
+    civ.eventChoices = 4;
+    civ.era = 1;
+    civ.development = band.minDepth * DEPTH_DEVELOPMENT_SCALE;
+    const quality = evaluateHarvestQuality(civ, false);
+    assert.equal(quality.credits, band.credits, band.grade + ' must pay its own credits');
+    if (band.grade !== 'premature') assert.equal(quality.grade, band.grade);
+  }
 });
 
-test('harvest quality scales continuously with depth', () => {
+test('v1.20.0 harvest quality scales concavely with depth', () => {
   const civ = GameEngine.createCivilizationForTest(83);
   civ.eventChoices = 4;
   civ.era = 1;
@@ -807,21 +820,39 @@ test('harvest quality scales continuously with depth', () => {
   const quality = evaluateHarvestQuality(civ, false);
   assert.equal(quality.grade, 'transcendent');
   assert.equal(quality.depth, 5);
-  assert.equal(Number(quality.multiplier.toFixed(4)), 1.35);
   assert.equal(quality.credits, 3);
+  assert.equal(Number(quality.multiplier.toFixed(4)), Number(depthYieldMultiplier(5).toFixed(4)));
+
   civ.development = 1920;
   const deep = evaluateHarvestQuality(civ, false);
   assert.equal(deep.grade, 'singular');
-  assert.equal(deep.credits, 14);
-  assert.equal(Number(deep.multiplier.toFixed(2)), 5.53);
+  assert.equal(deep.credits, DEPTH_CREDIT_CAP);
+
+  // Concave, and measurably so. A run nearly five times as deep must be worth clearly less than five
+  // times as much, or a run is quadratic in its own duration and the meta-economy compounds -- which
+  // is exactly what v1.19 did.
+  assert.ok(deep.multiplier > quality.multiplier, 'deeper must still pay more');
+  assert.ok(deep.multiplier < quality.multiplier * 2.5, 'depth 24 must not pay 4.8x depth 5');
+  let previousSlope = Infinity;
+  for (const depth of [2, 4, 8, 16, 32]) {
+    const slope = depthYieldMultiplier(depth + 1) - depthYieldMultiplier(depth);
+    assert.ok(slope > 0, 'the curve must keep rising at depth ' + depth);
+    assert.ok(slope < previousSlope, 'the curve must keep flattening at depth ' + depth);
+    previousSlope = slope;
+  }
 });
 
-test('the credit curve is capped at twenty', () => {
+test('v1.20.0 no single run can bank more than half a Universe', () => {
   const civ = GameEngine.createCivilizationForTest(84);
   civ.eventChoices = 9;
   civ.era = 3;
   civ.development = 100_000;
-  assert.equal(evaluateHarvestQuality(civ, false).credits, 20);
+  assert.equal(evaluateHarvestQuality(civ, false).credits, DEPTH_CREDIT_CAP);
+  assert.equal(DEPTH_CREDIT_CAP, 10);
+  // A Universe costs 18. The cap is what makes two successful runs the arithmetic floor for a
+  // prestige at every stage of the game -- including a completed Directive objective's extra credit.
+  assert.ok(DEPTH_CREDIT_CAP + 1 < 18, 'one run must never fund a Universe');
+  assert.ok(DEPTH_CREDIT_CAP * 2 >= 18, 'two perfect runs must be able to');
 });
 
 test('a premature harvest stays premature at any depth', () => {
@@ -1076,7 +1107,7 @@ test('Directive completion boosts rewards by fifteen percent and grants one cred
   assert.equal(preview.objectiveCompleted, true);
   assert.equal(preview.depth, 5);
   assert.equal(preview.credits, 4);
-  assert.equal(Number(preview.rewardMultiplier.toFixed(6)), Number((1.35 * 1.15).toFixed(6)));
+  assert.equal(Number(preview.rewardMultiplier.toFixed(6)), Number((depthYieldMultiplier(5) * 1.15).toFixed(6)));
   engine.harvest(false);
   assert.equal(engine.state.machine.lastHarvest.objective_completed, true);
   assert.equal(engine.state.machine.cultivationCreditsThisUniverse, 4);
@@ -1124,16 +1155,16 @@ test('v1.3.1 machine curve uses the approved balanced prices and growth', () => 
   const actual = Object.fromEntries(balancedMachineUpgrades(CONTENT.machine_upgrades)
     .map(definition => [definition.id, [definition.base_cost, definition.growth]]));
   assert.deepEqual(actual, {
-    reality_lattice: [60, 1.55],
+    reality_lattice: [60, 1.9],
     prediction_core: [90, 1.60],
     cultivation_accelerator: [120, 1.68],
     historical_compressor: [120, 1.68],
     cognitive_extractor: [120, 1.68],
     paradox_sieve: [110, 1.68],
     existence_furnace: [130, 1.70],
-    awareness_scrubber: [150, 1.68],
-    sanity_protocol: [165, 1.70],
-    cosmic_muffling: [150, 1.70],
+    awareness_scrubber: [150, 2.2],
+    sanity_protocol: [165, 2.2],
+    cosmic_muffling: [150, 2.2],
     contingency_vat: [210, 1.75],
     temporal_injector: [220, 1.75],
   });
@@ -1155,7 +1186,10 @@ test('v1.3.1 first-run curve funds one or two levels at the median and at most t
 
   assert.ok(median >= 1 && median <= 2, `first-run purchasable-level median ${median}`);
   assert.ok(p90 <= 3, `first-run purchasable-level p90 ${p90}`);
-  assert.ok(runs.every(run => run.harvest.grade === 'established'));
+  // A run that collapses short of the first Cultivation Credit stays Premature -- the grade bands are
+  // credit steps now, so "established" means "banked something", not "survived a while".
+  assert.ok(runs.every(run => run.harvest.grade === 'established' || run.harvest.chaotic));
+  assert.ok(runs.filter(run => run.harvest.grade === 'established').length >= runs.length * 0.9);
 });
 
 test('v1.3.1 Accelerate policy has blocked turns instead of self-funding every intervention', () => {
@@ -1210,8 +1244,9 @@ test('Temporal Injector improves Accelerate while Stable Constants and Bureaucra
   engine.state.meta.universeUpgradeLevels.stable_constants = 2;
   engine.state.meta.universeUpgradeLevels.bureaucracy_of_gods = 3;
   const bonuses = engine.runtimeBonuses();
-  assert.equal(bonuses.accelerateYears, 450);
-  assert.equal(bonuses.accelerateTimer, 16);
+  assert.equal(bonuses.accelerateYears, 1150);
+  assert.equal(bonuses.accelerateDevelopment, 48);
+  assert.equal(bonuses.accelerateTimer, 18);
   assert.equal(bonuses.eventDelay, 0);
   assert.equal(bonuses.containmentRating, 2);
   assert.equal(bonuses.controlRecharge, 3);
@@ -1350,15 +1385,32 @@ test('containment sums upgrade levels across both layers', () => {
   assert.equal(engine.runtimeBonuses().entropyGainMult, undefined);
 });
 
-test('Reality Lattice is reachable from the first cascade harvest', () => {
+test('v1.20.0 Reality Lattice opens at 60 and then climbs steeply', () => {
   const engine = freshEngine();
   const lattice = engine.upgradeById('machine', 'reality_lattice');
-  assert.equal(lattice.base_cost, 60);
-  assert.equal(lattice.growth, 1.55);
+  // The opening rung is the design promise the ladder exists to keep: a first weak run affords the
+  // first real survival improvement.
+  assert.equal(engine.upgradeCost('machine', 'reality_lattice'), 60);
   assert.deepEqual(
-    [0, 1, 2, 3].map(level => upgradeCost(lattice.base_cost, lattice.growth, level)),
-    [60, 93, 144, 223],
+    [0, 1, 2, 3, 4, 5, 6, 7].map(level => upgradeCost(lattice.base_cost, lattice.growth, level, lattice.cost_ladder)),
+    [60, 600, 1800, 4500, 11000, 26000, 60000, 140000],
   );
+
+  // From the second rung on, Reality Lattice must not simply be the cheapest Containment: the other
+  // three modules have to be a live alternative or the survival build has no decisions in it.
+  const secondLattice = upgradeCost(lattice.base_cost, lattice.growth, 1, lattice.cost_ladder);
+  for (const id of ['awareness_scrubber', 'sanity_protocol', 'cosmic_muffling']) {
+    const module = engine.upgradeById('machine', id);
+    const first = upgradeCost(module.base_cost, module.growth, 0, module.cost_ladder);
+    assert.ok(first < secondLattice, id + ' must undercut a second Lattice level');
+    assert.ok(first > 60, id + ' must not undercut the opening Lattice rung');
+    // Deepening one module has to lose to broadening across them, or "spread your Containment" is
+    // advice the price list contradicts.
+    assert.ok(upgradeCost(module.base_cost, module.growth, 1, module.cost_ladder) > secondLattice, id + ' level 2 must cost more than a second Lattice');
+  }
+
+  // Beyond the authored rungs the curve continues geometrically rather than falling off a cliff.
+  assert.equal(upgradeCost(lattice.base_cost, lattice.growth, 8, lattice.cost_ladder), Math.round(140000 * 1.9));
 });
 
 test('Wide Lattice preserves Reality Lattice levels through Universe consumption', () => {
@@ -1640,10 +1692,12 @@ test('a run stretched past the catalog spreads its repeats instead of concentrat
     { reality_lattice: 8, awareness_scrubber: 5, sanity_protocol: 5, cosmic_muffling: 5, contingency_vat: 4 },
     { stable_constants: 5 },
   );
-  const result = runCivilization(engine, { seed: 11, policy: ['safe', 'vent'], maxSeconds: 9000 });
+  const result = runCivilization(engine, { seed: 11, policy: ['safe', 'manage'], maxSeconds: 9000 });
   const counts = new Map();
   for (const id of result.eventIds) counts.set(id, (counts.get(id) ?? 0) + 1);
-  assert.ok(result.interventions >= 200, `only ${result.interventions} interventions`);
+  // The drawable catalog is 185 interventions and each may be drawn once per run, so anything above
+  // it proves the run entered a second pass -- which is what the spread assertions below are about.
+  assert.ok(result.interventions >= 190, `only ${result.interventions} interventions`);
   assert.ok(counts.size >= 125, `only ${counts.size} distinct events`);
   // No single intervention may take more than a twentieth of the run: the whole catalog is served
   // once before anything repeats, so a second pass is spread, not concentrated.
@@ -1664,10 +1718,25 @@ test('Vent trades Stability for Entropy relief and harvestable Paradox', () => {
   civ.era = 2;
   assert.equal(engine.useTacticalAction('vent'), true);
   assert.equal(civ.tactical.entropy, 22);
-  assert.equal(civ.stats.stability, civ.stats.stabilityMax - 10);
+  assert.equal(civ.stats.stability, civ.stats.stabilityMax - VENT_STABILITY_COST);
   assert.equal(civ.stats.attention, 4);
   assert.equal(civ.tactical.controlCapacity, 2);
-  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 14.4);
+  // 18 Entropy removed at the Transcendence rate, at the first vent's price.
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 18 * (VENT_PARADOX_BASE + VENT_PARADOX_PER_ERA * 2));
+
+  // The second vent of a run costs more and pays proportionally more, so Paradox per Stability is
+  // flat and what the escalation rations is run length rather than the Paradox economy.
+  civ.tactical.entropy = 40;
+  civ.tactical.controlCapacity = 3;
+  const paradoxAfterFirst = civ.harvestBonus.paradox;
+  const stabilityBeforeSecond = civ.stats.stability;
+  assert.equal(engine.useTacticalAction('vent'), true);
+  const secondPrice = VENT_STABILITY_COST * (1 + VENT_COST_ESCALATION);
+  assert.equal(Number((stabilityBeforeSecond - civ.stats.stability).toFixed(2)), secondPrice);
+  assert.equal(
+    Number(((civ.harvestBonus.paradox - paradoxAfterFirst) / paradoxAfterFirst).toFixed(4)),
+    Number((secondPrice / VENT_STABILITY_COST).toFixed(4)),
+  );
 });
 
 test('Vent removes only the Entropy that exists and pays out accordingly', () => {
@@ -1678,7 +1747,7 @@ test('Vent removes only the Entropy that exists and pays out accordingly', () =>
   civ.era = 0;
   assert.equal(engine.useTacticalAction('vent'), true);
   assert.equal(civ.tactical.entropy, 0);
-  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 4);
+  assert.equal(Number(civ.harvestBonus.paradox.toFixed(2)), 10 * VENT_PARADOX_BASE);
 });
 
 test('Vent is unavailable below the minimum Entropy and changes nothing', () => {
@@ -1701,6 +1770,9 @@ test('Vent gives the credit-optimal playstyle a Paradox source', () => {
   const vented = venting.state.machine.lastHarvest.rewards;
   const plain = without.state.machine.lastHarvest.rewards;
   assert.ok(vented.paradox > plain.paradox * 1.4, `venting must lift Paradox: ${vented.paradox} vs ${plain.paradox}`);
+  // Venting now costs run length as well as Stability, so the trade has to be visible in both
+  // directions: more Paradox, and a shallower run for it.
+  assert.ok(vented.causal_mass < plain.causal_mass, 'venting every opportunity must cost run depth');
   const share = resources => resources.paradox / (resources.causal_mass + resources.cognition + resources.existence);
   assert.ok(share(vented) > share(plain), 'venting must raise the Paradox share of a harvest');
 });
@@ -1846,7 +1918,7 @@ test('a no-upgrade run with full reserve spending stays under seven minutes', ()
 
 test('new state carries convergence and milestone statistics fields', () => {
   const state = createNewState();
-  assert.equal(state.saveVersion, 4);
+  assert.equal(state.saveVersion, SAVE_VERSION);
   assert.equal(state.meta.convergences, 0);
   assert.deepEqual(state.meta.victories, []);
   const p = state.meta.progression;
@@ -1875,7 +1947,7 @@ test('a save written under the previous version is migrated, not discarded', () 
   assert.equal(engine.state.meta.convergences, 5);
   assert.equal(engine.state.meta.progression.machineInsight, 12);
   assert.equal(engine.saveMigration.status, 'migrated');
-  assert.equal(engine.state.saveVersion, 4);
+  assert.equal(engine.state.saveVersion, SAVE_VERSION);
 });
 
 const MIGRATED_MILESTONE_AWARDS = {
@@ -2562,10 +2634,15 @@ test('objectiveForDirective and evaluateDirectiveObjective resolve correctly', (
   assert.equal(accelDev.id, 'objective_accelerated_development');
 
   civ.directiveId = 'accelerated_development';
-  civ.development = 259;
+  civ.era = 2;
+  civ.development = 399;
   assert.equal(evaluateDirectiveObjective(civ), false);
-  civ.development = 260;
+  civ.development = 400;
   assert.equal(evaluateDirectiveObjective(civ), true);
+  // The era half of the objective is the half the Directive cannot buy for the player.
+  civ.era = 1;
+  assert.equal(evaluateDirectiveObjective(civ), false);
+  civ.era = 2;
 
   // cognitive_extraction
   assert.ok(objectiveForDirective('cognitive_extraction'));
@@ -2583,14 +2660,14 @@ test('objectiveForDirective and evaluateDirectiveObjective resolve correctly', (
   // stable_cultivation
   assert.ok(objectiveForDirective('stable_cultivation'));
   civ.directiveId = 'stable_cultivation';
-  civ.stats.stability = 74;
-  civ.tactical.entropy = 74;
+  civ.stats.stability = 79;
+  civ.tactical.entropy = 69;
   assert.equal(evaluateDirectiveObjective(civ), false);
-  civ.stats.stability = 75;
-  civ.tactical.entropy = 75;
+  civ.stats.stability = 80;
+  civ.tactical.entropy = 70;
   assert.equal(evaluateDirectiveObjective(civ), false);
-  civ.stats.stability = 75;
-  civ.tactical.entropy = 74;
+  civ.stats.stability = 80;
+  civ.tactical.entropy = 69;
   assert.equal(evaluateDirectiveObjective(civ), true);
 
   // paradox_prospecting

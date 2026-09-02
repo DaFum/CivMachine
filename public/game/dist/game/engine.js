@@ -17,7 +17,7 @@ import { buildDecisionFeedback, captureDecisionSnapshot, } from "./decision-feed
 import { advancePressure, pressureYears } from "./pressure.js";
 import { statDrift } from "./stat-drift.js";
 import { developmentGrowthPerSecond } from "./development.js";
-import { TACTICAL_ACTIONS, applyTacticalAction, tacticalAvailability, } from "./tactical-actions.js";
+import { ACCELERATE_DEVELOPMENT, ACCELERATE_YEARS, TACTICAL_ACTIONS, applyTacticalAction, maxSimulationSpeed, predictionMitigation, tacticalAvailability, } from "./tactical-actions.js";
 import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality, gradeIndex, } from "./harvest-quality.js";
 import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses, } from "./run-interventions.js";
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective, } from "./run-directives.js";
@@ -25,7 +25,7 @@ import { convergenceBonuses, convergenceRequirements, convergenceTargets, conver
 import { MILESTONE_CATALOG, completedMilestoneCount } from "./milestones.js";
 import { buildRunReport, recordRunTrace } from "./run-report.js";
 import { acknowledgeStep, advanceTutorial, liveTutorialFacts, newTutorialState, normalizeTutorialState, recordTutorialFact, tutorialView, } from "./tutorial.js";
-import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades, } from "./upgrade-balance.js";
+import { balancedAxiomUpgrades, balancedDirectives, balancedMachineUpgrades, balancedUniverseUpgrades, } from "./upgrade-balance.js";
 // The era identifiers, in era order. They double as the catalog keys (lowercased) and as the label
 // of last resort, which is why they stay a plain constant while everything read on screen goes
 // through `eraLabel` -- a constant filled at import time would keep the language the page booted in.
@@ -131,7 +131,7 @@ export class GameEngine {
         this.machineUpgrades = balancedMachineUpgrades(C.machine_upgrades);
         this.universeUpgrades = balancedUniverseUpgrades(C.universe_upgrades);
         this.axiomUpgrades = balancedAxiomUpgrades(C.axiom_upgrades);
-        this.directives = C.directives;
+        this.directives = balancedDirectives(C.directives);
         this.matrices = C.breeding_matrices;
         this.mutations = C.mutations;
         this.eventsByEra = new Map();
@@ -380,7 +380,8 @@ export class GameEngine {
             chaoticRetention: 0.4,
             containmentRating: 0,
             controlRecharge: 1,
-            accelerateYears: 200,
+            accelerateYears: ACCELERATE_YEARS[0],
+            accelerateDevelopment: ACCELERATE_DEVELOPMENT[0],
             accelerateTimer: 8,
             gradeRewardMult: 1,
         };
@@ -482,7 +483,7 @@ export class GameEngine {
     upgradeCost(layer, id) {
         const d = this.upgradeById(layer, id);
         return d
-            ? upgradeCost(Number(d.base_cost), Number(d.growth), this.upgradeLevel(layer, id))
+            ? upgradeCost(Number(d.base_cost), Number(d.growth), this.upgradeLevel(layer, id), Array.isArray(d.cost_ladder) ? d.cost_ladder : undefined)
             : 0;
     }
     currencyAmount(currency) {
@@ -656,8 +657,9 @@ export class GameEngine {
                 0.1 * l("axiom", "axiom_compassionate_accounting")),
             containmentRating,
             controlRecharge: 1 + (bureaucracyLevel >= 1 ? 1 : 0) + (bureaucracyLevel >= 3 ? 1 : 0),
-            accelerateYears: [200, 260, 340, 450][temporalLevel],
-            accelerateTimer: [8, 10, 13, 16][temporalLevel],
+            accelerateYears: ACCELERATE_YEARS[temporalLevel],
+            accelerateDevelopment: ACCELERATE_DEVELOPMENT[temporalLevel],
+            accelerateTimer: [8, 11, 14, 18][temporalLevel],
             gradeRewardMult: 1 + gradeModules * 0.025,
         };
         const selected = [
@@ -830,20 +832,27 @@ export class GameEngine {
             return {};
         const effects = structuredClone(CivilizationPaths.mergedChoiceEffects(civ, choice));
         const b = this.runtimeBonuses();
+        // Foresight is only worth what it changes. A Probe spent on this intervention softens whatever it
+        // was about to cost, scaled by Prediction Core -- and only the costs, never the gains.
+        const foresight = civ.tactical.probedEventId && civ.tactical.probedEventId === civ.pendingEvent
+            ? 1 - predictionMitigation(b.predictionLevel)
+            : 1;
         for (const key of ["stability", "awareness", "sanity", "attention"]) {
             if (effects[key] == null)
                 continue;
             let amount = Number(effects[key]);
             if (key === "stability" && amount < 0)
-                amount *= b.stabilityLossMult;
+                amount *= b.stabilityLossMult * foresight;
             else if (key === "awareness" && amount > 0)
-                amount *= b.awarenessGainMult;
+                amount *= b.awarenessGainMult * foresight;
             else if (key === "sanity" && amount < 0)
-                amount *= b.sanityLossMult;
+                amount *= b.sanityLossMult * foresight;
             else if (key === "attention" && amount > 0)
-                amount *= b.attentionGainMult;
+                amount *= b.attentionGainMult * foresight;
             effects[key] = amount;
         }
+        if (foresight < 1 && Number(effects.entropy) > 0)
+            effects.entropy = Number(effects.entropy) * foresight;
         return effects;
     }
     developmentRate() {
@@ -1470,8 +1479,10 @@ export class GameEngine {
         return this.setExplainMode(!this.state.help.explain);
     }
     maxSimulationSpeed() {
-        const x = this.upgradeLevel("machine", "temporal_injector");
-        return x >= 3 ? 4 : x >= 1 ? 2 : 1;
+        // Whichever is greater: what this save has earned with Machine Insight, or what it had already
+        // bought back when Temporal Injector sold simulation speed. The grandfathered floor never
+        // decreases, so a returning player never loses a speed they were using.
+        return Math.max(maxSimulationSpeed(this.machineInsight()), Math.max(1, Math.trunc(Number(this.state.meta.progression.simulationSpeedUnlocked ?? 1)) || 1));
     }
     setSimulationSpeed(n) {
         this.state.simulationSpeed = Math.max(1, Math.min(this.maxSimulationSpeed(), Math.trunc(n)));

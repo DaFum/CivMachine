@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { CONTENT } from '../public/game/dist/data/content.generated.js';
+import { SAVE_VERSION } from '../public/game/dist/game/rules.js';
 import { EXPANDED_INTERVENTIONS } from '../public/game/dist/data/expanded-interventions.js';
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS } from '../public/game/dist/data/expanded-path-interventions.js';
 import { APOTHEOSIS_EVENTS } from '../public/game/dist/data/apotheosis-events.js';
@@ -146,11 +147,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.19.0', async () => {
+test('release metadata identifies browser app v1.20.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.19.0');
+  assert.equal(rootPackage.version, '1.20.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 
@@ -173,7 +174,8 @@ test('release metadata identifies browser app v1.19.0', async () => {
   // `main.ts` reads the footer's `data-version` and fills the localized footer string with it, so this
   // -- not the English text beside it -- is the version a booted game actually shows.
   assert.match(html, new RegExp(`data-version="${escaped}"`));
-  assert.match(html, /v4 save/);
+  // The save format the shell advertises before `main.ts` localizes the line.
+  assert.match(html, new RegExp(`v${SAVE_VERSION} save`));
   // Both README titles, not merely a mention anywhere in the file: the release notes for older
   // versions stay in place, so a loose match would pass on a stale title.
   assert.match(rootReadme, new RegExp(`^# .*v${escaped}$`, 'm'));

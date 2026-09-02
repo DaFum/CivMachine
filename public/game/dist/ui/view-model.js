@@ -3,8 +3,8 @@ import { milestoneProgress } from '../game/milestones.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
-import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalActionText, tacticalRisk } from '../game/tactical-actions.js';
+import { DEPTH_BANDS, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, depthYieldMultiplier, harvestUrgency } from '../game/harvest-quality.js';
+import { TACTICAL_ACTIONS, VENT_COST_ESCALATION, VENT_ENTROPY_RELIEF, tacticalActionText, tacticalRisk, tacticalSummary, ventStabilityCost } from '../game/tactical-actions.js';
 import { civilizationSituation, machineSituation } from '../game/guidance.js';
 import { localizeDecisionFeedback } from '../game/decision-feedback.js';
 import { eraLabel } from '../game/engine.js';
@@ -72,7 +72,10 @@ function nextDepthBand(depth) {
         grade: upcoming.grade,
         label: harvestGradeLabel(upcoming.grade) ?? HARVEST_GRADE_LABELS[upcoming.grade],
         depthNeeded: upcoming.minDepth,
-        yieldMultiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * upcoming.minDepth,
+        // The Credit the band pays. Since v1.20.0 a grade boundary *is* a credit step, so the forecast
+        // can name the economic reward instead of leaving the player to infer it from a multiplier.
+        credits: upcoming.credits,
+        yieldMultiplier: depthYieldMultiplier(upcoming.minDepth),
     };
 }
 function buildResourcesViewModel(engine) {
@@ -135,6 +138,7 @@ function buildTacticalViewModel(engine, civ, bonuses) {
         actions: Object.keys(TACTICAL_ACTIONS).map(id => ({
             ...TACTICAL_ACTIONS[id],
             ...tacticalActionText(id),
+            summary: tacticalSummary(id, bonuses),
             risk: tacticalRisk(civ, id),
             ...engine.tacticalAvailability(id),
         })),
@@ -159,7 +163,8 @@ function buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, b
             stability: civ.stats.stability,
             controlCapacity: civ.tactical.controlCapacity,
             ventEntropyRelief: VENT_ENTROPY_RELIEF,
-            ventStabilityCost: VENT_STABILITY_COST,
+            ventStabilityCost: ventStabilityCost(civ.tactical.actionUsage.vent),
+            ventCostEscalation: VENT_COST_ESCALATION,
             entropy: civ.tactical.entropy,
             premature: controlledHarvest?.grade === 'premature',
         }),

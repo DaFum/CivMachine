@@ -202,6 +202,7 @@ export interface ProgressionState {
   objectivesCompleted: number;
   longestRunSeconds: number;
   maxEndgamesInRun: number;
+  simulationSpeedUnlocked?: number;
 }
 
 export interface VictoryRecord {
@@ -278,6 +279,7 @@ export interface RuntimeBonuses {
   containmentRating: number;
   controlRecharge: number;
   accelerateYears: number;
+  accelerateDevelopment: number;
   accelerateTimer: number;
   gradeRewardMult: number;
 }

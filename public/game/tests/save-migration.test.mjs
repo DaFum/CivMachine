@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { GameEngine, SAVE_BACKUP_KEY } from '../dist/game/engine.js';
 import { SAVE_VERSION, createNewState, upgradeCost } from '../dist/game/rules.js';
 import {
-  OLDEST_MIGRATABLE_SAVE_VERSION, SAVE_MIGRATIONS, migrateSaveState, parseSaveText,
+  OLDEST_MIGRATABLE_SAVE_VERSION, SAVE_MIGRATIONS, legacySimulationSpeed, migrateSaveState, parseSaveText,
 } from '../dist/game/save-migration.js';
 import { freshEngine } from './balance-harness.mjs';
 
@@ -71,7 +71,7 @@ test('an older save is migrated instead of discarded, keeping every progress fie
   assert.equal(report.status, 'migrated');
   assert.equal(report.fromVersion, 3);
   assert.equal(report.toVersion, SAVE_VERSION);
-  assert.deepEqual(report.steps, ['v3_to_v4_structural']);
+  assert.deepEqual(report.steps, ['v3_to_v4_structural', 'v4_to_v5_simulation_speed_from_insight']);
   assert.equal(loaded.saveVersion, SAVE_VERSION);
   assert.equal(loaded.machine.currencies.causal_mass, 4200);
   assert.equal(loaded.machine.upgradeLevels.harvest_yield, 6);
@@ -400,4 +400,51 @@ test('an in-progress run keeps playing across a migrating load', () => {
   engine.tick(1);
   assert.ok(engine.state.civilization.years > before);
   assert.equal(engine.state.civilization.seed, 4711);
+});
+
+test('v1.20.0 hands a stored Temporal Injector its simulation speed instead of taking it away', () => {
+  // Before v1.20.0 the module unlocked 2x at level 1 and 4x at level 3. Speed is Machine Insight now,
+  // so the level alone no longer means what it used to -- and a player who paid for 4x must not load
+  // into 1x because their Insight has not caught up.
+  const build = (temporalLevel, machineInsight) => {
+    const state = structuredClone(progressedState());
+    state.saveVersion = 4;
+    state.machine.upgradeLevels.temporal_injector = temporalLevel;
+    state.meta.progression.machineInsight = machineInsight;
+    delete state.meta.progression.simulationSpeedUnlocked;
+    return state;
+  };
+
+  for (const [level, expected] of [[0, 1], [1, 2], [2, 2], [3, 4], [5, 4]]) {
+    const { state, report } = parseSaveText(JSON.stringify(build(level, 0)));
+    assert.equal(report.status, 'migrated');
+    assert.ok(report.steps.includes('v4_to_v5_simulation_speed_from_insight'));
+    assert.equal(state.meta.progression.simulationSpeedUnlocked ?? 1, expected, `level ${level}`);
+    assert.equal(legacySimulationSpeed(level), expected);
+  }
+
+  // The module itself is untouched: it is still owned, and it now buys a stronger Temporal Injection.
+  const { state: kept } = parseSaveText(JSON.stringify(build(3, 0)));
+  assert.equal(kept.machine.upgradeLevels.temporal_injector, 3);
+
+  // And the engine honours the floor, so the speed control offers what the save had already bought
+  // even on a save whose Machine Insight would not yet earn it.
+  const storedFourTimes = JSON.stringify(build(3, 0));
+  const engine = new GameEngine({
+    autosave: false,
+    storage: { getItem: () => storedFourTimes, setItem: () => {}, removeItem: () => {} },
+  });
+  assert.equal(engine.maxSimulationSpeed(), 4);
+
+  // A save that never bought the module gets exactly what Machine Insight says and nothing more.
+  const storedNone = JSON.stringify(build(0, 0));
+  const plain = new GameEngine({
+    autosave: false,
+    storage: { getItem: () => storedNone, setItem: () => {}, removeItem: () => {} },
+  });
+  assert.equal(plain.maxSimulationSpeed(), 1);
+  plain.state.meta.progression.machineInsight = 3;
+  assert.equal(plain.maxSimulationSpeed(), 2);
+  plain.state.meta.progression.machineInsight = 10;
+  assert.equal(plain.maxSimulationSpeed(), 4);
 });

@@ -187,7 +187,7 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(readout, /data-live="harvest-summary"/);
   assert.match(readout, /data-live="harvest-meter"/);
   assert.match(readout, /t\.nextBand/, 'the next depth band and its yield must be named');
-  assert.match(APP.nextBand, /^NEXT \{grade\} AT DEPTH \{depth\} FOR ×\{multiplier\}$/);
+  assert.match(APP.nextBand, /^NEXT \{grade\} AT DEPTH \{depth\} \/\/ CREDIT \{credits\} \/\/ ×\{multiplier\}$/);
   assert.match(viewModel, /bandProgress/);
   const refresh = app.slice(app.indexOf('function refreshCivilizationLive'));
   assert.match(refresh, /\[data-live="harvest-meter"\][\s\S]{0,120}vm\.harvest\.bandProgress/);

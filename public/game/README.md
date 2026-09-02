@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.19.0
+# Reality Consumption Engine — App Edition v1.20.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,109 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.20.0 the campaign curve
+
+v1.20.0 rebalances the meta-economy above the run. The individual run was healthy; the loop above it
+was not. Measured on v1.19.0 from an empty save, a competent player reached the first Universe in
+**three runs**, and the second of those banked 2480 Causal Mass -- enough to buy 21 Machine levels in
+one purchase step and to take a fresh Machine from Containment 0 to Containment 10.
+
+Five changes close that loop, and a new campaign-level test suite holds it closed.
+
+**Depth pays less the deeper it goes.** Raw harvest value already scales with Development, and
+Development scales with run length, so multiplying it by a yield multiplier that *also* rose linearly
+with Depth made a run quadratic in its own duration. The multiplier is now concave: within a few
+percent of the old straight line for the Depth an opening run reaches, and 2.7x lower at the Depth
+v1.19.0 reached on run three.
+
+**Cultivation Credits cap at 10, not 20.** A Universe costs 18. The old cap sat above it, so a single
+long run paid for a whole prestige; two successful Civilizations are now the arithmetic floor for a
+Universe at every stage of the game.
+
+**Every Harvest Grade boundary is a Cultivation Credit step.** Grades and credits used to be
+independent curves that disagreed by design -- a run 0.4 Depth from TRANSCENDENT was still 1.4 Depth
+from its next Credit, so the louder signal was the less valuable one. ESTABLISHED, TRANSCENDENT,
+ASCENDANT and SINGULAR now sit exactly on credits 1, 3, 6 and 10, and the live rail and the run report
+name the credit a band pays.
+
+**Containment is priced as the compounding stat it is.** Reality Lattice still opens at 60 Causal
+Mass, because a first weak run has to afford one real survival improvement -- but the ladder then
+climbs 600, 1800, 4500 rather than 93, 144, 223, and the other three Containment modules are laddered
+with it so that pricing one does not simply move the stacking to the next. From the second purchase
+onward the survival build is assembled rather than stacked.
+
+**Entropy Vents get dearer as a run spends them.** Containment sets the cascade horizon, but a run
+that kept resolving interventions kept being handed Stability and Control back, and a flat-priced vent
+turned both straight into more run: at Containment 3, runs finished anywhere between 300 s and 900 s.
+Each vent now costs 35% more Stability than the last -- and pays proportionally more Paradox, so what
+the escalation rations is run length, not the Paradox economy.
+
+Alongside those, three systems that were traps became decisions:
+
+- **Simulation speed is permanent progression.** 2x at Machine Insight 3, 4x at 10. It used to be sold
+  by Temporal Injector, a Machine upgrade -- which meant re-buying the same fast-forward button after
+  every Universe. Temporal Injector now buys what it is named after: a Temporal Injection worth 1150
+  years and 48 Development at level 3, against 450 and 6 before. Saves that had already bought 2x or
+  4x keep it; see the save note below.
+- **Prediction Core pays out.** An intervention you spent Control probing lands 12% softer per level,
+  to a maximum of 50%. The module still does nothing at all until you Probe, which is its identity.
+- **Accelerated Development no longer solves its own objective.** It multiplied Development and then
+  asked for Development; the objective now asks for Development 400 *in the Transcendence era*, which
+  is the half the Directive cannot buy for the player. On a bare Machine it clears no runs at all.
+
+The first Universe also stopped arriving as an avalanche: it unlocks Universe upgrades and nothing
+else. Breeding Matrices wait for the second Universe, Multiverse prestige for the third, and Existence
+is now identified when a civilization first reaches Transcendence rather than in the same step.
+
+### Measured, before and after
+
+Same modelled player, same seeds, both engines. `npm run balance` prints the full table.
+
+| Measure | v1.19.0 | v1.20.0 | Target |
+| --- | ---: | ---: | ---: |
+| First run, seconds | 130 | 130 | unchanged |
+| First run, affordable Machine levels | 3 | 2 | 1-2 |
+| Containment gained per run, median / p90 | 5 / 15 | 1 / 3 | 1-2 / <=3 |
+| Reality Lattice levels bought in one step, worst | 6 | 2 | <=2 |
+| Cultivation Credits from one run, worst | 20 | 10 | < 18 |
+| Civilizations to the first Universe | 3 | 5 | 5-7 |
+| Civilizations per Universe, U2 / U3 / U4 | 2 / 2 / 1 | 3 / 3 / 3 | 3-4 then ~2 |
+| Systems unlocked in the first-Universe step | 2 | 1 | 1-2 |
+| Deep run at a mature build, minutes | 27+ | 11.5-13.1 | 12-15 |
+| Civilizations to the first Multiverse | 8 | 15 | measured |
+| Civilizations to Great Convergence readiness | 27 | 67 | measured |
+| Simulated hours to Great Convergence readiness | 6.0 | 6.2 | ~8-12 h active |
+| Strongest line to the first Universe | deep_run, 2 runs | survival_first, 5 runs | no runaway |
+| Spread across the seven purchase tilts | 1.33x | 1.40x | no dominant build |
+
+The run lifecycle the curve now produces, measured by build:
+
+| Build | Containment | Run length | Depth | Credits | Grade |
+| --- | ---: | ---: | ---: | ---: | --- |
+| bare Machine | 0 | 2.1 min | 1.7 | 1 | ESTABLISHED |
+| early | 2 | 5.8 min | 5.1 | 3 | TRANSCENDENT |
+| mid | 4 | 9.1 min | 10.0 | 6 | ASCENDANT |
+| mature | 8 | 11.7 min | 16.7 | 10 | SINGULAR |
+
+Simulated hours count cultivation time at 1x only; the player also spends real time on interventions
+and purchases, and can run at 2x or 4x once Machine Insight allows it.
+
+### Saves
+
+`SAVE_VERSION` is 5. Balance changes alone never invalidate a save, and nothing here deletes earned
+value: purchased levels, Machine Insight, milestones, Universes and Axioms all carry forward
+untouched. The one reinterpretation is Temporal Injector, which no longer means "2x simulation speed",
+so the v4 -> v5 step records the speed a save had already unlocked and the engine keeps honouring it
+whatever Machine Insight says. A recorded Harvest Grade is likewise kept, even where the new bands
+would place the same Depth one band lower.
+
+### Balance tooling
+
+`npm run balance` simulates whole campaigns -- an empty save played forward through Machine purchases,
+Universes, Multiverses and Axioms under eleven named strategies -- and prints the curve.
+`npm run balance:full` widens the seed set and adds the Great Convergence horizon.
+`public/game/tests/campaign.test.mjs` asserts the bands in CI.
 
 ## v1.19.0 mobile UX & game-focus pass
 

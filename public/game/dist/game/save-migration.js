@@ -14,7 +14,33 @@ export const SAVE_MIGRATIONS = [
     { from: 1, to: 2, id: 'v1_to_v2_structural', apply: raw => raw },
     { from: 2, to: 3, id: 'v2_to_v3_structural', apply: raw => raw },
     { from: 3, to: 4, id: 'v3_to_v4_structural', apply: raw => raw },
+    // v1.20.0 moved simulation speed off Temporal Injector and onto Machine Insight. The module is
+    // still owned and still does something -- it buys a stronger Temporal Injection now -- but the
+    // capability it used to sell is read from somewhere else, so a save written before the change has
+    // to hand that capability over explicitly. Without this step a player who had bought 2x or 4x would
+    // load into 1x and be told nothing, which is exactly the silent deletion of purchased value the
+    // migration contract exists to prevent.
+    { from: 4, to: 5, id: 'v4_to_v5_simulation_speed_from_insight', apply: raw => grandfatherSimulationSpeed(raw) },
 ];
+export function legacySimulationSpeed(temporalInjectorLevel) {
+    const level = Math.max(0, Math.trunc(Number(temporalInjectorLevel) || 0));
+    return level >= 3 ? 4 : level >= 1 ? 2 : 1;
+}
+function grandfatherSimulationSpeed(raw) {
+    const machine = isPlainObject(raw.machine) ? raw.machine : null;
+    const levels = machine && isPlainObject(machine.upgradeLevels) ? machine.upgradeLevels : null;
+    const earned = legacySimulationSpeed(Number(levels?.temporal_injector ?? 0));
+    if (earned <= 1)
+        return raw;
+    const meta = isPlainObject(raw.meta) ? raw.meta : null;
+    if (!meta)
+        return raw;
+    const progression = isPlainObject(meta.progression) ? meta.progression : null;
+    if (!progression)
+        return raw;
+    progression.simulationSpeedUnlocked = Math.max(earned, Number(progression.simulationSpeedUnlocked ?? 1) || 1);
+    return raw;
+}
 export const OLDEST_MIGRATABLE_SAVE_VERSION = SAVE_MIGRATIONS.length ? SAVE_MIGRATIONS[0].from : SAVE_VERSION;
 // JSON.parse produces these as ordinary own properties, and assigning them would reach the
 // prototype chain. Nothing in GameState is named this, so dropping them costs nothing.

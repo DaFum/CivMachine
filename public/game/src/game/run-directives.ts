@@ -30,12 +30,17 @@ export function buildDirectiveOffers(knownIds: readonly string[], seed: number, 
 }
 
 export const DIRECTIVE_OBJECTIVES: Readonly<Record<string, DirectiveObjectiveDefinition>> = {
+  // The Directive multiplies Development by 1.25 and then asks for Development, which made it the one
+  // early objective that substantially completed itself: measured on v1.19 it cleared on almost every
+  // run that did not collapse. Requiring the Transcendence era as well makes the objective ask for the
+  // thing the Directive does *not* give -- a run that survives long enough to get there -- so the
+  // aggressive line has to actually be played rather than merely selected.
   accelerated_development: {
     id: 'objective_accelerated_development',
     directiveId: 'accelerated_development',
     title: 'Compressed Maturity',
-    description: 'Reach Development 260 before harvest.',
-    isComplete: civ => civ.development >= 260,
+    description: 'Reach Development 400 in the Transcendence era.',
+    isComplete: civ => civ.development >= 400 && civ.era >= 2,
   },
   cognitive_extraction: {
     id: 'objective_cognitive_extraction',
@@ -48,8 +53,8 @@ export const DIRECTIVE_OBJECTIVES: Readonly<Record<string, DirectiveObjectiveDef
     id: 'objective_stable_cultivation',
     directiveId: 'stable_cultivation',
     title: 'Untorn Harvest',
-    description: 'Harvest with at least 75 Stability and less than 75 Entropy.',
-    isComplete: civ => civ.stats.stability >= 75 && civ.tactical.entropy < 75,
+    description: 'Harvest with at least 80 Stability and less than 70 Entropy.',
+    isComplete: civ => civ.stats.stability >= 80 && civ.tactical.entropy < 70,
   },
   paradox_prospecting: {
     id: 'objective_paradox_prospecting',

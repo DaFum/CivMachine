@@ -50,20 +50,29 @@ export class Progression {
             known.push(id);
             this.announce(state, `option:${id}`, fill(text().reports.progression.newOptionUnlocked, { name: this.optionName(storage, id) }), out);
         } }
+    // The unlock ladder, staggered so that no prestige lands more than one new concept at a time.
+    // Until v1.20 the first Universe unlocked Universe upgrades *and* Breeding Matrices, revealed
+    // Existence *and* Universal Residue, and paid the four Machine Insight that made the next tier of
+    // Machine modules purchasable -- four independent systems in the step the player is least equipped
+    // to read. Universe upgrades are the reward for the first Universe and now arrive alone; Matrices
+    // wait for the second, and Multiverse prestige for the third, where it is still two Universes ahead
+    // of the four it needs.
     static refresh(state, out = []) { const p = state.meta.progression; const insight = this.machineInsight(state); if (p.controlledHarvestsTotal >= 2 && insight >= 3)
         this.unlockSystem(state, 'directives', out); if (state.machine.civilizationsTotal >= 4 || insight >= 6)
-        this.unlockSystem(state, 'universe_prestige', out); if (state.meta.universesTotal >= 1) {
-        this.unlockSystem(state, 'universe_upgrades', out);
-        if (insight >= 7)
-            this.unlockSystem(state, 'breeding_matrices', out);
-    } if (state.meta.universesTotal >= 2)
+        this.unlockSystem(state, 'universe_prestige', out); if (state.meta.universesTotal >= 1)
+        this.unlockSystem(state, 'universe_upgrades', out); if (state.meta.universesTotal >= 2 && insight >= 7)
+        this.unlockSystem(state, 'breeding_matrices', out); if (state.meta.universesTotal >= 3)
         this.unlockSystem(state, 'multiverse_prestige', out); if (state.meta.multiversesConsumed >= 1 && insight >= 18)
         this.unlockSystem(state, 'axioms', out); this.refreshKnown(state, 'directives', DIRECTIVE_INSIGHT, 'knownDirectives', out); this.refreshKnown(state, 'breeding_matrices', MATRIX_INSIGHT, 'knownBreedingMatrices', out); this.refreshKnown(state, 'axioms', AXIOM_KNOWLEDGE, 'knownAxioms', out); return out; }
     static recordMilestones(state, convergenceUnlocked, out = []) { const result = evaluateMilestones(state, convergenceUnlocked); for (const milestone of result.newlyCompleted)
         if (milestone.insight)
             out.push(fill(text().reports.progression.machineInsightAwarded, { amount: milestone.insight, title: milestoneCopy(milestone.id)?.title ?? milestone.title })); return this.refresh(state, out); }
+    // Existence is earned by every harvest long before it is named, so naming it at the first Universe
+    // spent a reveal the player had already paid for -- inside the busiest step in the game. Carrying a
+    // civilization into Transcendence is its own moment and now carries its own resource.
     static recordCivilizationProgress(state, civ) { const out = []; if (civ.development >= 70)
-        this.discover(state, 'cognition', 'Cognition', out); return this.recordMilestones(state, false, out); }
+        this.discover(state, 'cognition', 'Cognition', out); if (civ.era >= 2)
+        this.discover(state, 'existence', 'Existence', out); return this.recordMilestones(state, false, out); }
     static recordHarvest(state, record) { const out = []; if (record.chaotic)
         state.meta.progression.chaoticHarvestsTotal++;
     else {
@@ -122,7 +131,7 @@ export function nextSystemPreviews(state) {
     const systems = text().reports.progression.systems;
     const candidates = [
         ['directives', 3], ['universe_prestige', 6], ['universe_upgrades', 7],
-        ['breeding_matrices', 7], ['multiverse_prestige', 16], ['axioms', 18],
+        ['breeding_matrices', 9], ['multiverse_prestige', 16], ['axioms', 18],
     ];
     return candidates.filter(([id]) => !Progression.systemUnlocked(state, id)).sort((a, b) => a[1] - b[1]).slice(0, 2)
         .map(([id]) => ({ id, name: systems[id].name, condition: systems[id].condition }));

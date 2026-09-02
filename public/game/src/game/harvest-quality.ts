@@ -1,4 +1,5 @@
 import { RESOURCE_KEYS } from './rules.js';
+import { VENT_STABILITY_COST } from './tactical-actions.js';
 import type { Civilization, HarvestGrade, ResourceKey } from './types.js';
 
 export interface HarvestQuality {
@@ -24,18 +25,60 @@ export const HARVEST_GRADE_LABELS: Readonly<Record<HarvestGrade, string>> = {
 export const DEPTH_DEVELOPMENT_SCALE = 80;
 export const DEPTH_ENDGAME_BONUS = 1.5;
 export const DEPTH_CREDIT_RATE = 0.6;
-export const DEPTH_CREDIT_CAP = 20;
+// Half a Universe, and not one credit more. The v1.19 cap of 20 sat above the 18 a Universe costs,
+// so a single run that simply lasted long enough paid for a whole prestige -- measured at 20 credits
+// from one 1697 s run on a fresh save. Capping below the requirement makes two successful runs the
+// arithmetic floor for a Universe at every stage of the game, which is what the roguelite cadence
+// was always specified to be.
+export const DEPTH_CREDIT_CAP = 10;
 export const DEPTH_YIELD_BASE = 0.25;
 export const DEPTH_YIELD_RATE = 0.22;
+/**
+ * Where the yield multiplier stops paying full rate. Below the knee `depthYieldMultiplier` is the
+ * v1.19 straight line to within a few percent; above it the curve is logarithmic.
+ *
+ * This is the single most load-bearing number in the rebalance. Raw harvest value already grows with
+ * Development, and Development grows with run length, so multiplying it by a multiplier that also
+ * grew linearly with Development made a run's worth quadratic in its own duration: the measured
+ * second run of a fresh save banked 2480 Causal Mass and could buy 21 Machine levels at once. A
+ * concave multiplier keeps a deep run clearly better than a shallow one without making it worth more
+ * than the several shorter runs it displaces.
+ */
+export const DEPTH_YIELD_KNEE = 6;
 export const PREMATURE_MULTIPLIER = 0.2;
 export const CHAOTIC_CREDIT_RETENTION = 0.6;
 
-export const DEPTH_BANDS: ReadonlyArray<{ grade: HarvestGrade; minDepth: number }> = [
-  { grade: 'premature', minDepth: 0 },
-  { grade: 'established', minDepth: 1.5 },
-  { grade: 'transcendent', minDepth: 4 },
-  { grade: 'ascendant', minDepth: 9 },
-  { grade: 'singular', minDepth: 16 },
+/** The Depth that buys the n-th Cultivation Credit, inverted from `credits = floor(rate * depth)`. */
+export function depthForCredit(credit: number): number {
+  return Math.max(0, credit) / DEPTH_CREDIT_RATE;
+}
+
+/**
+ * The reward multiplier a Harvest Grade is worth, as a concave function of Cultivation Depth.
+ *
+ * `log1p` is what makes the early game survive the rebalance untouched: for the Depth 1.7 to 3 an
+ * opening run reaches, this is within 8% of the old straight line, so the published first-run economy
+ * still holds. At Depth 33 -- reachable on run three of the old curve -- it pays 2.7x less.
+ */
+export function depthYieldMultiplier(depth: number): number {
+  const safe = Math.max(0, Number(depth) || 0);
+  return DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * DEPTH_YIELD_KNEE * Math.log1p(safe / DEPTH_YIELD_KNEE);
+}
+
+/**
+ * Grade boundaries sit exactly on Cultivation Credit steps, so a Grade change *is* an economic
+ * event. Until v1.20 the two curves were independent and disagreed by design: a run 0.4 Depth from
+ * TRANSCENDENT was still 1.4 Depth from its next Credit, which made the louder of the two signals the
+ * less valuable one. Deriving the bands from `DEPTH_CREDIT_RATE` removes the disagreement at the
+ * source rather than papering over it in the interface, and gives the top band a real meaning:
+ * SINGULAR is exactly the Depth at which Credits cap.
+ */
+export const DEPTH_BANDS: ReadonlyArray<{ grade: HarvestGrade; minDepth: number; credits: number }> = [
+  { grade: 'premature', minDepth: 0, credits: 0 },
+  { grade: 'established', minDepth: depthForCredit(1), credits: 1 },
+  { grade: 'transcendent', minDepth: depthForCredit(3), credits: 3 },
+  { grade: 'ascendant', minDepth: depthForCredit(6), credits: 6 },
+  { grade: 'singular', minDepth: depthForCredit(DEPTH_CREDIT_CAP), credits: DEPTH_CREDIT_CAP },
 ];
 
 export function endgameStatesReached(civ: Civilization): number {
@@ -60,7 +103,7 @@ export function evaluateHarvestQuality(civ: Civilization, _chaotic = false): Har
   if (grade === 'premature') return { grade, multiplier: PREMATURE_MULTIPLIER, credits: 0, depth };
   return {
     grade,
-    multiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * depth,
+    multiplier: depthYieldMultiplier(depth),
     credits: Math.min(DEPTH_CREDIT_CAP, Math.floor(DEPTH_CREDIT_RATE * depth)),
     depth,
   };
@@ -83,6 +126,7 @@ export type HarvestUrgency = 'building' | 'closing' | 'harvest' | 'cascading' | 
 
 export interface HarvestUrgencyInput {
   depth: number;
+  ventCostEscalation?: number;
   credits: number;
   developmentRate: number;
   secondsToCascade: number;
@@ -114,15 +158,24 @@ export interface HarvestUrgencyView {
  * which is what it already is in practice.
  */
 export function reachableRunSeconds(input: Pick<HarvestUrgencyInput,
-  'secondsToCascade' | 'entropyRate' | 'stability' | 'controlCapacity' | 'ventEntropyRelief' | 'ventStabilityCost'>): number {
+  'secondsToCascade' | 'entropyRate' | 'stability' | 'controlCapacity' | 'ventEntropyRelief' | 'ventStabilityCost' | 'ventCostEscalation'>): number {
   const floor = Math.max(0, input.secondsToCascade);
   const rate = Math.max(0, input.entropyRate);
   const cost = Math.max(0, input.ventStabilityCost);
   const relief = Math.max(0, input.ventEntropyRelief);
   if (rate <= 0) return Number.POSITIVE_INFINITY;
   if (cost <= 0 || relief <= 0) return floor;
-  const ventsAffordable = Math.min(input.controlCapacity, Math.max(0, Math.floor(Math.max(0, input.stability) / cost)));
-  return floor + ventsAffordable * relief / rate;
+  // Vents get dearer as a run spends them, so the horizon has to walk the ladder rather than divide
+  // by one price: `ventStabilityCost` is the price of the *next* vent, and `ventCostEscalation` is
+  // what each one after it adds.
+  const escalation = Math.max(0, input.ventCostEscalation ?? 0) * VENT_STABILITY_COST;
+  let budget = Math.max(0, input.stability);
+  let vents = 0;
+  for (let next = cost; vents < input.controlCapacity && budget >= next; next += escalation) {
+    budget -= next;
+    vents++;
+  }
+  return floor + vents * relief / rate;
 }
 
 /**
@@ -137,7 +190,7 @@ export function harvestUrgency(input: HarvestUrgencyInput): HarvestUrgencyView {
   const nextCredit = Math.min(DEPTH_CREDIT_CAP, credits + 1);
   const capped = credits >= DEPTH_CREDIT_CAP;
   // The depth at which the credit step lands, inverted from credits = floor(rate * depth).
-  const depthNeeded = nextCredit / DEPTH_CREDIT_RATE;
+  const depthNeeded = depthForCredit(nextCredit);
   const developmentNeeded = Math.max(0, (depthNeeded - input.depth) * DEPTH_DEVELOPMENT_SCALE);
   const rate = Math.max(0, input.developmentRate);
   const secondsToNextCredit = rate <= 0 ? Number.POSITIVE_INFINITY : developmentNeeded / rate;

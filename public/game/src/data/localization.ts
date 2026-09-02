@@ -119,7 +119,7 @@ const ENGLISH = {
       "closing": "CLOSING",
       "building": "BUILDING",
       "shortCreditForecast": "{state} · credit {nextCredit} in {seconds}",
-      "nextBand": "NEXT {grade} AT DEPTH {depth} FOR ×{multiplier}",
+      "nextBand": "NEXT {grade} AT DEPTH {depth} // CREDIT {credits} // ×{multiplier}",
       "harvestGrade": "HARVEST GRADE",
       "simulationSpeed": "Simulation speed",
       "tacticalActions": "TACTICAL ACTIONS",
@@ -424,9 +424,9 @@ const ENGLISH = {
           },
           "credits": {
             "term": "Cultivation Credits",
-            "what": "A second currency paid only by a harvest of Established grade or better: floor(0.6 × Cultivation Depth), capped at 20.",
+            "what": "A second currency paid only by a harvest of Established grade or better: floor(0.6 × Cultivation Depth), capped at 10.",
             "where": "The meta bar under the top bar, as Cultivation Credits x/18.",
-            "why": "18 of them consume the Universe, which is the first prestige step. Credits, not resources, are what gate progress."
+            "why": "18 of them consume the Universe, which is the first prestige step. The cap of 10 is deliberate: no single run can pay for a Universe, so a prestige is always at least two good Civilizations."
           },
           "insight": {
             "term": "Machine Insight",
@@ -516,13 +516,13 @@ const ENGLISH = {
             "term": "Cultivation Depth",
             "what": "Development / 80, plus 1.5 for every endgame state the civilization reached.",
             "where": "The large number in the HARVEST GRADE readout.",
-            "why": "It sets both the grade and the yield multiplier (0.25 + 0.22 × Depth), so it is the single number a run is trying to raise."
+            "why": "It sets both the grade and the yield multiplier, which rises steeply at first and then flattens — a run twice as deep is worth clearly more, but not twice as much."
           },
           "grade": {
             "term": "Harvest Grade",
-            "what": "Premature below Depth 1.5, then Established, Transcendent at 4, Ascendant at 9, Singular at 16. A run is also Premature until it has resolved 3 interventions and left Emergence.",
+            "what": "Premature below Depth 1.67, then Established, Transcendent at 5, Ascendant at 10, Singular at 16.67. A run is also Premature until it has resolved 3 interventions and left Emergence.",
             "where": "HARVEST GRADE // in the Pressure & Harvest rail.",
-            "why": "Premature pays a flat 0.2 multiplier and zero Cultivation Credits, which makes leaving it the first goal of every run."
+            "why": "Every boundary is a Cultivation Credit step — reaching a grade is the moment the credit is paid — so the loud signal and the valuable one are the same signal. Premature pays a flat 0.2 multiplier and zero Credits, which makes leaving it the first goal of every run."
           },
           "call": {
             "term": "The harvest call",
@@ -831,13 +831,13 @@ const ENGLISH = {
         "prematureManyInterventions": "The run resolved {eventChoices} interventions. Three plus Expansion era is the floor a harvest has to clear before it pays any Cultivation Credits.",
         "prematureEra": "The run never left {era}. A payout needs Expansion, which is 2,500 years — Accelerate (2) buys 200 of them per use.",
         "prematureDepth": "Cultivation Depth finished at {depth}; Established starts at 1.5, which is Development 120.",
-        "stabilityCollapse": "Stability, not Entropy, ended this run — it hit zero with Entropy at {entropy}. Stabilize (1) is +14 for 2 Control, and every Entropy Vent charges 10 of the same number.",
+        "stabilityCollapse": "Stability, not Entropy, ended this run — it hit zero with Entropy at {entropy}. Stabilize (1) is +14 for 2 Control, and this run spent {ventStability} Stability on {vents} Entropy Vents. Each vent costs more than the last, so the budget is finite: Containment is what makes it stretch.",
         "entropyCascade": "Entropy reached 100 and the cascade took the rest. Containment upgrades divide the rate permanently; Entropy Vent (4) only removes 18 at a time.",
         "unusedControlOneAction": "The run ended with {control} Control unspent after {actions} tactical action. Control does not carry over — an unspent charge is a discarded one.",
         "unusedControlManyActions": "The run ended with {control} Control unspent after {actions} tactical actions. Control does not carry over — an unspent charge is a discarded one.",
         "directiveOneCredit": "The Directive objective \"{objectiveTitle}\" was not met. It is worth ×1.15 on the whole harvest plus one Cultivation Credit, which at this depth was about {credits} credit.",
         "directiveManyCredits": "The Directive objective \"{objectiveTitle}\" was not met. It is worth ×1.15 on the whole harvest plus one Cultivation Credit, which at this depth was about {credits} credits.",
-        "nextBand": "{grade} begins at Depth {minDepth}, which was {distance} away. The harvest call in the pressure rail says when that distance stops being reachable.",
+        "nextBand": "{grade} begins at Depth {minDepth}, which was {distance} away -- and pays Cultivation Credit {credits} at the same moment, because every grade boundary is a credit step. The harvest call in the pressure rail says when that distance stops being reachable.",
         "creditCap": "Cultivation Credits are capped at {cap} and this run hit the cap. Past it only raw resource yield grows, so staying longer buys upgrades rather than prestige.",
         "cleanOneCredit": "Nothing went wrong: {grade} grade at Depth {depth} for {credits} Cultivation Credit. Spend the harvest on Containment for a longer next run, or on the harvest modules for more out of the same one.",
         "cleanManyCredits": "Nothing went wrong: {grade} grade at Depth {depth} for {credits} Cultivation Credits. Spend the harvest on Containment for a longer next run, or on the harvest modules for more out of the same one."
@@ -1001,7 +1001,7 @@ const ENGLISH = {
       "accelerate": {
         "title": "Temporal Injection",
         "label": "Accelerate historical throughput",
-        "summary": "+200 years · advance Development",
+        "summary": "+{years} years · +{development} Development",
         "risk": "-4 Stability · +3 Entropy, +3 more per era"
       },
       "probe": {
@@ -1024,7 +1024,8 @@ const ENGLISH = {
       "probeRequiresIntervention": "Probe requires an active intervention.",
       "alreadyProbed": "This intervention has already been probed.",
       "entropyTooLowToVent": "Entropy is too low to vent.",
-      "accelerateRisk": "-4 Stability · +{entropy} Entropy"
+      "accelerateRisk": "-4 Stability · +{entropy} Entropy",
+      "ventRisk": "-{stability} Stability · +4 Attention"
     }
   },
   "content": {
@@ -1081,11 +1082,11 @@ const ENGLISH = {
     "upgrades": {
       "reality_lattice": {
         "name": "Reality Lattice",
-        "description": "+1 Containment per level, which slows Entropy in every era. +10 starting and maximum Reality Stability per level."
+        "description": "+1 Containment per level, which slows Entropy in every era. +10 starting and maximum Reality Stability per level. Each level costs sharply more than the last."
       },
       "prediction_core": {
         "name": "Prediction Core",
-        "description": "Reveals intervention outcomes; higher levels make tactical Probe reports increasingly exact."
+        "description": "Probing an intervention softens what it costs, by 12% per level. Higher levels also make Probe reports increasingly exact."
       },
       "cultivation_accelerator": {
         "name": "Cultivation Accelerator",
@@ -1109,15 +1110,15 @@ const ENGLISH = {
       },
       "awareness_scrubber": {
         "name": "Awareness Scrubber",
-        "description": "+1 Containment per level. Reduces Machine Awareness gain by 8% per level."
+        "description": "+1 Containment per level. Reduces Machine Awareness gain by 8% per level. Each level costs sharply more than the last."
       },
       "sanity_protocol": {
         "name": "Sanity Compliance Protocol",
-        "description": "+1 Containment per level. Reduces Collective Sanity losses by 8% per level."
+        "description": "+1 Containment per level. Reduces Collective Sanity losses by 8% per level. Each level costs sharply more than the last."
       },
       "cosmic_muffling": {
         "name": "Cosmic Muffling",
-        "description": "+1 Containment per level. Reduces Cosmic Attention gain by 8% per level."
+        "description": "+1 Containment per level. Reduces Cosmic Attention gain by 8% per level. Each level costs sharply more than the last."
       },
       "contingency_vat": {
         "name": "Contingency Vat",
@@ -1125,7 +1126,7 @@ const ENGLISH = {
       },
       "temporal_injector": {
         "name": "Temporal Injector",
-        "description": "Unlocks 2× simulation speed, then 4× at level 3; each level strengthens Accelerate."
+        "description": "Each level injects more years and more Development into a Temporal Injection. Simulation speed is earned with Machine Insight instead."
       },
       "wide_lattice": {
         "name": "Wide Reality Lattice",
@@ -4821,7 +4822,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "closing": "ABSCHLUSS",
       "building": "AUFBAU",
       "shortCreditForecast": "{state} · Credit {nextCredit} in {seconds}",
-      "nextBand": "NÄCHSTES BAND {grade} BEI DEPTH {depth} FÜR ×{multiplier}",
+      "nextBand": "NÄCHSTES BAND {grade} BEI DEPTH {depth} // CREDIT {credits} // ×{multiplier}",
       "harvestGrade": "HARVEST GRADE",
       "simulationSpeed": "Simulationsgeschwindigkeit",
       "tacticalActions": "TACTICAL ACTIONS",
@@ -5126,9 +5127,9 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
           },
           "credits": {
             "term": "Cultivation Credits",
-            "what": "Eine zweite Währung, die nur bei einem Harvest mit Grade Established oder besser ausgezahlt wird: floor(0,6 × Cultivation Depth), maximal 20.",
+            "what": "Eine zweite Währung, die nur bei einem Harvest mit Grade Established oder besser ausgezahlt wird: floor(0,6 × Cultivation Depth), maximal 10.",
             "where": "In der Metaleiste unter der oberen Leiste als Cultivation Credits x/18.",
-            "why": "18 Cultivation Credits verbrauchen das Universe und lösen damit den ersten Prestige-Schritt aus. Der Fortschritt wird durch Credits, nicht durch Ressourcen begrenzt."
+            "why": "18 Cultivation Credits verbrauchen das Universe und lösen damit den ersten Prestige-Schritt aus. Der Deckel von 10 ist Absicht: kein einzelner Run kann ein Universe bezahlen, ein Prestige kostet also immer mindestens zwei gute Civilizations."
           },
           "insight": {
             "term": "Machine Insight",
@@ -5218,13 +5219,13 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
             "term": "Cultivation Depth",
             "what": "Development / 80 plus 1,5 für jeden erreichten Endgame-Zustand.",
             "where": "Die große Zahl in der Anzeige HARVEST GRADE.",
-            "why": "Cultivation Depth bestimmt Grade und Ertragsmultiplikator (0,25 + 0,22 × Depth) und ist damit der zentrale Wert, den ein Run steigern soll."
+            "why": "Cultivation Depth bestimmt Grade und Ertragsmultiplikator, der zunächst steil und dann immer flacher steigt — ein doppelt so tiefer Run bringt deutlich mehr, aber nicht doppelt so viel."
           },
           "grade": {
             "term": "Harvest Grade",
-            "what": "Premature unter Depth 1,5, danach Established, Transcendent ab 4, Ascendant ab 9 und Singular ab 16. Ein Run bleibt außerdem Premature, bis drei Interventionen abgeschlossen sind und Emergence verlassen wurde.",
+            "what": "Premature unter Depth 1,67, danach Established, Transcendent ab 5, Ascendant ab 10 und Singular ab 16,67. Ein Run bleibt außerdem Premature, bis drei Interventionen abgeschlossen sind und Emergence verlassen wurde.",
             "where": "HARVEST GRADE // im Bereich Pressure & Harvest.",
-            "why": "Premature zahlt nur einen festen Multiplikator von 0,2 und keine Cultivation Credits. Diesen Zustand zu verlassen ist daher das erste Ziel jedes Runs."
+            "why": "Jede Grenze ist zugleich eine Cultivation-Credit-Stufe — einen Grade zu erreichen ist genau der Moment, in dem der Credit ausgezahlt wird. Premature zahlt nur einen festen Multiplikator von 0,2 und keine Cultivation Credits; diesen Zustand zu verlassen ist daher das erste Ziel jedes Runs."
           },
           "call": {
             "term": "Harvest-Empfehlung",
@@ -5533,13 +5534,13 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
         "prematureManyInterventions": "Der Run löste {eventChoices} Interventionen. Drei Interventionen plus Era Expansion sind die Mindestanforderung, bevor ein Harvest Cultivation Credits auszahlt.",
         "prematureEra": "Der Run verließ {era} nicht. Eine Auszahlung benötigt Expansion bei 2.500 Jahren — Accelerate (2) liefert pro Nutzung 200 Jahre.",
         "prematureDepth": "Cultivation Depth endete bei {depth}; Established beginnt bei 1,5 beziehungsweise Development 120.",
-        "stabilityCollapse": "Stability, nicht Entropy, beendete diesen Run — sie erreichte bei Entropy {entropy} null. Stabilize (1) liefert +14 für 2 Control; jeder Entropy Vent kostet 10 desselben Werts.",
+        "stabilityCollapse": "Stability, nicht Entropy, beendete diesen Run — sie erreichte bei Entropy {entropy} null. Stabilize (1) liefert +14 für 2 Control; dieser Run gab {ventStability} Stability für {vents} Entropy Vents aus. Jeder Vent kostet mehr als der vorige, das Budget ist also endlich — Containment ist das, was es streckt.",
         "entropyCascade": "Entropy erreichte 100 und die Cascade übernahm den Rest. Containment Upgrades reduzieren die Rate dauerhaft; Entropy Vent (4) entfernt jeweils nur 18.",
         "unusedControlOneAction": "Der Run endete mit {control} ungenutztem Control nach {actions} Tactical Action. Control wird nicht übertragen — ungenutzte Ladung geht verloren.",
         "unusedControlManyActions": "Der Run endete mit {control} ungenutztem Control nach {actions} Tactical Actions. Control wird nicht übertragen — ungenutzte Ladung geht verloren.",
         "directiveOneCredit": "Das Directive-Ziel „{objectiveTitle}“ wurde nicht erfüllt. Es ist ×1,15 auf den gesamten Harvest plus einen Cultivation Credit wert; bei dieser Depth entsprach das ungefähr {credits} Credit.",
         "directiveManyCredits": "Das Directive-Ziel „{objectiveTitle}“ wurde nicht erfüllt. Es ist ×1,15 auf den gesamten Harvest plus einen Cultivation Credit wert; bei dieser Depth entsprach das ungefähr {credits} Credits.",
-        "nextBand": "{grade} beginnt bei Depth {minDepth}; die Distanz betrug {distance}. Der Harvest-Hinweis im Pressure Rail zeigt, wann diese Distanz nicht mehr erreichbar ist.",
+        "nextBand": "{grade} beginnt bei Depth {minDepth}; die Distanz betrug {distance} -- und zahlt im selben Moment Cultivation Credit {credits}, denn jede Grade-Grenze ist eine Credit-Stufe. Der Harvest-Hinweis im Pressure Rail zeigt, wann diese Distanz nicht mehr erreichbar ist.",
         "creditCap": "Cultivation Credits sind bei {cap} gedeckelt und dieser Run erreichte das Limit. Danach wächst nur noch der rohe Ressourcenertrag; längeres Spielen finanziert Upgrades statt Prestige.",
         "cleanOneCredit": "Keine kritische Abweichung: Grade {grade} bei Depth {depth} für {credits} Cultivation Credit. Harvest in Containment für einen längeren nächsten Run oder in Harvest-Module für mehr Ertrag desselben Runs investieren.",
         "cleanManyCredits": "Keine kritische Abweichung: Grade {grade} bei Depth {depth} für {credits} Cultivation Credits. Harvest in Containment für einen längeren nächsten Run oder in Harvest-Module für mehr Ertrag desselben Runs investieren."
@@ -5703,7 +5704,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "accelerate": {
         "title": "Temporal Injection",
         "label": "Historischen Durchsatz beschleunigen",
-        "summary": "+200 Jahre · Development vorantreiben",
+        "summary": "+{years} Jahre · +{development} Development",
         "risk": "-4 Stability · +3 Entropy, +3 zusätzlich pro Era"
       },
       "probe": {
@@ -5726,7 +5727,8 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "probeRequiresIntervention": "Probe benötigt eine aktive Intervention.",
       "alreadyProbed": "Diese Intervention wurde bereits mit Probe untersucht.",
       "entropyTooLowToVent": "Entropy ist für Vent zu niedrig.",
-      "accelerateRisk": "-4 Stability · +{entropy} Entropy"
+      "accelerateRisk": "-4 Stability · +{entropy} Entropy",
+      "ventRisk": "-{stability} Stability · +4 Attention"
     }
   },
   "content": {
@@ -5783,11 +5785,11 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
     "upgrades": {
       "reality_lattice": {
         "name": "Reality Lattice",
-        "description": "+1 Containment pro Level, wodurch Entropy in jeder Era langsamer ansteigt. +10 anfängliche und maximale Reality Stability pro Level."
+        "description": "+1 Containment pro Level, wodurch Entropy in jeder Era langsamer ansteigt. +10 anfängliche und maximale Reality Stability pro Level. Jedes Level kostet deutlich mehr als das vorherige."
       },
       "prediction_core": {
         "name": "Prediction Core",
-        "description": "Zeigt Interventionsergebnisse; höhere Level machen taktische Probe-Berichte zunehmend präzise."
+        "description": "Eine mit Probe untersuchte Intervention kostet 12 % weniger pro Level. Höhere Level machen Probe-Berichte zusätzlich präziser."
       },
       "cultivation_accelerator": {
         "name": "Cultivation Accelerator",
@@ -5811,15 +5813,15 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       },
       "awareness_scrubber": {
         "name": "Awareness Scrubber",
-        "description": "+1 Containment pro Level. Reduziert den Zuwachs von Machine Awareness um 8 % pro Level."
+        "description": "+1 Containment pro Level. Reduziert den Zuwachs von Machine Awareness um 8 % pro Level. Jedes Level kostet deutlich mehr als das vorherige."
       },
       "sanity_protocol": {
         "name": "Sanity Compliance Protocol",
-        "description": "+1 Containment pro Level. Reduziert Verluste von Collective Sanity um 8 % pro Level."
+        "description": "+1 Containment pro Level. Reduziert Verluste von Collective Sanity um 8 % pro Level. Jedes Level kostet deutlich mehr als das vorherige."
       },
       "cosmic_muffling": {
         "name": "Cosmic Muffling",
-        "description": "+1 Containment pro Level. Reduziert den Zuwachs von Cosmic Attention um 8 % pro Level."
+        "description": "+1 Containment pro Level. Reduziert den Zuwachs von Cosmic Attention um 8 % pro Level. Jedes Level kostet deutlich mehr als das vorherige."
       },
       "contingency_vat": {
         "name": "Contingency Vat",
@@ -5827,7 +5829,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       },
       "temporal_injector": {
         "name": "Temporal Injector",
-        "description": "Schaltet 2× Simulationsgeschwindigkeit frei, ab Level 3 4×; jedes Level verstärkt Accelerate."
+        "description": "Jedes Level injiziert mehr Jahre und mehr Development in eine Temporal Injection. Die Simulationsgeschwindigkeit wird stattdessen mit Machine Insight verdient."
       },
       "wide_lattice": {
         "name": "Wide Reality Lattice",
