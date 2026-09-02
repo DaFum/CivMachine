@@ -1,6 +1,7 @@
 import { hash01 } from './primitives.js';
 import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
+import { worldWidthMultiplier } from './world-model.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
 export function depthLaneYOffset(lane) {
     if (lane === 'back')
@@ -84,6 +85,8 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
     const sizes = settlementSizes(civ, snapshot);
     const roster = factionRoster(civ);
     const scale = [.24, .46, .7, .96, 1.28][stage] ?? .24;
+    const viewportWidth = worldWidth / worldWidthMultiplier(civ);
+    const mobileScale = viewportWidth < 800 ? 1.25 : (viewportWidth < 1200 ? 1.12 : 1.0);
     const allowed = new Set(structureKindsForEra(civ.era, stage));
     const settlements = [];
     let globalIndex = 0;
@@ -117,8 +120,8 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
             else if (settlementClass === 'arcology')
                 classScale = distFromCenter < 0.25 ? 1.85 : 0.85;
             const heightDensityMult = Math.max(0.5, (1.25 - distFromCenter * 0.55) * classScale);
-            const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale;
-            const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale;
+            const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * mobileScale;
+            const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * mobileScale;
             const structureHeight = Math.max(18, Math.min(height * .68, baseHeight));
             structures.push({
                 id: `s${index}:${i}`,

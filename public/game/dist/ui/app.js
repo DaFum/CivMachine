@@ -74,7 +74,12 @@ const focusClass = (vm, anchor) => vm.tutorial.step?.anchor === anchor ? ' tutor
 // One line, always on screen during a run: what is happening, why, and the single move it suggests.
 // Neither the id nor the severity is a band in the render key -- both follow the harvest call, which
 // moves continuously -- so the sentences and the severity class ride the live refresh instead.
-const situationBanner = (vm) => { const t = text().ui.app; return `<section class="situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm, '.situation-banner')}" role="status" aria-live="polite"><div class="panel-kicker">${esc(t.situationHeading)}</div><b data-live="situation-headline">${esc(vm.situation.headline)}</b><p class="situation-cause"><span>${esc(t.why)}</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>${esc(t.do)}</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p>${explainNote('situation', vm.explain)}</section>`; };
+const situationBanner = (vm) => {
+    if (vm.event)
+        return '';
+    const t = text().ui.app;
+    return `<section class="situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm, '.situation-banner')}" role="status" aria-live="polite"><div class="panel-kicker">${esc(t.situationHeading)}</div><b data-live="situation-headline">${esc(vm.situation.headline)}</b><p class="situation-cause"><span>${esc(t.why)}</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>${esc(t.do)}</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p>${explainNote('situation', vm.explain)}</section>`;
+};
 function decisionFeedback(feedback, focus = '', explain = false) {
     if (!feedback)
         return '';
@@ -85,6 +90,21 @@ function decisionFeedback(feedback, focus = '', explain = false) {
     const changes = metrics || affinities ? `<div class="decision-deltas">${metrics}${affinities}</div>` : `<p class="no-delta">${esc(t.noMeasurableStateChange)}</p>`;
     return `<section class="panel decision-feedback tone-${esc(feedback.tone)}${focus}" aria-live="polite" aria-atomic="true"><div class="panel-kicker">${esc(t.decisionResolved)}</div>${explainNote('decision_feedback', explain)}<div class="decision-heading"><div><h2>${esc(feedback.choiceLabel)}</h2><p>${esc(feedback.eventTitle)}</p></div><span>${esc(fill(feedback.metrics.length === 1 ? t.metricChangedOne : t.metricChangedMany, { count: feedback.metrics.length }))}</span></div>${changes}${additions ? `<div class="decision-additions">${additions}</div>` : ''}</section>`;
 }
+const openDisclosures = new Set();
+function isDisclosureOpen(id) { return openDisclosures.has(id); }
+function disclosureAttr(id) { return isDisclosureOpen(id) ? ' open' : ''; }
+if (typeof document !== 'undefined' && !document.__disclosureListenerBound) {
+    document.__disclosureListenerBound = true;
+    document.addEventListener('toggle', (e) => {
+        const target = e.target;
+        if (target && target.dataset && target.dataset.disclosure) {
+            if (target.open)
+                openDisclosures.add(target.dataset.disclosure);
+            else
+                openDisclosures.delete(target.dataset.disclosure);
+        }
+    }, true);
+}
 export function createGameUI(engine, world) {
     const resourceBar = document.querySelector('#resource-bar');
     const metaBar = document.querySelector('#meta-bar');
@@ -92,6 +112,7 @@ export function createGameUI(engine, world) {
     const civView = document.querySelector('#civilization-view');
     const worldShell = document.querySelector('#world-shell');
     const worldHud = document.querySelector('#world-hud');
+    const worldStatusDock = document.querySelector('#world-status-dock');
     const civPanels = document.querySelector('#civilization-panels');
     const victoryView = document.querySelector('#victory-view');
     const log = document.querySelector('#machine-log');
@@ -165,7 +186,13 @@ export function createGameUI(engine, world) {
                 refreshCivilizationLive(vm);
             }
         }
-        replaceIfChanged(log, vm.messages.length ? vm.messages.map(x => `<li>${esc(x)}</li>`).join('') : `<li>${esc(t.machineRecordAwaitingActivity)}</li>`);
+        const logItems = vm.messages.length ? vm.messages.map(x => `<li>${esc(x)}</li>`).join('') : `<li>${esc(t.machineRecordAwaitingActivity)}</li>`;
+        replaceIfChanged(log, logItems);
+        if (log && log.parentElement)
+            log.parentElement.classList.toggle('is-hidden', vm.phase !== 'machine');
+        const civLog = civPanels.querySelector('#machine-log-civ');
+        if (civLog)
+            replaceIfChanged(civLog, logItems);
         // The coach card lives outside the phase views so a step can point at either of them without the
         // card itself being torn down when the phase changes.
         replaceIfChanged(tutorialLayer, tutorialOverlay(vm.tutorial));
@@ -260,6 +287,14 @@ export function createGameUI(engine, world) {
     // the command rail is what the player spends, the pressure rail is when the run should end -- and
     // the harvest buttons sit under the readout that says whether to press them.
     const speedRow = (vm) => `<div class="speed-row"><span>${esc(text().ui.app.simulationSpeed)}</span>${[1, 2, 4].filter(x => x <= vm.maxSimulationSpeed).map(x => `<button data-action="speed" data-speed="${x}" class="${vm.simulationSpeed === x ? 'active' : ''}">${x}×</button>`).join('')}</div>`;
+    const harvestActionSurface = (vm) => {
+        const c = text().ui.app;
+        const h = vm.harvest;
+        if (!h)
+            return '';
+        const collapse = vm.civilization && (vm.civilization.stats.stability < 25 || vm.tactical.entropy >= 100) ? `<div class="collapse-warning">${esc(c.collapseWarning)}</div>` : '';
+        return `<section class="panel harvest-surface${focusClass(vm, '.harvest-surface')}"><div class="panel-kicker">${esc(c.harvestGrade)} // <b data-live="harvest-grade-inline">${esc(gradeText(h.controlled.grade))}</b> · DEPTH <b data-live="depth-inline">${h.depth.toFixed(1)}</b> · <span data-live="harvest-call">${esc(urgencyText(h))}</span></div>${collapse}<section class="harvest-actions${focusClass(vm, '.harvest-actions')}"><button class="primary big" data-action="harvest">${esc(c.controlledHarvest)}</button><div class="harvest-actions-secondary"><button class="danger" data-action="chaos">${esc(c.forceChaoticHarvest)}</button><button class="ghost" data-action="abandon">${esc(c.abandonWithoutReward)}</button></div></section></section>`;
+    };
     const commandRail = (vm) => { const t = vm.tactical; if (!t)
         return ''; const pips = Array.from({ length: t.controlMax }, (_, index) => `<i class="${index < t.controlCapacity ? 'active' : ''}" aria-hidden="true"></i>`).join(''); const keys = t.actions.map((action) => `<b>${esc(action.shortcut)}</b>`).join(' '); const copy = text().ui.app; const actions = t.actions.map((action) => `<div class="tactical-action-wrap"><button data-action="tactical" data-id="${esc(action.id)}" aria-describedby="tactical-reason-${esc(action.id)}" ${action.enabled ? '' : 'disabled'}><span><kbd>${esc(action.shortcut)}</kbd>${esc(action.label)}</span><b>${esc(action.summary)}</b><small>${esc(action.risk)} · ${esc(fill(copy.cost, { cost: action.cost }))}</small></button><span id="tactical-reason-${esc(action.id)}" class="tactical-reason" data-tactical-reason="${esc(action.id)}">${esc(action.reason)}</span></div>`).join(''); return `<section class="tactical-rail command-rail entropy-${esc(t.entropyBand.id)}${focusClass(vm, '.command-rail')}" aria-label="${esc(copy.tacticalActionsAria)}"><div class="rail-head"><span class="panel-kicker">${esc(copy.tacticalActions)}</span><span class="rail-keys">${esc(copy.keys)} ${keys}</span></div>${explainNote('command_rail', vm.explain)}<div class="control-line"><strong>${esc(copy.controlCapacity)}</strong><div class="control-pips" aria-label="${esc(fill(copy.controlAvailable, { available: t.controlCapacity, max: t.controlMax }))}">${pips}<b data-live="control-value">${t.controlCapacity}/${t.controlMax}</b></div></div><div class="tactical-actions">${actions}</div>${speedRow(vm)}<p class="tactical-failure" aria-live="polite" data-live="tactical-failure">${esc(vm.lastActionFailure)}</p></section>`; };
     const pressureRail = (vm) => {
@@ -268,15 +303,12 @@ export function createGameUI(engine, world) {
             return '';
         const c = vm.civilization;
         const copy = text().ui.app;
-        const collapse = c && (c.stats.stability < 25 || t.entropy >= 100) ? `<div class="collapse-warning">${esc(copy.collapseWarning)}</div>` : '';
-        // Containment, pressure and rate are three numbers inside one sentence, and the sentence has the
-        // live hooks in it -- so the template is filled with the marked-up spans rather than plain values.
         const readout = fill(copy.containmentPressureRate, {
             containment: `<b>${t.containmentRating}</b>`,
             pressure: `<b data-live="pressure-multiplier">×${t.pressureMultiplier.toFixed(2)}</b>`,
             rate: `<b data-live="entropy-rate">${t.entropyRate.toFixed(2)}</b>`,
         });
-        return `<section class="tactical-rail pressure-rail entropy-${esc(t.entropyBand.id)}${focusClass(vm, '.pressure-rail')}" aria-label="${esc(copy.pressureHarvestAria)}"><div class="rail-head"><span class="panel-kicker">${esc(copy.pressureHarvest)}</span></div>${explainNote('pressure_rail', vm.explain)}<div class="entropy-readout"><span>${esc(text().ui.viewModel.metrics.entropy.toUpperCase())} // <b data-live="entropy-band">${esc(t.entropyBand.label)}</b></span><strong data-live="entropy-value">${t.entropy.toFixed(1)}</strong><div class="entropy-meter"><i data-live="entropy-meter" style="width:${pct(t.entropy)}"></i></div><small>${readout}</small><small class="cascade-eta">${fill(copy.cascadeCurrentCourse, { seconds: `<b data-live="cascade-eta">${t.secondsToCascade.toFixed(0)}s</b>` })}</small></div>${harvestReadout(vm)}${collapse}<section class="harvest-actions${focusClass(vm, '.harvest-actions')}"><button class="primary" data-action="harvest">${esc(copy.controlledHarvest)}</button><button class="danger" data-action="chaos">${esc(copy.forceChaoticHarvest)}</button><button class="ghost" data-action="abandon">${esc(copy.abandonWithoutReward)}</button></section></section>`;
+        return `<details class="panel tactical-rail pressure-rail entropy-${esc(t.entropyBand.id)}${focusClass(vm, '.pressure-rail')}" data-disclosure="pressure-details"${disclosureAttr('pressure-details')}><summary>${esc(copy.pressureHarvestDetails ?? copy.pressureHarvest)} <small data-live="pressure-summary">ENT ${t.entropy.toFixed(1)} · ${esc(t.entropyBand.label)} · CASCADE ${t.secondsToCascade.toFixed(0)}s</small></summary>${explainNote('pressure_rail', vm.explain)}<div class="entropy-readout"><span>${esc(text().ui.viewModel.metrics.entropy.toUpperCase())} // <b data-live="entropy-band">${esc(t.entropyBand.label)}</b></span><strong data-live="entropy-value">${t.entropy.toFixed(1)}</strong><div class="entropy-meter"><i data-live="entropy-meter" style="width:${pct(t.entropy)}"></i></div><small>${readout}</small><small class="cascade-eta">${fill(copy.cascadeCurrentCourse, { seconds: `<b data-live="cascade-eta">${t.secondsToCascade.toFixed(0)}s</b>` })}</small></div>${harvestReadout(vm)}</details>`;
     };
     function renderCivilization(vm) {
         const c = vm.civilization;
@@ -290,23 +322,28 @@ export function createGameUI(engine, world) {
         // The depth is a live value, so the sentence around it is filled with the marked-up span.
         const depthSpan = `<b data-live="convergence-depth">${vm.harvest.depth.toFixed(1)}</b>`;
         const terminalBanner = c.terminal ? `<section class="panel terminal-banner ${vm.harvest.convergenceReady ? 'ready' : ''}"><div class="panel-kicker">${esc(t.terminalCultivation)}</div><b>${esc(fill(t.convergenceTargetDepth, { depth: vm.convergence.targetDepth.toFixed(1) }))}</b><span>${fill(vm.harvest.convergenceReady ? t.currentDepthReady : t.currentDepthInsufficient, { depth: depthSpan })}</span></section>` : '';
-        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? fill(t.dominantPath, { path: `<b>${esc(path.dominantName)}</b>` }) : boldAfterColon(t.unresolvedPath)}</div><div class="world-state-strip${focusClass(vm, '.world-state-strip')}"><span title="${esc(abbreviationTitle('ERA'))}">ERA <b data-live="world-era">${esc(eraLabel(c.era))}</b></span><span title="${esc(abbreviationTitle('DEV'))}">DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('STB'))}">STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('SAN'))}">SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('AWR'))}">AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ATT'))}">ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ENT'))}">ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="world-mobile-strip urgency-${esc(vm.harvest.urgency.state)}"><span>${esc(t.cascade)} <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div><div class="swipe-hint">${esc(t.dragSwipeExplore)}</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="${esc(t.panLeft)}">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="${esc(t.panRight)}">›</button>`);
-        const eventCard = event ? `<section class="panel intervention${focusClass(vm, '.intervention')}"><div class="panel-kicker">${esc(event.probed ? t.currentInterventionProbed : t.currentIntervention)}</div><h2>${esc(event.title)}</h2>${explainNote('intervention', vm.explain)}<p class="event-body">${esc(event.body)}</p>${event.predictionLocked ? `<div class="prediction-lock">${esc(t.predictionCoreOffline)}</div>` : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? `<button class="ghost" data-action="reroll">${esc(t.rerollWithParadox)}</button>` : ''}</section>` : `<section class="panel intervention quiet${focusClass(vm, '.intervention')}"><div class="panel-kicker">${esc(t.currentIntervention)}</div><h2>${esc(t.monitoringCivilization)}</h2>${explainNote('intervention', vm.explain)}<p data-live="event-timer">${esc(fill(t.nextInterventionWindow, { seconds: Math.max(0, c.eventTimer).toFixed(1) }))}</p></section>`;
+        replaceIfChanged(worldHud, `<div class="world-chip"><span>${esc(c.faction.name)}</span><b>${esc(c.species.name)}</b></div><div class="world-chip path-chip">${path.dominantName ? fill(t.dominantPath, { path: `<b>${esc(path.dominantName)}</b>` }) : boldAfterColon(t.unresolvedPath)}</div><button class="world-arrow left" data-action="pan" data-dir="-1" aria-label="${esc(t.panLeft)}">‹</button><button class="world-arrow right" data-action="pan" data-dir="1" aria-label="${esc(t.panRight)}">›</button>`);
+        if (worldStatusDock) {
+            replaceIfChanged(worldStatusDock, `<div class="world-status-strip${focusClass(vm, '.world-status-strip')}"><div class="status-group"><span title="${esc(abbreviationTitle('ERA'))}">ERA <b data-live="world-era">${esc(eraLabel(c.era))}</b></span><span title="${esc(abbreviationTitle('DEV'))}">DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('STB'))}">STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('SAN'))}">SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span></div><div class="status-group"><span title="${esc(abbreviationTitle('AWR'))}">AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ATT'))}">ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ENT'))}">ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="status-group cascade-group urgency-${esc(vm.harvest.urgency.state)}"><span>CASCADE <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div></div>`);
+        }
+        const eventCard = event ? `<section class="panel intervention situation-card situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm, '.intervention')}" role="status" aria-live="polite"><div class="panel-kicker">${esc(t.situationHeading)} // ${esc(event.probed ? t.currentInterventionProbed : t.currentIntervention)}</div><h2>${esc(event.title)}</h2><details data-disclosure="situation-details"${disclosureAttr('situation-details')}><summary>${esc(t.situationDetailsSummary)}</summary><p class="event-body">${esc(event.body)}</p><div class="situation-cause-advice"><p class="situation-cause"><span>${esc(t.why)}</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>${esc(t.do)}</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p></div>${explainNote('intervention', vm.explain)}</details>${event.predictionLocked ? `<div class="prediction-lock">${esc(t.predictionCoreOffline)}</div>` : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? `<button class="ghost" data-action="reroll">${esc(t.rerollWithParadox)}</button>` : ''}</section>` : `<section class="panel intervention quiet${focusClass(vm, '.intervention')}"><div class="panel-kicker">${esc(t.currentIntervention)}</div><h2>${esc(t.monitoringCivilization)}</h2>${explainNote('intervention', vm.explain)}<p data-live="event-timer">${esc(fill(t.nextInterventionWindow, { seconds: Math.max(0, c.eventTimer).toFixed(1) }))}</p></section>`;
         const tendencies = path.tendencies.length ? path.tendencies.map((entry) => `<li><b>${esc(entry.name)}</b><span>${esc(entry.label)}</span></li>`).join('') : `<li><span>${esc(t.noCoherentTendency)}</span></li>`;
-        const objectiveCard = vm.directiveObjective ? card(esc(t.directiveObjectiveTitle), `${explainNote('objective', vm.explain)}<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${esc(vm.directiveObjective.completed ? t.directiveObjectiveComplete : t.directiveObjectiveActive)}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>${esc(t.objectiveBonus)}</small></div>`, 'directive-objective') : '';
-        const reserveCard = vm.machineReserve.length ? card(esc(t.machineReserve), `${explainNote('reserve', vm.explain)}<p class="panel-note">${esc(t.machineReserveDescription)}</p><div class="reserve-actions">${vm.machineReserve.map((entry) => `<div class="tactical-action-wrap"><button data-action="reserve" data-id="${esc(entry.id)}" aria-describedby="reserve-reason-${esc(entry.id)}" ${entry.enabled ? '' : 'disabled'}><span>${esc(entry.title)}</span><b>${esc(entry.summary)}</b><small data-reserve-cost="${esc(entry.id)}">${esc(reserveCostText(entry))}</small></button><span id="reserve-reason-${esc(entry.id)}" class="tactical-reason" data-reserve-reason="${esc(entry.id)}">${esc(entry.reason)}</span></div>`).join('')}</div>`, 'machine-reserve') : '';
-        // Order is the point: what the run asks of the player right now sits directly under the world it
-        // is asking about, the two rails that answer "what do I spend" and "when do I stop" come next,
-        // then the run's own context, and only then the reference material.
+        const objectiveCard = vm.directiveObjective ? `<details class="panel directive-objective" data-disclosure="directive-objective"${disclosureAttr('directive-objective')}><summary>${esc(t.directiveObjectiveTitle)} <small>${esc(vm.directiveObjective.completed ? t.directiveObjectiveComplete : t.directiveObjectiveActive)}</small></summary>${explainNote('objective', vm.explain)}<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${esc(vm.directiveObjective.completed ? t.directiveObjectiveComplete : t.directiveObjectiveActive)}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>${esc(t.objectiveBonus)}</small></div></details>` : '';
+        const reserveCard = vm.machineReserve.length ? `<details class="panel machine-reserve" data-disclosure="machine-reserve"${disclosureAttr('machine-reserve')}><summary>${esc(t.machineReserve)} <small>${vm.machineReserve.length} ${esc(t.optionsCount ?? 'options')}</small></summary>${explainNote('reserve', vm.explain)}<p class="panel-note">${esc(t.machineReserveDescription)}</p><div class="reserve-actions">${vm.machineReserve.map((entry) => `<div class="tactical-action-wrap"><button data-action="reserve" data-id="${esc(entry.id)}" aria-describedby="reserve-reason-${esc(entry.id)}" ${entry.enabled ? '' : 'disabled'}><span>${esc(entry.title)}</span><b>${esc(entry.summary)}</b><small data-reserve-cost="${esc(entry.id)}">${esc(reserveCostText(entry))}</small></button><span id="reserve-reason-${esc(entry.id)}" class="tactical-reason" data-reserve-reason="${esc(entry.id)}">${esc(entry.reason)}</span></div>`).join('')}</div></details>` : '';
         replaceIfChanged(civPanels, `${explainNote('world', vm.explain)}${abbreviationLegend(vm.explain)}${situationBanner(vm)}${terminalBanner}${eventCard}${decisionFeedback(vm.feedback, focusClass(vm, '.decision-feedback'), vm.explain)}
-      <div class="run-controls">${commandRail(vm)}${pressureRail(vm)}</div>
+      ${harvestActionSurface(vm)}
+      <div class="run-controls">${commandRail(vm)}</div>
+      ${pressureRail(vm)}
       ${objectiveCard}${reserveCard}
-      ${card(esc(t.strategicOverview), `${explainNote('strategic_overview', vm.explain)}<div class="stats-grid">${statBar(t.realityStability, c.stats.stability, c.stats.stabilityMax, 'stability')}${statBar(t.machineAwareness, c.stats.awareness, 100, 'awareness')}${statBar(t.collectiveSanity, c.stats.sanity, 100, 'sanity')}${statBar(t.cosmicAttention, c.stats.attention, 100, 'attention')}</div><div class="overview-line"><span>${esc(t.era)} <b data-live="era">${esc(eraLabel(c.era))}</b></span><span>${esc(t.year)} <b data-live="year">${fmt(c.years)}</b></span><span>${esc(t.development)} <b data-live="development">${c.development.toFixed(1)}</b></span></div><p class="cosmic-line">${esc(c.stats.attention > 65 ? t.externalObserversConverging : c.stats.awareness > 65 ? t.civilizationDangerouslyAware : t.cosmicObservationTolerable)}</p>`)}
-      <details><summary>${esc(t.speciesFactionDossier)}</summary>${card('', `<div class="tag-row">${c.traits.map((trait) => `<span>${esc(trait.name)}</span>`).join('')}</div><h4>${esc(t.emergingTendencies)}</h4><ul class="tendency-list">${tendencies}</ul>${c.institutions.length ? `<h4>${esc(t.institutions)}</h4><p>${c.institutions.map((id) => esc(institutionName(id) ?? id.replaceAll('_', ' '))).join(' · ')}</p>` : ''}`)}</details>
-      <details><summary>${esc(t.harvestYieldDetail)}</summary>${card('', `${explainNote('harvest_detail', vm.explain)}<p class="panel-note">${esc(t.harvestDetailDescription)}</p><div class="harvest-grid"><div><b>${esc(t.controlled)}</b>${CONTROLLED_KEYS.map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>${esc(t.chaotic)}</b>${CHAOTIC_KEYS.map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>${esc(t.chaoticAutomatic)}</small></div></div>`)}</details>
-      <details><summary>${esc(t.civilizationRecord)}</summary>${card('', `<ol class="history">${c.history.length ? c.history.map((h) => `<li>${esc(h)}</li>`).join('') : `<li>${esc(t.noRecordedHistoryYet)}</li>`}</ol>`)}</details>
-      <details><summary>${esc(t.civilizationIdentity)}</summary>${card('', `<p><b>${esc(c.species.name)}</b> · ${esc(c.species.bodyType)} · ${esc(c.species.culture)}</p><p>${esc(fill(t.visualMotif, { motif: c.species.motif }))}</p><p><b>${esc(c.faction.name)}</b><br>${esc(fill(t.doctrine, { doctrine: c.faction.doctrine }))}<br>${esc(fill(t.focus, { focus: c.faction.focus }))}</p>`)}</details>
-      <details><summary>${esc(t.eraProgression)}</summary>${card('', `<p>${esc(t.eraRanges)}</p><div class="era-track"><i style="width:${Math.min(100, c.years / 14000 * 100)}%"></i></div>`)}</details>`);
+      <details class="panel strategic-overview-panel" data-disclosure="strategic-overview"${disclosureAttr('strategic-overview')}><summary>${esc(t.strategicOverview)} <small data-live="overview-summary">STB ${c.stats.stability.toFixed(0)} · SAN ${c.stats.sanity.toFixed(0)}</small></summary>${explainNote('strategic_overview', vm.explain)}<div class="stats-grid">${statBar(t.realityStability, c.stats.stability, c.stats.stabilityMax, 'stability')}${statBar(t.machineAwareness, c.stats.awareness, 100, 'awareness')}${statBar(t.collectiveSanity, c.stats.sanity, 100, 'sanity')}${statBar(t.cosmicAttention, c.stats.attention, 100, 'attention')}</div><div class="overview-line"><span>${esc(t.era)} <b data-live="era">${esc(eraLabel(c.era))}</b></span><span>${esc(t.year)} <b data-live="year">${fmt(c.years)}</b></span><span>${esc(t.development)} <b data-live="development">${c.development.toFixed(1)}</b></span></div><p class="cosmic-line">${esc(c.stats.attention > 65 ? t.externalObserversConverging : c.stats.awareness > 65 ? t.civilizationDangerouslyAware : t.cosmicObservationTolerable)}</p></details>
+      <details class="records-intel-panel" data-disclosure="records-intel"${disclosureAttr('records-intel')}><summary>${esc(t.recordsAndIntelligence)}</summary>
+        <details data-disclosure="dossier"${disclosureAttr('dossier')}><summary>${esc(t.speciesFactionDossier)}</summary>${card('', `<div class="tag-row">${c.traits.map((trait) => `<span>${esc(trait.name)}</span>`).join('')}</div><h4>${esc(t.emergingTendencies)}</h4><ul class="tendency-list">${tendencies}</ul>${c.institutions.length ? `<h4>${esc(t.institutions)}</h4><p>${c.institutions.map((id) => esc(institutionName(id) ?? id.replaceAll('_', ' '))).join(' · ')}</p>` : ''}`)}</details>
+        <details data-disclosure="harvest-yield"${disclosureAttr('harvest-yield')}><summary>${esc(t.harvestYieldDetail)}</summary>${card('', `${explainNote('harvest_detail', vm.explain)}<p class="panel-note">${esc(t.harvestDetailDescription)}</p><div class="harvest-grid"><div><b>${esc(t.controlled)}</b>${CONTROLLED_KEYS.map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>${esc(t.chaotic)}</b>${CHAOTIC_KEYS.map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>${esc(t.chaoticAutomatic)}</small></div></div>`)}</details>
+        <details data-disclosure="civ-record"${disclosureAttr('civ-record')}><summary>${esc(t.civilizationRecord)}</summary>${card('', `<ol class="history">${c.history.length ? c.history.map((h) => `<li>${esc(h)}</li>`).join('') : `<li>${esc(t.noRecordedHistoryYet)}</li>`}</ol>`)}</details>
+        <details data-disclosure="civ-identity"${disclosureAttr('civ-identity')}><summary>${esc(t.civilizationIdentity)}</summary>${card('', `<p><b>${esc(c.species.name)}</b> · ${esc(c.species.bodyType)} · ${esc(c.species.culture)}</p><p>${esc(fill(t.visualMotif, { motif: c.species.motif }))}</p><p><b>${esc(c.faction.name)}</b><br>${esc(fill(t.doctrine, { doctrine: c.faction.doctrine }))}<br>${esc(fill(t.focus, { focus: c.faction.focus }))}</p>`)}</details>
+        <details data-disclosure="era-progression"${disclosureAttr('era-progression')}><summary>${esc(t.eraProgression)}</summary>${card('', `<p>${esc(t.eraRanges)}</p><div class="era-track"><i style="width:${Math.min(100, c.years / 14000 * 100)}%"></i></div>`)}</details>
+        <details data-disclosure="machine-record"${disclosureAttr('machine-record')}><summary>${esc(t.machineRecord)}</summary>${card('', `<ul id="machine-log-civ" role="log" aria-live="off">${vm.messages.length ? vm.messages.map((x) => `<li>${esc(x)}</li>`).join('') : `<li>${esc(t.machineRecordAwaitingActivity)}</li>`}</ul>`)}</details>
+      </details>`);
         if (vm.feedback && vm.feedback.sequence !== lastFeedbackSequence) {
             lastFeedbackSequence = vm.feedback.sequence;
             worldShell.classList.remove('decision-impact', 'tone-positive', 'tone-negative', 'tone-mixed');
@@ -322,7 +359,7 @@ export function createGameUI(engine, world) {
             return;
         const setText = (selector, value) => { const element = civPanels.querySelector(selector); if (element)
             element.textContent = value; };
-        const setWorldText = (selector, value) => { const element = worldHud.querySelector(selector); if (element)
+        const setWorldText = (selector, value) => { const element = (worldStatusDock ? worldStatusDock.querySelector(selector) : null) ?? worldHud.querySelector(selector); if (element)
             element.textContent = value; };
         setText('[data-live="event-timer"]', fill(text().ui.app.nextInterventionWindow, { seconds: Math.max(0, c.eventTimer).toFixed(1) }));
         setText('[data-live="era"]', eraLabel(c.era));
@@ -354,21 +391,25 @@ export function createGameUI(engine, world) {
         setWorldText('[data-live="world-entropy"]', vm.tactical.entropy.toFixed(0));
         setWorldText('[data-live="strip-cascade"]', `${vm.tactical.secondsToCascade.toFixed(0)}s`);
         setWorldText('[data-live="strip-call"]', urgencyShort(vm.harvest));
-        const strip = worldHud.querySelector('.world-mobile-strip');
-        if (strip)
+        const group = (worldStatusDock ? worldStatusDock.querySelector('.cascade-group') : null) ?? worldHud.querySelector('.world-mobile-strip');
+        if (group)
             for (const state of ['building', 'closing', 'harvest', 'cascading'])
-                strip.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
+                group.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
         setText('[data-live="entropy-value"]', vm.tactical.entropy.toFixed(1));
         setText('[data-live="entropy-band"]', vm.tactical.entropyBand.label);
         setText('[data-live="control-value"]', `${vm.tactical.controlCapacity}/${vm.tactical.controlMax}`);
         setText('[data-live="tactical-failure"]', vm.lastActionFailure);
+        setText('[data-live="pressure-summary"]', `ENT ${vm.tactical.entropy.toFixed(1)} · ${vm.tactical.entropyBand.label} · CASCADE ${vm.tactical.secondsToCascade.toFixed(0)}s`);
+        setText('[data-live="overview-summary"]', `STB ${c.stats.stability.toFixed(0)} · SAN ${c.stats.sanity.toFixed(0)}`);
+        setText('[data-live="harvest-grade-inline"]', gradeText(vm.harvest.controlled.grade));
+        setText('[data-live="depth-inline"]', vm.harvest.depth.toFixed(1));
         const entropyMeter = civPanels.querySelector('[data-live="entropy-meter"]');
         if (entropyMeter)
             entropyMeter.style.width = pct(vm.tactical.entropy);
         const harvestMeter = civPanels.querySelector('[data-live="harvest-meter"]');
         if (harvestMeter)
             harvestMeter.style.width = pct(vm.harvest.bandProgress);
-        setText('[data-live="harvest-call"]', urgencyText(vm.harvest));
+        civPanels.querySelectorAll('[data-live="harvest-call"]').forEach(el => { el.textContent = urgencyText(vm.harvest); });
         // The situation is selected in part by the harvest call, whose two sides move continuously, so
         // neither its id nor its severity may enter the structural key. Sentences and severity band are
         // both rewritten here instead, exactly like the readout below.

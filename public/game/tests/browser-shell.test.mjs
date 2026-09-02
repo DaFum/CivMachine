@@ -146,7 +146,7 @@ test('world surface is larger across desktop, portrait and landscape layouts', a
   assert.match(styles, /decision-impact/);
   assert.match(styles, /tone-positive/);
   assert.match(styles, /tone-negative/);
-  assert.match(mobile, /62dvh/);
+  assert.match(mobile, /42dvh/);
   assert.match(mobile, /74dvh/);
   assert.match(mobile, /orientation:\s*landscape\)[\s\S]{0,180}min-height:\s*360px/);
 });
@@ -160,11 +160,10 @@ test('tactical action rail exposes Entropy, Control, disabled reasons, and exact
   assert.match(app, /data-action="tactical"/);
   assert.match(app, /aria-describedby/);
   saysThrough(app, 'tacticalActions', 'TACTICAL ACTIONS');
-  // Both rails are rendered before the first accordion: what the run asks of the player is never
-  // behind a summary they have to open mid-run.
+  // Both primary action rails are rendered before secondary disclosures.
   const panels = app.slice(app.indexOf('replaceIfChanged(civPanels,'));
-  assert.ok(panels.indexOf('commandRail(vm)') < panels.indexOf('<details>'));
-  assert.ok(panels.indexOf('pressureRail(vm)') < panels.indexOf('<details>'));
+  assert.ok(panels.indexOf('harvestActionSurface(vm)') < panels.indexOf('commandRail(vm)'));
+  assert.ok(panels.indexOf('commandRail(vm)') < panels.indexOf('records-intel-panel'));
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /containmentRating/);
   assert.match(viewModel, /entropyBand/);
@@ -178,10 +177,10 @@ test('the tactical rail carries the harvest decision instead of a collapsed pane
   assert.match(app, /class="harvest-readout /);
   const rail = app.slice(app.indexOf('const pressureRail='), app.indexOf('function renderCivilization'));
   assert.match(rail, /harvestReadout\(vm\)/, 'the pressure rail must render the harvest readout');
-  // And the buttons that end the run sit in the same rail as the readout that says whether to press
-  // them, instead of at the bottom of the view behind every accordion.
-  assert.match(rail, /data-action="harvest"/);
-  assert.match(rail, /data-action="chaos"/);
+  // And the buttons that end the run sit in harvestActionSurface ahead of pressure details.
+  const harvestSurface = app.slice(app.indexOf('const harvestActionSurface='), app.indexOf('const commandRail='));
+  assert.match(harvestSurface, /data-action="harvest"/);
+  assert.match(harvestSurface, /data-action="chaos"/);
   const readout = app.slice(app.indexOf('const harvestReadout='), app.indexOf('const speedRow='));
   saysThrough(readout, 'harvestGrade', 'HARVEST GRADE');
   assert.match(readout, /data-live="depth"/);
@@ -214,15 +213,33 @@ test('the civilization view is ordered by what it asks of the player', async () 
   // The intervention is the one thing the run asks the player to answer, so it sits directly under
   // the world it is asking about -- ahead of every readout, control and accordion.
   assert.match(panels, /\$\{terminalBanner\}\$\{eventCard\}/);
-  assert.ok(at('${eventCard}') < at('run-controls'), 'the intervention comes before the rails');
-  assert.ok(at('run-controls') < at('t.strategicOverview'), 'the rails come before the run context');
-  assert.ok(at('t.strategicOverview') < at('<details>'), 'reference material comes last');
+  assert.ok(at('${eventCard}') < at('harvestActionSurface(vm)'), 'the intervention comes before harvest actions');
+  assert.ok(at('harvestActionSurface(vm)') < at('commandRail(vm)'), 'harvest actions come before tactical actions');
+  assert.ok(at('commandRail(vm)') < at('pressureRail(vm)'), 'tactical actions come before pressure details disclosure');
+  assert.ok(at('pressureRail(vm)') < at('records-intel-panel'), 'pressure details comes before reference disclosures');
 
   // Simulation speed is a pacing control used mid-run; it belongs with the actions, not behind an
   // accordion that was misleadingly called Intervention Control next to the actual interventions.
   assert.doesNotMatch(app, /Intervention Control/);
   const command = app.slice(app.indexOf('const commandRail='), app.indexOf('const pressureRail='));
   assert.match(command, /speedRow\(vm\)/);
+});
+
+test('mobile UI hierarchy features collapsible event details, high harvest actions, and closed disclosures by default', async () => {
+  const app = await readFile(new URL('../dist/ui/app.js', import.meta.url), 'utf8');
+  // Event details use native disclosure and choices sit outside it
+  assert.match(app, /data-disclosure="situation-details"/);
+  const eventSlice = app.slice(app.indexOf('const eventCard'), app.indexOf('const tendencies'));
+  assert.ok(eventSlice.indexOf('</details>') < eventSlice.indexOf('choice-list'), 'event choice buttons must be outside the situation details disclosure');
+
+  // Secondary information disclosures default to closed (using disclosureAttr)
+  assert.match(app, /data-disclosure="pressure-details"/);
+  assert.match(app, /data-disclosure="directive-objective"/);
+  assert.match(app, /data-disclosure="machine-reserve"/);
+  assert.match(app, /data-disclosure="strategic-overview"/);
+  assert.match(app, /data-disclosure="records-intel"/);
+  assert.match(app, /data-disclosure="machine-record"/);
+  assert.match(app, /openDisclosures/);
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {
@@ -488,4 +505,14 @@ test('reduced motion silences every decorative animation the shell adds', async 
     /@media\(prefers-reduced-motion:no-preference\) and \(min-width:761px\)\{\s*\.background-noise::after\{animation:silk-aurora/,
     'the ambient drift must be gated to pointer-width viewports',
   );
+});
+
+test('mobile UX consolidates decision surface and groups secondary records', async () => {
+  const app = await readFile(new URL('../dist/ui/app.js', import.meta.url), 'utf8');
+  assert.match(app, /class="records-intel-panel"/, 'secondary records must be grouped under a single disclosure container');
+  assert.match(app, /harvest-actions-secondary/, 'pressure harvest must structure chaotic and abandon actions under primary harvest');
+  assert.match(app, /situation-card/, 'intervention and situation must be consolidated');
+  // Ensure harvest actions are not duplicated in pressure rail
+  const pressureRail = app.slice(app.indexOf('const pressureRail'), app.indexOf('function renderCivilization'));
+  assert.doesNotMatch(pressureRail, /data-action="harvest"/, 'pressureRail must not duplicate harvest buttons');
 });

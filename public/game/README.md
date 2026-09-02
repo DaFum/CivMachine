@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.18.0
+# Reality Consumption Engine — App Edition v1.19.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,10 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.19.0 mobile UX & game-focus pass
+
+v1.19.0 improves CivMachine's mobile player experience with enlarged, readable typography, responsive single-line HUDs, a consolidated situation and decision surface, 1-column tactical actions with touch targets, enhanced settlement visibility, and grouped secondary records.
 
 ## v1.18.0 visual renderer release
 

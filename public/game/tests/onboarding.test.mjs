@@ -475,7 +475,7 @@ test('the field manual explains every term with what, where and why', () => {
 
 test('every abbreviation on the world strip is expanded somewhere the player can read it', async () => {
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
-  const strip = app.slice(app.indexOf('class="world-state-strip'), app.indexOf('world-mobile-strip'));
+  const strip = app.slice(app.indexOf('world-status-strip'), app.indexOf('const eventCard='));
   const abbreviations = [...strip.matchAll(/>([A-Z]{3}) <b/g)].map(match => match[1]);
   assert.ok(abbreviations.length >= 7, `only ${abbreviations.length} strip columns found`);
   for (const abbreviation of abbreviations) {
