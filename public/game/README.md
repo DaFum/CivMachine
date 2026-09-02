@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.21.0
+# Reality Consumption Engine — App Edition v1.22.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -53,7 +53,7 @@ npm test
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
 
-## v1.21.0 the civilization diorama
+## v1.22.0 the civilization diorama
 
 The world is still three stacked canvases of deterministic Canvas 2D, and it still draws the same
 state it always did. What changed is what that state looks like: the sky is a graded atmosphere with

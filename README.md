@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.21.0
+# Reality Consumption Engine — App Edition v1.22.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -25,7 +25,7 @@ ending run runs out of unseen ones.
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
 
-## v1.21.0 the civilization diorama
+## v1.22.0 the civilization diorama
 
 The world is still three stacked canvases of deterministic Canvas 2D, and it still draws the same
 state it always did. What changed is what that state looks like: the sky is a graded atmosphere with
