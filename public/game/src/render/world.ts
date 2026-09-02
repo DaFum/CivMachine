@@ -395,16 +395,19 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
   }
 
   for (const settlement of settlements) {
-    // The settlement footprint is the cheap first cut, but a wide settlement straddling the band edge
-    // still holds structures far outside it, so each structure is checked too. Its own width is the
-    // slack, which covers the annexes and crowns drawn around the anchor.
-    if (settlement.centerX - settlement.radius > view.to || settlement.centerX + settlement.radius < view.from) continue;
     // Light spill: the glow a settlement puts into the air above itself, painted behind its own
     // skyline and shaped by it -- it rises with the tallest structure instead of sitting on the
-    // ground as a patch of fog. Capped at SPILL_MAX_RADIUS, and culled by the glow's own extent
-    // rather than by the settlement footprint, whose radius reaches far past the band.
+    // ground as a patch of fog, and is capped at SPILL_MAX_RADIUS.
     const crown = settlementCrown(settlement, ground);
     const spillRadius = Math.min(SPILL_MAX_RADIUS, Math.max(50, crown * .8));
+    // The first cut has to be the *widest* thing this settlement paints, not its footprint. A tall
+    // settlement's glow reaches tens of pixels past its own radius, so a footprint-first guard drops
+    // that glow from a narrow strip redraw while a full redraw of the same slice paints it -- and the
+    // cached layer then differs from a full repaint until the next invalidation. Structures and the
+    // glow are still each checked by their own extent below; this only decides whether anything
+    // belonging to this settlement can reach the band at all.
+    const reach = Math.max(settlement.radius, spillRadius);
+    if (settlement.centerX - reach > view.to || settlement.centerX + reach < view.from) continue;
     if (stage > 0 && settlement.centerX + spillRadius >= view.from && settlement.centerX - spillRadius <= view.to) {
       const spillStrength = lightLevel * (settlement.settlementClass === 'camp' ? .3 : settlement.settlementClass === 'village' ? .5 : 1);
       surface.fillRadialGlow(settlement.centerX, ground - crown * .42, 0, spillRadius, [
@@ -421,6 +424,9 @@ function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: 
         fadeColor: mixColor(colors.skyHorizon, colors.haze, .4),
         fade: 1,
         lightLevel,
+        // The same light the spill, the lamps and the road reflections use, so a chimney and a
+        // launch pad belong to this settlement's night rather than to a palette of their own.
+        lightColor: colors.lightSpill,
       });
     }
     // A faction-colored plinth marks who holds the settlement even in the cached layer.

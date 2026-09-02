@@ -1160,3 +1160,53 @@ test('the animated layer is a pure function of the world and the clock', async (
   const other = await dynamicFrameAt(3132, 5000, false, 'det-c');
   assert.notDeepEqual(first, other, 'a different seed must draw a different world');
 });
+
+
+test('a strip redraw paints a settlement glow that reaches in from outside its own footprint', async () => {
+  // The bug this pins: the settlement loop culled by the footprint *before* checking the glow, and a
+  // tall settlement's light spill reaches tens of pixels past its own radius. A narrow strip whose
+  // band the glow overlaps but the footprint does not therefore dropped the glow, while a full redraw
+  // of the same slice painted it -- so the cached scenery layer disagreed with a full repaint until
+  // the next invalidation. Every settlement in this fixture has that gap, so the scenario is not
+  // hypothetical; it just never fell inside the windows the other equivalence tests compare.
+  const { worldSnapshot } = await import('../dist/render/world-model.js');
+  const { settlementLayout } = await import('../dist/render/settlements.js');
+  const { settlementCrown } = await import('../dist/render/structures.js');
+
+  const WIDTH = 900, HEIGHT = 520, SEED = 404, NUDGE = 12;
+  const civ = developedCivilization(SEED);
+  const snapshot = worldSnapshot(civ, WIDTH);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
+  const ground = HEIGHT * 0.78;
+
+  // Pick the settlement whose glow overhangs its footprint by the most, and place the viewport so
+  // that overhang is the only thing reaching the exposed strip.
+  const reach = settlements.map(settlement => {
+    const crown = settlementCrown(settlement, ground);
+    const spill = Math.min(190, Math.max(50, crown * 0.8));
+    return { settlement, spill, overhang: spill - settlement.radius };
+  }).sort((a, b) => b.overhang - a.overhang)[0];
+  assert.ok(reach.overhang > 20, `no settlement's glow overhangs its footprint (best ${reach.overhang.toFixed(0)}px)`);
+
+  // Screen x of the settlement centre must put its footprint clear of the strip band (the window plus
+  // the band's own slack) while the glow still reaches into the window.
+  const BAND_SLACK = 48;
+  const target = WIDTH + BAND_SLACK + reach.settlement.radius + (reach.overhang - BAND_SLACK) * 0.5;
+  const scroll = Math.round(Math.max(NUDGE, Math.min(snapshot.worldWidth - WIDTH, reach.settlement.centerX - target)));
+  const onScreen = reach.settlement.centerX - scroll;
+  assert.ok(onScreen - reach.settlement.radius > WIDTH + BAND_SLACK,
+    `the footprint still reaches the strip band: left edge at ${(onScreen - reach.settlement.radius).toFixed(0)}`);
+  assert.ok(onScreen - reach.spill <= WIDTH,
+    `the glow does not reach the viewport: left edge at ${(onScreen - reach.spill).toFixed(0)}`);
+
+  const viaStrip = await sceneryAfterDrags(SEED, [scroll - NUDGE, NUDGE], 'glow-strip');
+  const viaFull = await sceneryAfterDrags(SEED, [scroll], 'glow-reference');
+  const lip = WIDTH - NUDGE;
+  const exposed = calls => calls
+    .filter(call => call.to >= lip && call.from <= WIDTH)
+    .map(call => ({ name: call.name, from: Math.max(lip, call.from), to: Math.min(WIDTH, call.to) }));
+
+  assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the window');
+  assert.deepEqual(exposed(viaStrip), exposed(viaFull),
+    'the strip redraw dropped geometry reaching in from a settlement whose footprint sits outside the strip');
+});

@@ -132,6 +132,10 @@ export function drawConsequenceImpact(
   const rawCx = anchorWorldX - scroll;
   // Ensure the impulse is visible within the current viewport slice
   const cx = Math.max(80, Math.min(width - 80, rawCx));
+  // How far that clamp moved the anchor. Anything drawn from a world position rather than from `cx`
+  // has to move with it, or a partially visible settlement gets its glow pulled on screen while the
+  // geometry that belongs to it stays outside -- which is the opposite of what the clamp is for.
+  const clampShift = cx - rawCx;
   const groundY = height * 0.78;
 
   // The anchor's own geometry, so a consequence lands on the civilization rather than on the middle
@@ -192,7 +196,7 @@ export function drawConsequenceImpact(
       { offset: 1, color, alpha: 0 },
     ]);
     for (let i = 0; i < 6; i++) {
-      const x = plots ? (plots[i % plots.length]!.x - scroll) : cx + (i - 2.5) * Math.max(18, footprint * .3);
+      const x = plots ? (plots[i % plots.length]!.x - scroll + clampShift) : cx + (i - 2.5) * Math.max(18, footprint * .3);
       const rise = skyline * (.35 + (i % 3) * .22) * (impact.staticOnly ? .6 : .3 + progress * .7);
       // Scaffolding: a rising mast with a lit cap and the pad it stands on, so growth reads as
       // construction on a plot rather than as a line over the city.

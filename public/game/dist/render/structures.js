@@ -57,6 +57,7 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
     // Aerial perspective: the further back a plane sits, the more of the atmosphere is in front of it.
     const fade = LANE_FADE[lane] * (style.fade ?? 1);
     const lightLevel = Math.max(0, Math.min(1, style.lightLevel ?? .5));
+    const lightColor = style.lightColor ?? windowColor;
     const baseColor = mixColor(shade(bodyColor, LANE_SHADE[lane]), fadeColor, fade);
     const litColor = tint(baseColor, lane === 'front' ? .07 : .03);
     const darkColor = shade(baseColor, .44);
@@ -89,13 +90,16 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             for (let stack = 0; stack < 2; stack++) {
                 const stackX = left + width * (.24 + stack * .46);
                 surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(stackX, top, width * .16, height);
+                // Hotter than the rest of the city, but the same light: the shared colour pushed toward the
+                // red end rather than a warm hex of its own.
+                const heat = mixColor(lightColor, 0xff5a22, .35);
                 surface.fillRadialGlow(stackX + width * .08, top - height * .06, 0, width * .34, [
-                    { offset: 0, color: mixColor(0xff7744, windowColor, .3), alpha: .22 + lightLevel * .14 },
-                    { offset: 1, color: mixColor(0xff7744, windowColor, .3), alpha: 0 },
+                    { offset: 0, color: heat, alpha: .22 + lightLevel * .14 },
+                    { offset: 1, color: heat, alpha: 0 },
                 ]);
                 surface.fillStyle(0x8f9aa6, .08 * detail).fillCircle(stackX + width * .08 + width * .12, top - height * .18, width * .3);
             }
-            surface.fillStyle(mixColor(0xff7744, windowColor, .4), (.16 + lightLevel * .2) * detail).fillRect(left + width * .1, groundY - bodyHeight * .3, width * .5, bodyHeight * .1);
+            surface.fillStyle(mixColor(lightColor, 0xff5a22, .28), (.16 + lightLevel * .2) * detail).fillRect(left + width * .1, groundY - bodyHeight * .3, width * .5, bodyHeight * .1);
             break;
         }
         case 'temple': {
@@ -150,9 +154,12 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             surface.lineStyle(1.2, accent, .28).line(left + width * .1, groundY - apron, structure.x, top + height * .32);
             surface.lineStyle(1.2, accent, .28).line(left + width * 1.2, groundY - apron, structure.x, top + height * .32);
             surface.fillStyle(accent, .26).fillTriangle(structure.x - width * .18, top, structure.x, top - height * .3, structure.x + width * .18, top);
+            // Pad floods: the city's own light with a touch of the path's accent in it, never a yellow of
+            // its own -- a spaceport lit differently from the street below it reads as a separate world.
+            const pad = mixColor(lightColor, accent, .3);
             surface.fillRadialGlow(structure.x, groundY - apron * .4, 0, width * .8, [
-                { offset: 0, color: mixColor(0xffd9a0, accent, .3), alpha: .3 + lightLevel * .22 },
-                { offset: 1, color: mixColor(0xffd9a0, accent, .3), alpha: 0 },
+                { offset: 0, color: pad, alpha: .3 + lightLevel * .22 },
+                { offset: 1, color: pad, alpha: 0 },
             ]);
             break;
         }

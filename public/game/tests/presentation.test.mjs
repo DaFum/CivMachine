@@ -1516,3 +1516,73 @@ test('a consequence is shaped by the settlement it happens to, not by the middle
   };
   assert.ok(ringY(tallSkyline) < ringY(shortSkyline), 'a taller settlement carries its consequence higher');
 });
+
+
+test('every light a structure emits comes from the world\'s shared light colour', async () => {
+  // The rule this pins lives in render/AGENTS.md: window glow, street lamps, road reflections and a
+  // settlement's glow in the air all share `colors.lightSpill`, so a chimney's heat and a launch
+  // pad's floods must be derived from it too. A hard-coded warm hex here is a building lit by a
+  // different night from the street it stands on, and it drifts further with every palette change.
+  const emissive = (kind, lightColor) => {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 'x', x: 200, width: 40, height: 120, kind, level: 4, depthLane: 'mid' },
+      400, 0x182b39, 0x6fe7e1, 0xf2cd7b, 7, { lightLevel: .8, lightColor });
+    // Every colour the structure emits as light: radial-glow stops plus filled emissive panels.
+    const colors = [];
+    for (const [name, ...args] of calls) {
+      if (name === 'fillRadialGlow') for (const stop of args[4]) colors.push(stop.color);
+      if (name === 'fillStyle') colors.push(args[0]);
+    }
+    return colors;
+  };
+
+  for (const kind of ['industry', 'spaceport']) {
+    const warm = emissive(kind, 0xffb457);
+    const cold = emissive(kind, 0x66ccff);
+    assert.ok(warm.length > 0, `${kind} emitted no light at all`);
+    assert.equal(warm.length, cold.length, `${kind} changed its geometry with the light colour`);
+    assert.notDeepEqual(warm, cold, `${kind} ignores the world's light colour: its emission is hard-coded`);
+    // And specifically: no channel of the emission may be a constant the palette cannot move.
+    const moved = warm.filter((color, i) => color !== cold[i]).length;
+    assert.ok(moved >= 2, `${kind} moved only ${moved} colour(s) with the shared light`);
+  }
+
+  // And the wiring, not only the capability: the settlement layer must actually hand the shared
+  // light down, or every structure quietly falls back to the window colour.
+  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
+  assert.match(world, /lightColor:\s*colors\.lightSpill/, 'the settlement layer must pass the shared light to drawStructure');
+
+  // Path-identity energy is deliberately *not* the city's light: a reactor core and a temple crown
+  // follow the accent, so they stay the dominant path's colour whatever the street lamps do.
+  const reactorWarm = emissive('reactor', 0xffb457);
+  const reactorCold = emissive('reactor', 0x66ccff);
+  assert.deepEqual(reactorWarm, reactorCold, 'a reactor core is identity energy and must follow the accent');
+});
+
+test('a consequence clamped into view brings the geometry it belongs to with it', () => {
+  const calls = [];
+  const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
+  const WIDTH = 900, HEIGHT = 520;
+  const feedback = { sequence: 5, eventId: 'growth:urban', tone: 'positive', consequence: { significance: 'turning_point', tags: ['urban_growth'], signatureProfile: 'growth' } };
+  // A settlement well past the right edge of the viewport: the impact clamps on screen so the player
+  // still sees it, and the scaffolds standing on that settlement's plots have to travel with it.
+  const far = { centerX: 2000, radius: 140, structures: [{ x: 1930, width: 20, height: 160 }, { x: 2070, width: 20, height: 120 }] };
+  drawConsequenceImpact(surface, feedback, 100, 200, WIDTH, HEIGHT, 0x6fe7e1, false, 0, 3600, [far]);
+
+  const glow = calls.find(([name]) => name === 'fillRadialGlow');
+  assert.ok(glow, 'growth must paint its light field');
+  const anchorX = glow[1];
+  assert.ok(anchorX >= 0 && anchorX <= WIDTH, `the clamped anchor left the viewport at ${anchorX}`);
+
+  const scaffolds = calls.filter(([name]) => name === 'line').map(([, x1]) => x1);
+  assert.ok(scaffolds.length > 0, 'growth must raise scaffolding');
+  for (const x of scaffolds) {
+    assert.ok(Number.isFinite(x), 'a scaffold got a non-finite position');
+    assert.ok(x >= 0 && x <= WIDTH, `a scaffold stayed off screen at ${x} while the anchor was clamped to ${anchorX}`);
+  }
+  // Still standing on real plots relative to each other -- the clamp translates them, it does not
+  // collapse them onto the anchor.
+  const spread = Math.max(...scaffolds) - Math.min(...scaffolds);
+  assert.ok(spread > 60, `the plots collapsed onto the anchor: spread ${spread}`);
+  assert.ok(Math.abs((Math.min(...scaffolds) + Math.max(...scaffolds)) / 2 - anchorX) < 120, 'the scaffolds and the light field parted company');
+});
