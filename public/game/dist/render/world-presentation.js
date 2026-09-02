@@ -68,7 +68,7 @@ export function worldPresentation(civ) {
             settlement: mix(mix(0x16283a, accent, .1 + awareness * .1), 0x5e261a, entropy * .16),
             window: mix(mix(0xf2cd7b, accent, attention * .36), 0xff6f43, entropy * .22),
             // Light leaving the city: warmer and weaker than a window, and the colour the settlement glow,
-            // the street lamps and the road reflections all share, so the lighting reads as one system.
+            // the streetlamps and the road reflections all share, so the lighting reads as one system.
             lightSpill: mix(mix(0xffb457, accent, .3 + attention * .2), 0xff5a2a, entropy * .45),
             haze: mix(mix(0x5ca9bc, accent, .35), 0xd65432, entropy * .55),
             // Entropy's own light: embers over the world when reality is failing, unused below its band.

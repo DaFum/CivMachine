@@ -40,7 +40,7 @@ silhouette: farms lie along the ground, industry keeps a heavy low mass under it
 the civic and residential structures compete for height.
 
 **The city has its own light.** Windows wake and sleep on per-structure phases interpolated through a
-slow cycle, so no two buildings are in step and none of them blinks; street lamps follow the roads
+slow cycle, so no two buildings are in step and none of them blinks; streetlamps follow the roads
 where a settlement is actually near; and a settlement puts a glow into the air shaped by the skyline
 that emits it. Development is visible as light.
 

@@ -3,6 +3,12 @@ import { factionRoster } from './factions.js';
 import { structureKindsForEra } from './structures.js';
 import { worldWidthMultiplier } from './world-model.js';
 export const CLASS_ORDER = ['camp', 'village', 'town', 'city', 'metropolis', 'arcology'];
+/**
+ * How far a settlement centre may drift from its nominal slot, as a fraction of the world. Named
+ * because the radius cap has to subtract it: the jitter is applied independently per settlement, so
+ * two neighbours can each drift half of it toward the other and close their gap by the whole amount.
+ */
+export const CENTER_JITTER = .035;
 export function depthLaneYOffset(lane) {
     if (lane === 'back')
         return -8;
@@ -151,12 +157,19 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
         const rank = CLASS_ORDER.indexOf(settlementClass);
         // Settlements reach nearer the world edges than they used to: at full scroll the last quarter of
         // a stage-4 world was empty ground, because nothing was ever placed past 94% of its width.
-        const centerX = Math.max(0, Math.min(worldWidth, worldWidth * (.045 + (index + .5) / sizes.length * .915) + (hash01(civ.seed * 11 + index * 23) - .5) * worldWidth * .035));
+        const centerX = Math.max(0, Math.min(worldWidth, worldWidth * (.045 + (index + .5) / sizes.length * .915) + (hash01(civ.seed * 11 + index * 23) - .5) * worldWidth * CENTER_JITTER));
         // Bounded by the room a settlement actually has. Without the slot term nine settlements on a
         // phone-sized world each claimed a radius wider than the gap to their neighbour, and the whole
         // world became one continuous wall of buildings with no gaps, no outskirts and no silhouette.
+        //
+        // Measured against the *worst-case* gap rather than the nominal slot. Each centre carries its own
+        // jitter of +/- worldWidth * .0175, so two neighbours can drift toward each other and close the
+        // gap by worldWidth * .035 -- and two radii capped at .46 of the nominal slot then overlap by a
+        // third of their own width. Measured before this: 1.34x on a 390 px world at nine settlements,
+        // which is the exact case the cap was added for.
         const slot = worldWidth * .915 / sizes.length;
-        const radius = Math.max(24, Math.min(worldWidth * .18, slot * .46, 20 + count * (7 + stage * 2.6)));
+        const worstGap = Math.max(0, slot - worldWidth * CENTER_JITTER);
+        const radius = Math.max(24, Math.min(worldWidth * .18, worstGap * .46, 20 + count * (7 + stage * 2.6)));
         const structures = [];
         const plots = districtPlots(count, rank, civ.seed * 3 + index * 29);
         for (let i = 0; i < count; i++) {

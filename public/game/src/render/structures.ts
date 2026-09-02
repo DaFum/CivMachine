@@ -1,6 +1,6 @@
 import type { DrawSurface } from './draw-surface.js';
 import { hash01, mixColor, shade, tint, type FactionSigil } from './primitives.js';
-import { structureEffectiveGround, type Settlement, type Structure, type StructureKind } from './settlements.js';
+import { structureEffectiveGround, type DepthLane, type Settlement, type Structure, type StructureKind } from './settlements.js';
 
 export const BANNER_CLEARANCE = 34;
 export const BANNER_POLE_MIN = 16;
@@ -38,15 +38,18 @@ export function structureKindsForEra(era: number, stage: number): StructureKind[
  * plane fades *into* -- the haze the caller already resolved -- `lightLevel` is how lit the
  * civilization is, and `lightColor` is the one colour everything the civilization emits shares, so a
  * chimney's heat and a launch pad's floods belong to the same night as the settlement glow, the
- * street lamps and the road reflections. All optional, so the drawing stays callable with nothing but
+ * streetlamps and the road reflections. All optional, so the drawing stays callable with nothing but
  * a palette; `lightColor` then falls back to the window colour, which is the nearest light the caller
  * did hand over. Path-identity energy -- a reactor core, a temple's crown, an orbital tether -- keeps
  * `accent` instead: that is identity, not the city's light.
  */
 export interface StructureStyle { fadeColor?: number; fade?: number; lightLevel?: number; lightColor?: number; }
 
-const LANE_FADE: Record<string, number> = { back: .38, mid: .15, front: .04 };
-const LANE_SHADE: Record<string, number> = { back: .3, mid: .12, front: 0 };
+// Keyed by the union rather than by `string`: the compiler then proves both tables cover every lane,
+// and the lookups need no assertion. A lane outside the union would otherwise read `undefined`, turn
+// every colour derived from it into NaN, and make the canvas drop the fills with no error at all.
+const LANE_FADE: Record<DepthLane, number> = { back: .38, mid: .15, front: .04 };
+const LANE_SHADE: Record<DepthLane, number> = { back: .3, mid: .12, front: 0 };
 // One light direction for the whole world: the sky is brightest at the horizon behind the city, so
 // every solid is lit on its left face and turns away into shadow on its right.
 const SIDE_SPLIT = .72;
@@ -69,10 +72,10 @@ export function drawStructure(surface: DrawSurface, structure: Structure, baseGr
   const groundY = structureEffectiveGround(baseGroundY, lane);
   const fadeColor = style.fadeColor ?? 0x1b2c3d;
   // Aerial perspective: the further back a plane sits, the more of the atmosphere is in front of it.
-  const fade = LANE_FADE[lane]! * (style.fade ?? 1);
+  const fade = LANE_FADE[lane] * (style.fade ?? 1);
   const lightLevel = Math.max(0, Math.min(1, style.lightLevel ?? .5));
   const lightColor = style.lightColor ?? windowColor;
-  const baseColor = mixColor(shade(bodyColor, LANE_SHADE[lane]!), fadeColor, fade);
+  const baseColor = mixColor(shade(bodyColor, LANE_SHADE[lane]), fadeColor, fade);
   const litColor = tint(baseColor, lane === 'front' ? .07 : .03);
   const darkColor = shade(baseColor, .44);
   const roofColor = mixColor(tint(baseColor, .3), accent, .25);

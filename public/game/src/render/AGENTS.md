@@ -51,7 +51,7 @@ keep the 30 FPS interval.
 ## Light is one system
 
 `presentation.colors.lightSpill` is the colour everything the civilization emits shares — window
-glow, street lamps, road reflections, the settlement's glow in the air — and `presentation.lightLevel`
+glow, streetlamps, road reflections, the settlement's glow in the air — and `presentation.lightLevel`
 is how lit the world is. A new light source reads from those rather than picking its own warm yellow,
 which is what keeps a settlement looking like one place. State that must stay legible (fractures,
 beacons, scars, impacts) keeps its own role colour and is never dimmed by the light level.

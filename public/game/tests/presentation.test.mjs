@@ -16,7 +16,7 @@ import { settlementSizes, settlementClassFor, settlementClassSignature, settleme
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
-import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
+import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS, SMOOTH_FRAME_COST_BUDGET_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
 import { worldMemorySignature } from '../dist/render/world-memory.js';
 import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
@@ -1374,6 +1374,12 @@ test('frame pacing keeps 30 FPS as the floor and earns more only from measured c
   assert.ok(DYNAMIC_FRAME_MS_SMOOTH < 1000 / 60, `${DYNAMIC_FRAME_MS_SMOOTH} ms cannot exceed 30 FPS on a 60 Hz display`);
   // A frame that costs real time, or any degraded tier, is held to 30 FPS.
   assert.equal(dynamicFrameIntervalMs(0, 12, false), DYNAMIC_FRAME_MS);
+  // The budget itself, pinned at its boundary: a cost just under it earns the smoother interval and
+  // one at it does not. Behaviour rather than a source literal, so a renamed constant still counts
+  // and a moved threshold still fails.
+  assert.equal(dynamicFrameIntervalMs(0, SMOOTH_FRAME_COST_BUDGET_MS - .1, false), DYNAMIC_FRAME_MS_SMOOTH);
+  assert.equal(dynamicFrameIntervalMs(0, SMOOTH_FRAME_COST_BUDGET_MS, false), DYNAMIC_FRAME_MS);
+  assert.ok(SMOOTH_FRAME_COST_BUDGET_MS < DYNAMIC_FRAME_MS_SMOOTH, 'the budget must leave headroom inside one frame');
   for (const tier of [1, 2, 3]) assert.equal(dynamicFrameIntervalMs(tier, 1, false), DYNAMIC_FRAME_MS);
 });
 
@@ -1476,10 +1482,17 @@ test('a portrait viewport keeps its sky: the skyline is budgeted from the aspect
   assert.ok(desktopCrown / 800 > portraitCrown / 844, 'a desktop viewport may spend more of its height on skyline');
 
   // And settlements keep room between them however narrow the world gets, or the whole world becomes
-  // one unbroken wall of buildings.
-  for (let i = 1; i < portrait.length; i++) {
-    const gap = portrait[i].centerX - portrait[i - 1].centerX;
-    assert.ok(portrait[i].radius + portrait[i - 1].radius < gap * 1.15, `settlements ${i - 1} and ${i} overlap completely`);
+  // one unbroken wall of buildings. Strict, with no tolerance: the radius cap subtracts the centre
+  // jitter budget, so two neighbours that each drift toward the other still cannot touch. A 1.15
+  // tolerance here is what let a measured 1.34x overlap through on a 390px world.
+  for (const layout of [portrait, desktop]) {
+    for (let i = 1; i < layout.length; i++) {
+      const gap = layout[i].centerX - layout[i - 1].centerX;
+      const sum = layout[i].radius + layout[i - 1].radius;
+      // The 24 px floor is the one documented exception: on a world too narrow for it the floor wins.
+      if (layout[i].radius === 24 && layout[i - 1].radius === 24) continue;
+      assert.ok(sum <= gap, `settlements ${i - 1} and ${i} overlap: radii ${sum.toFixed(0)} across a ${gap.toFixed(0)}px gap`);
+    }
   }
 });
 
@@ -1547,10 +1560,9 @@ test('every light a structure emits comes from the world\'s shared light colour'
     assert.ok(moved >= 2, `${kind} moved only ${moved} colour(s) with the shared light`);
   }
 
-  // And the wiring, not only the capability: the settlement layer must actually hand the shared
-  // light down, or every structure quietly falls back to the window colour.
-  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /lightColor:\s*colors\.lightSpill/, 'the settlement layer must pass the shared light to drawStructure');
+  // The wiring -- that the settlement layer actually hands this light down -- is asserted through the
+  // compiled renderer in render-smoke.test.mjs, not by matching source text here: a text match would
+  // pass while dist still held the old call, which is the opposite of what these tests promise.
 
   // Path-identity energy is deliberately *not* the city's light: a reactor core and a temple crown
   // follow the accent, so they stay the dominant path's colour whatever the street lamps do.

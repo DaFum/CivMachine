@@ -31,6 +31,9 @@ export function structureKindsForEra(era, stage) {
         kinds.push('orbital_anchor');
     return kinds;
 }
+// Keyed by the union rather than by `string`: the compiler then proves both tables cover every lane,
+// and the lookups need no assertion. A lane outside the union would otherwise read `undefined`, turn
+// every colour derived from it into NaN, and make the canvas drop the fills with no error at all.
 const LANE_FADE = { back: .38, mid: .15, front: .04 };
 const LANE_SHADE = { back: .3, mid: .12, front: 0 };
 // One light direction for the whole world: the sky is brightest at the horizon behind the city, so

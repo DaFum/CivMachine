@@ -1172,25 +1172,32 @@ test('a strip redraw paints a settlement glow that reaches in from outside its o
   const { worldSnapshot } = await import('../dist/render/world-model.js');
   const { settlementLayout } = await import('../dist/render/settlements.js');
   const { settlementCrown } = await import('../dist/render/structures.js');
+  // The renderer's own constants, not copies of them: a duplicated 190 / .8 / .78 / 48 in here can
+  // stop matching the layer this test exists to pin, and the test would still pass.
+  const { GROUND_RATIO, SCENERY_SLACK, settlementSpillRadius } = await import('../dist/render/world.js');
 
   const WIDTH = 900, HEIGHT = 520, SEED = 404, NUDGE = 12;
   const civ = developedCivilization(SEED);
   const snapshot = worldSnapshot(civ, WIDTH);
   const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
-  const ground = HEIGHT * 0.78;
+  const ground = HEIGHT * GROUND_RATIO;
 
   // Pick the settlement whose glow overhangs its footprint by the most, and place the viewport so
   // that overhang is the only thing reaching the exposed strip.
   const reach = settlements.map(settlement => {
     const crown = settlementCrown(settlement, ground);
-    const spill = Math.min(190, Math.max(50, crown * 0.8));
+    const spill = settlementSpillRadius(crown);
     return { settlement, spill, overhang: spill - settlement.radius };
   }).sort((a, b) => b.overhang - a.overhang)[0];
-  assert.ok(reach.overhang > 20, `no settlement's glow overhangs its footprint (best ${reach.overhang.toFixed(0)}px)`);
+  // Guarded on the value the positioning below actually needs: the footprint has to clear the band's
+  // own slack, so an overhang under it would make the placement term negative and fail the
+  // precondition against perfectly correct code.
+  assert.ok(reach.overhang > SCENERY_SLACK,
+    `no settlement's glow overhangs its footprint past the band slack (best ${reach.overhang.toFixed(0)}px)`);
 
   // Screen x of the settlement centre must put its footprint clear of the strip band (the window plus
   // the band's own slack) while the glow still reaches into the window.
-  const BAND_SLACK = 48;
+  const BAND_SLACK = SCENERY_SLACK;
   const target = WIDTH + BAND_SLACK + reach.settlement.radius + (reach.overhang - BAND_SLACK) * 0.5;
   const scroll = Math.round(Math.max(NUDGE, Math.min(snapshot.worldWidth - WIDTH, reach.settlement.centerX - target)));
   const onScreen = reach.settlement.centerX - scroll;
@@ -1209,4 +1216,66 @@ test('a strip redraw paints a settlement glow that reaches in from outside its o
   assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the window');
   assert.deepEqual(exposed(viaStrip), exposed(viaFull),
     'the strip redraw dropped geometry reaching in from a settlement whose footprint sits outside the strip');
+});
+
+
+// One scenery paint, with the colours it emitted. `recordingContext` has no gradient factories, so
+// `fillRadialGlow` falls back to filling its first stop as a plain colour -- which is what makes the
+// light a structure emits observable as a string here.
+async function sceneryColorsFor(civ, tag) {
+  const calls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [recordingContext([]), recordingContext(calls), recordingContext([])];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? recordingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    controller.destroy();
+  });
+  return calls.filter(([name]) => name === 'fillStyle').map(([, value]) => value);
+}
+
+test('the settlement layer hands the world\'s shared light to every structure that emits', async () => {
+  // Asserted through the compiled renderer rather than by matching the source text: tests here import
+  // from ../dist/** precisely because a source edit is invisible until tsc runs, so a text match
+  // against ../src would report the wiring as correct while dist still held the old call. This drives
+  // the real layer and looks for the colour a chimney is supposed to emit.
+  const { worldPresentation } = await import('../dist/render/world-presentation.js');
+  const { mixColor } = await import('../dist/render/primitives.js');
+  const channel = value => `rgba(${value >> 16 & 0xff},${value >> 8 & 0xff},${value & 0xff},`;
+
+  // Two palettes, because one match could be a coincidence: the dominant path moves the accent, the
+  // accent moves `lightSpill`, and the heat a chimney emits has to move with it.
+  for (const path of ['machine_faith', 'void_communion']) {
+    const civ = developedCivilization(1717);
+    civ.pathState.affinity = Object.fromEntries(Object.keys(civ.pathState.affinity).map(id => [id, 0]));
+    civ.pathState.affinity[path] = 9;
+    civ.pathState.dominantPath = path;
+
+    const spill = worldPresentation(civ).colors.lightSpill;
+    const colors = await sceneryColorsFor(civ, `sharedlight-${path}`);
+    assert.ok(colors.length > 0, 'the settlement layer painted nothing');
+
+    // Industry's chimney heat and its facade panel are both the shared light pushed toward the red
+    // end. If `lightSpill` never reached drawStructure, these would be a fixed orange instead.
+    const heat = channel(mixColor(spill, 0xff5a22, .35));
+    const panel = channel(mixColor(spill, 0xff5a22, .28));
+    assert.ok(colors.some(color => color.startsWith(heat) || color.startsWith(panel)),
+      `no structure emitted the world's shared light for ${path}: expected ${heat} or ${panel}`);
+
+    // And the fixed hexes the review found must not come back.
+    for (const stale of [0xff7744, 0xffd9a0]) {
+      assert.ok(!colors.some(color => color.startsWith(channel(stale))),
+        `a structure emitted the hard-coded ${stale.toString(16)} instead of the shared light`);
+    }
+  }
 });
