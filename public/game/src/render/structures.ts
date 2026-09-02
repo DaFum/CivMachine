@@ -1,6 +1,6 @@
 import type { DrawSurface } from './draw-surface.js';
 import { hash01, mixColor, shade, tint, type FactionSigil } from './primitives.js';
-import { structureEffectiveGround, type Settlement, type Structure, type StructureKind } from './settlements.js';
+import { structureEffectiveGround, type DepthLane, type Settlement, type Structure, type StructureKind } from './settlements.js';
 
 export const BANNER_CLEARANCE = 34;
 export const BANNER_POLE_MIN = 16;
@@ -45,8 +45,8 @@ export function structureKindsForEra(era: number, stage: number): StructureKind[
  */
 export interface StructureStyle { fadeColor?: number; fade?: number; lightLevel?: number; lightColor?: number; }
 
-const LANE_FADE: Record<string, number> = { back: .38, mid: .15, front: .04 };
-const LANE_SHADE: Record<string, number> = { back: .3, mid: .12, front: 0 };
+const LANE_FADE: Record<DepthLane, number> = { back: .38, mid: .15, front: .04 };
+const LANE_SHADE: Record<DepthLane, number> = { back: .3, mid: .12, front: 0 };
 // One light direction for the whole world: the sky is brightest at the horizon behind the city, so
 // every solid is lit on its left face and turns away into shadow on its right.
 const SIDE_SPLIT = .72;
@@ -69,10 +69,10 @@ export function drawStructure(surface: DrawSurface, structure: Structure, baseGr
   const groundY = structureEffectiveGround(baseGroundY, lane);
   const fadeColor = style.fadeColor ?? 0x1b2c3d;
   // Aerial perspective: the further back a plane sits, the more of the atmosphere is in front of it.
-  const fade = LANE_FADE[lane]! * (style.fade ?? 1);
+  const fade = LANE_FADE[lane] * (style.fade ?? 1);
   const lightLevel = Math.max(0, Math.min(1, style.lightLevel ?? .5));
   const lightColor = style.lightColor ?? windowColor;
-  const baseColor = mixColor(shade(bodyColor, LANE_SHADE[lane]!), fadeColor, fade);
+  const baseColor = mixColor(shade(bodyColor, LANE_SHADE[lane]), fadeColor, fade);
   const litColor = tint(baseColor, lane === 'front' ? .07 : .03);
   const darkColor = shade(baseColor, .44);
   const roofColor = mixColor(tint(baseColor, .3), accent, .25);

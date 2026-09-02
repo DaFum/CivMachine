@@ -156,7 +156,7 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
         // phone-sized world each claimed a radius wider than the gap to their neighbour, and the whole
         // world became one continuous wall of buildings with no gaps, no outskirts and no silhouette.
         const slot = worldWidth * .915 / sizes.length;
-        const radius = Math.max(24, Math.min(worldWidth * .18, slot * .46, 20 + count * (7 + stage * 2.6)));
+        const radius = Math.max(24, Math.min(worldWidth * .18, Math.max(0, slot - worldWidth * .035) * .46, 20 + count * (7 + stage * 2.6)));
         const structures = [];
         const plots = districtPlots(count, rank, civ.seed * 3 + index * 29);
         for (let i = 0; i < count; i++) {
