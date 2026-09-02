@@ -1,6 +1,8 @@
 import { civilizationDramaPhase, dramaPhaseLabel } from './drama.js';
-import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, HARVEST_GRADE_LABELS } from './harvest-quality.js';
+import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from './harvest-quality.js';
 import { ventStabilityCost } from './tactical-actions.js';
+// The first band that pays a Cultivation Credit, and therefore the one a Premature run is short of.
+const ESTABLISHED_BAND = DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1];
 import { RESOURCE_KEYS } from './rules.js';
 import { eraName, fill, harvestGradeLabel, text } from '../data/i18n.js';
 // What a finished run says about itself. Two halves:
@@ -146,7 +148,13 @@ export function runLessons(civ, context, depth, credits) {
             ? fill(civ.eventChoices === 1 ? copy.prematureOneIntervention : copy.prematureManyInterventions, { eventChoices: civ.eventChoices })
             : civ.era <= 0
                 ? fill(copy.prematureEra, { era: context.eraNames[0] ?? eraName('emergence') ?? '' })
-                : fill(copy.prematureDepth, { depth: depth.toFixed(1) }));
+                : fill(copy.prematureDepth, {
+                    depth: depth.toFixed(1),
+                    // Read from the bands rather than written into the sentence: the boundary moved once
+                    // already, and a lesson that names a Depth the player cannot reach is worse than no lesson.
+                    established: ESTABLISHED_BAND.minDepth.toFixed(2),
+                    development: Math.ceil(ESTABLISHED_BAND.minDepth * DEPTH_DEVELOPMENT_SCALE),
+                }));
     }
     if (context.reason === 'stability_collapse') {
         // What the vents actually cost this run, not what the first one would have: the price escalates,

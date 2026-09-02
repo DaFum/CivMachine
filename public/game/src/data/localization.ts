@@ -830,7 +830,7 @@ const ENGLISH = {
         "prematureOneIntervention": "The run resolved {eventChoices} intervention. Three plus Expansion era is the floor a harvest has to clear before it pays any Cultivation Credits.",
         "prematureManyInterventions": "The run resolved {eventChoices} interventions. Three plus Expansion era is the floor a harvest has to clear before it pays any Cultivation Credits.",
         "prematureEra": "The run never left {era}. A payout needs Expansion, which is 2,500 years — Accelerate (2) buys 200 of them per use.",
-        "prematureDepth": "Cultivation Depth finished at {depth}; Established starts at 1.5, which is Development 120.",
+        "prematureDepth": "Cultivation Depth finished at {depth}; Established starts at {established}, which is Development {development}.",
         "stabilityCollapse": "Stability, not Entropy, ended this run — it hit zero with Entropy at {entropy}. Stabilize (1) is +14 for 2 Control, and this run spent {ventStability} Stability on {vents} Entropy Vents. Each vent costs more than the last, so the budget is finite: Containment is what makes it stretch.",
         "entropyCascade": "Entropy reached 100 and the cascade took the rest. Containment upgrades divide the rate permanently; Entropy Vent (4) only removes 18 at a time.",
         "unusedControlOneAction": "The run ended with {control} Control unspent after {actions} tactical action. Control does not carry over — an unspent charge is a discarded one.",
@@ -1215,7 +1215,7 @@ const ENGLISH = {
       "objectives": {
         "accelerated_development": {
           "title": "Compressed Maturity",
-          "description": "Reach Development 260 before harvest."
+          "description": "Reach Development 400 in the Transcendence era."
         },
         "cognitive_extraction": {
           "title": "Lucid Yield",
@@ -1223,7 +1223,7 @@ const ENGLISH = {
         },
         "stable_cultivation": {
           "title": "Untorn Harvest",
-          "description": "Harvest with at least 75 Stability and less than 75 Entropy."
+          "description": "Harvest with at least 80 Stability and less than 70 Entropy."
         },
         "paradox_prospecting": {
           "title": "Productive Contradiction",
@@ -5533,7 +5533,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
         "prematureOneIntervention": "Der Run löste {eventChoices} Intervention. Drei Interventionen plus Era Expansion sind die Mindestanforderung, bevor ein Harvest Cultivation Credits auszahlt.",
         "prematureManyInterventions": "Der Run löste {eventChoices} Interventionen. Drei Interventionen plus Era Expansion sind die Mindestanforderung, bevor ein Harvest Cultivation Credits auszahlt.",
         "prematureEra": "Der Run verließ {era} nicht. Eine Auszahlung benötigt Expansion bei 2.500 Jahren — Accelerate (2) liefert pro Nutzung 200 Jahre.",
-        "prematureDepth": "Cultivation Depth endete bei {depth}; Established beginnt bei 1,5 beziehungsweise Development 120.",
+        "prematureDepth": "Cultivation Depth endete bei {depth}; Established beginnt bei {established} beziehungsweise Development {development}.",
         "stabilityCollapse": "Stability, nicht Entropy, beendete diesen Run — sie erreichte bei Entropy {entropy} null. Stabilize (1) liefert +14 für 2 Control; dieser Run gab {ventStability} Stability für {vents} Entropy Vents aus. Jeder Vent kostet mehr als der vorige, das Budget ist also endlich — Containment ist das, was es streckt.",
         "entropyCascade": "Entropy erreichte 100 und die Cascade übernahm den Rest. Containment Upgrades reduzieren die Rate dauerhaft; Entropy Vent (4) entfernt jeweils nur 18.",
         "unusedControlOneAction": "Der Run endete mit {control} ungenutztem Control nach {actions} Tactical Action. Control wird nicht übertragen — ungenutzte Ladung geht verloren.",
@@ -5918,7 +5918,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "objectives": {
         "accelerated_development": {
           "title": "Compressed Maturity",
-          "description": "Development 260 vor dem Harvest erreichen."
+          "description": "Development 400 in der Era Transcendence erreichen."
         },
         "cognitive_extraction": {
           "title": "Lucid Yield",
@@ -5926,7 +5926,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
         },
         "stable_cultivation": {
           "title": "Untorn Harvest",
-          "description": "Mit mindestens 75 Stability und weniger als 75 Entropy harvesten."
+          "description": "Mit mindestens 80 Stability und weniger als 70 Entropy harvesten."
         },
         "paradox_prospecting": {
           "title": "Productive Contradiction",
