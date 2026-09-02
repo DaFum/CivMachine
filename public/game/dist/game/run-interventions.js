@@ -20,8 +20,10 @@ export function runInterventionUses(civ, id) {
     return Math.max(0, Number(civ.runInterventionUses[id] ?? 0));
 }
 // Spending banked resources to survive longer produces more resources, which is a positive feedback
-// loop. Escalation alone does not close it, because yield grows quadratically with depth, so the
-// price also rises with how deep the civilization already is.
+// loop. Escalation alone does not close it, so the price also rises with how deep the civilization
+// already is. The depth term predates v1.20.0, when yield really was quadratic in depth; the yield
+// curve is concave now, and the term is kept because the loop it closes is the spending one -- a deep
+// run has more banked to spend and more to gain by spending it -- not the yield one.
 export function runInterventionCost(definition, uses, depth) {
     const escalation = Math.pow(RUN_INTERVENTION_COST_GROWTH, Math.max(0, uses));
     const depthFactor = 1 + Math.max(0, depth) / RUN_INTERVENTION_DEPTH_SCALE;

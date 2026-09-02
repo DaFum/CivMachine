@@ -113,14 +113,15 @@ for (const strategy of STRATEGY_IDS) {
 
 // ---------------------------------------------------------------- 6
 section('6. Multiverse horizon  -- reached inside the four-Universe sweep');
-console.log(L('strategy', 22) + R('runs to MV1', 20) + R('sim minutes to MV1', 26) + R('Machine Insight', 22));
+console.log(L('strategy', 22) + R('runs to MV1', 18) + R('sim minutes', 16) + R('minutes waited', 18) + R('Machine Insight', 18));
 for (const strategy of STRATEGY_IDS) {
   const reached = toFourthUniverse.get(strategy).filter(c => c.firstMultiverseRun > 0);
   if (!reached.length) { console.log(L(strategy, 22) + 'no Multiverse inside four Universes'); continue; }
   console.log(L(strategy, 22)
-    + R(band(reached.map(c => c.firstMultiverseRun), 0), 20)
-    + R(band(reached.map(c => c.firstMultiverseSeconds / 60), 0), 26)
-    + R(band(reached.map(c => c.insight), 0), 22));
+    + R(band(reached.map(c => c.firstMultiverseRun), 0), 18)
+    + R(band(reached.map(c => c.firstMultiverseSeconds / 60), 0), 16)
+    + R(band(reached.map(c => c.firstMultiverseWallClock / 60), 0), 18)
+    + R(band(reached.map(c => c.insight), 0), 18));
 }
 
 // ---------------------------------------------------------------- 7
@@ -169,8 +170,13 @@ if (full) {
   console.log(L('multiverses', 26) + R(band(convergence.map(c => c.multiverses), 0), 26));
   console.log(L('machine insight', 26) + R(band(convergence.map(c => c.insight), 0), 26));
   console.log(L('simulated hours', 26) + R(band(convergence.map(c => c.simulatedSeconds / 3600), 2), 26));
-  console.log('\nSimulated hours are 1x cultivation time only -- the player also spends real time on');
-  console.log('interventions and purchases, and can run at 2x or 4x once Machine Insight allows it.');
+  console.log(L('hours actually waited', 26) + R(band(convergence.map(c => c.wallClockSeconds / 3600), 2), 26));
+  console.log(L('intervention decisions', 26) + R(band(convergence.map(c => c.runs.reduce((t, r) => t + r.interventions, 0)), 0), 26));
+  console.log('\nSimulated hours are cultivation at 1x. Hours actually waited applies the simulation');
+  console.log('speed the campaign had earned at the time -- 2x from Machine Insight 3, 4x from 10 --');
+  console.log('and is what the player sits through. The rest of the campaign is its decisions, counted');
+  console.log('beside it and deliberately not multiplied into one figure: how long a decision takes is');
+  console.log('not something this harness can know.');
   }
 }
 

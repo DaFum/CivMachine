@@ -235,7 +235,25 @@ test('campaign: the three early Directives set genuinely different goals', () =>
 
 // ---------------------------------------------------------------- unlock pacing
 
-test('campaign: the first Universe lands one new system, not a wall of them', () => {
+test('campaign: a prestige reveals a decision, not a catalog', () => {
+  // Counting `unlockedSystems` is not enough and once hid the whole problem. Systems were staggered
+  // while the eight Universe upgrades behind them were gated on Machine Insight a player has long
+  // since passed, so the first Universe opened one system, one currency and the entire layer at once:
+  // ten new things, reported as one. This counts everything the player can newly act on.
+  const deep = ['balanced', 'survival_first'].flatMap(strategy => campaigns(strategy, 'universes:4', 6));
+  for (const campaign of deep) {
+    for (const universe of campaign.universes) {
+      const added = universe.surfaceAdded ?? [];
+      assert.ok(added.length <= 4,
+        `${campaign.strategy} seed ${campaign.seed}: Universe ${universe.index} revealed ${added.length} things at once (${added.join(', ')})`);
+    }
+    // ...and every Universe has to reveal *something*, or the layer stops being a reason to prestige.
+    for (const universe of campaign.universes.slice(0, 4)) {
+      assert.ok((universe.surfaceAdded ?? []).length >= 1,
+        `${campaign.strategy}: Universe ${universe.index} revealed nothing`);
+    }
+  }
+
   const all = REPRESENTATIVE.flatMap(strategy => campaigns(strategy, 'first_universe', 8));
   for (const campaign of all) {
     const atFirstUniverse = campaign.unlockTimeline
@@ -307,6 +325,55 @@ test('campaign: spending everything on one axis still leaves the others reachabl
   assert.ok(reachable.length >= 8, `only ${reachable.length} Machine upgrades stayed reachable`);
   assert.ok(campaign.runs.some(run => run.purchased.some(id => id !== 'reality_lattice')),
     'even a Lattice rush must find something else worth buying');
+});
+
+test('campaign: no purchase tilt wins on every axis of the late campaign', () => {
+  // The single-axis comparison above asks who reaches the first Universe soonest. That is the wrong
+  // question on its own: a build that needs more Civilizations but finishes each one faster is not
+  // behind, it is different. This measures the four axes the rebalance mandate names, at the point the
+  // campaign has actually developed -- the first Multiverse -- and in wall-clock rather than simulated
+  // time, because wall-clock is what the player spends.
+  const sum = run => Object.values(run.rewards).reduce((total, value) => total + value, 0);
+  const rows = PURCHASE_POLICIES.map(strategy => {
+    const sweep = campaigns(strategy, 'universes:4', 6);
+    const finite = values => values.filter(Number.isFinite);
+    return {
+      strategy,
+      runsToMultiverse: percentile(finite(sweep.map(c => c.firstMultiverseRun)), 0.5),
+      wallMinutes: percentile(finite(sweep.map(c => c.firstMultiverseWallClock / 60)), 0.5),
+      creditsPerMinute: percentile(finite(sweep.map(c => c.runs.reduce((t, r) => t + r.credits, 0) / (c.wallClockSeconds / 60))), 0.5),
+      resourcesPerMinute: percentile(finite(sweep.map(c => c.runs.reduce((t, r) => t + sum(r), 0) / (c.wallClockSeconds / 60))), 0.5),
+    };
+  });
+
+  for (const row of rows) {
+    assert.ok(row.runsToMultiverse > 0, `${row.strategy} never reached a Multiverse`);
+    assert.ok(row.wallMinutes > 0 && Number.isFinite(row.creditsPerMinute), `${row.strategy} produced no throughput`);
+  }
+
+  // No tilt may hold every axis at once. One being ahead on two of them is a build; one being ahead on
+  // all four is the others being decoration.
+  const bestRuns = Math.min(...rows.map(r => r.runsToMultiverse));
+  const bestWall = Math.min(...rows.map(r => r.wallMinutes));
+  const bestCredits = Math.max(...rows.map(r => r.creditsPerMinute));
+  const bestResources = Math.max(...rows.map(r => r.resourcesPerMinute));
+  const sweeps = rows.filter(r => r.runsToMultiverse === bestRuns && r.wallMinutes === bestWall
+    && r.creditsPerMinute === bestCredits && r.resourcesPerMinute === bestResources);
+  assert.equal(sweeps.length, 0, `${sweeps.map(r => r.strategy).join(', ')} leads on all four axes`);
+
+  // And the axes a player feels -- their time, and what that time earns -- have to stay close. Run
+  // count is allowed a wider band: needing more, shorter Civilizations is a legitimate shape of build.
+  const spread = (values, lowerIsBetter) => (lowerIsBetter
+    ? Math.max(...values) / Math.min(...values)
+    : Math.max(...values) / Math.min(...values));
+  assert.ok(spread(rows.map(r => r.wallMinutes)) <= 1.5,
+    `wall-clock to the first Multiverse spans ${spread(rows.map(r => r.wallMinutes)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.creditsPerMinute)) <= 1.5,
+    `Cultivation Credits per minute span ${spread(rows.map(r => r.creditsPerMinute)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.resourcesPerMinute)) <= 1.8,
+    `resources per minute span ${spread(rows.map(r => r.resourcesPerMinute)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.runsToMultiverse)) <= 2,
+    `Civilizations to the first Multiverse span ${spread(rows.map(r => r.runsToMultiverse)).toFixed(2)}x`);
 });
 
 test('campaign: the strategy table has no universally dominant entry', () => {

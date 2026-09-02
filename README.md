@@ -97,8 +97,9 @@ Same modelled player, same seeds, both engines. `npm run balance` prints the ful
 | Systems unlocked in the first-Universe step | 2 | 1 | 1-2 |
 | Deep run at a mature build, minutes | 27+ | 11.5-13.1 | 12-15 |
 | Civilizations to the first Multiverse | 8 | 15 | measured |
-| Civilizations to Great Convergence readiness | 27 | 67 | measured |
-| Simulated hours to Great Convergence readiness | 6.0 | 6.2 | ~8-12 h active |
+| Civilizations to Great Convergence readiness | 27 | 83 | measured |
+| Simulated hours to Convergence readiness | 6.0 | 7.7 | measured |
+| Cultivation actually waited through | 6.0 | 1.9 | measured |
 | Strongest line to the first Universe | deep_run, 2 runs | survival_first, 5 runs | no runaway |
 | Spread across the seven purchase tilts | 1.33x | 1.40x | no dominant build |
 
@@ -111,8 +112,32 @@ The run lifecycle the curve now produces, measured by build:
 | mid | 4 | 9.1 min | 10.0 | 6 | ASCENDANT |
 | mature | 8 | 11.7 min | 16.7 | 10 | SINGULAR |
 
-Simulated hours count cultivation time at 1x only; the player also spends real time on interventions
-and purchases, and can run at 2x or 4x once Machine Insight allows it.
+### How long the campaign is
+
+The earlier draft of these notes said 6.2 simulated hours and assumed a player's decision time closed
+the gap to the 8-12 hour reference. That was an assumption wearing a number, and this release is the
+one that makes it wrong: simulation speed is permanent progression now, so a player runs at 4x for
+most of a campaign and does *not* sit through simulated time at all.
+
+Measured to Great Convergence readiness, balanced tilt:
+
+| | |
+| --- | ---: |
+| Civilizations | 83 |
+| Universes / Multiverses | 20 / 5 |
+| Simulated cultivation | 7.7 h |
+| **Cultivation actually waited through, at the speeds the player has earned** | **1.9 h** |
+| Intervention decisions | ~2,500 |
+| Purchase phases | 83 |
+
+So the campaign's length is not waiting; it is roughly 1.9 hours of cultivation plus about 2,500
+decisions. Whether that totals 8-12 hours depends entirely on how long a decision takes, which is the
+one quantity a simulation cannot measure -- at 5 seconds each it is under 5 hours, at 12 seconds each
+it is over 10. The harness reports the two halves separately and does not multiply them together into
+a single confident figure.
+
+No grind was added to reach a target. If the number wants to move, the honest levers are the decision
+count and the Convergence gate, not the clock.
 
 ### Saves
 

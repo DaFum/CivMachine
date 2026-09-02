@@ -8,6 +8,7 @@ import { cultivationDepth, harvestUrgency } from '../dist/game/harvest-quality.j
 import { entropyRate, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
 import { VENT_COST_ESCALATION, VENT_ENTROPY_RELIEF, ventStabilityCost } from '../dist/game/tactical-actions.js';
 import { freshEngine, maximumPurchasableMachineLevels, safestChoiceIndex } from './balance-harness.mjs';
+import { Progression } from '../dist/game/progression.js';
 
 export { maximumPurchasableMachineLevels };
 
@@ -180,6 +181,20 @@ const YIELD_MODULES = ['historical_compressor', 'cognitive_extractor', 'paradox_
 const DEVELOPMENT_MODULES = ['cultivation_accelerator'];
 const UTILITY_MODULES = ['prediction_core', 'temporal_injector', 'contingency_vat'];
 
+/**
+ * What this harness cannot measure.
+ *
+ * The modelled player takes the safest branch of every intervention, which makes foresight worth
+ * almost nothing to them: Prediction Core softens what a choice costs, and they were already
+ * choosing the cheapest one. Modelling them probing anyway was tried and measured *worse* than not
+ * probing at all -- the Control a Probe spends is Control a vent needed -- so it is not modelled,
+ * because a policy that plays badly measures the policy rather than the game.
+ *
+ * The consequence: `utility_first`'s numbers here are a floor on that build, not its value. A human
+ * who probes the interventions that actually matter, and changes their branch on what they see,
+ * gets something this simulation has no way to represent. Read the utility row as "not a trap",
+ * which is what the mandate asks of it, and not as "the weakest build".
+ */
 export const MODULE_CATEGORY = new Map([
   ...CONTAINMENT_MODULES.map(id => [id, 'containment']),
   ...YIELD_MODULES.map(id => [id, 'yield']),
@@ -310,6 +325,27 @@ export function containmentRating(engine) { return engine.runtimeBonuses().conta
 
 export function unlockedSystemCount(engine) { return engine.state.meta.progression.unlockedSystems.length; }
 
+/**
+ * Everything the player can newly act on: systems, currencies and every purchasable upgrade in every
+ * layer.
+ *
+ * Counting `unlockedSystems` alone understated the first Universe badly. Systems were staggered, but
+ * the eight Universe upgrades behind them were gated on Machine Insight the player had long since
+ * passed, so consuming the first Universe opened one system, one currency and the entire layer at
+ * once -- ten new things, reported as one.
+ */
+export function progressionSurface(engine) {
+  const surface = new Set();
+  for (const id of engine.state.meta.progression.unlockedSystems) surface.add(`system:${id}`);
+  for (const id of engine.state.meta.progression.discoveredResources) surface.add(`resource:${id}`);
+  for (const layer of ['machine', 'universe', 'axiom']) {
+    for (const definition of engine.catalog(layer)) {
+      if (Progression.canUseUpgrade(engine.state, layer, String(definition.id))) surface.add(`${layer}:${definition.id}`);
+    }
+  }
+  return surface;
+}
+
 const STRATEGY_DEFAULTS = { trigger: 'urgent', accelerate: false };
 
 export const STRATEGIES = {
@@ -352,6 +388,15 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
   let simulatedSeconds = 0;
   let lastMultiverseRun = 0;
   const multiverseRuns = [];
+  // Simulated seconds are what the run costs the *civilization*; wall-clock seconds are what it costs
+  // the player. Since v1.20.0 simulation speed is permanent progression -- 2x at Machine Insight 3, 4x
+  // at 10 -- so the two diverge sharply, and quoting only the first overstates what a campaign asks of
+  // a real evening. Human decision time is deliberately not modelled here: it is a separate quantity
+  // and folding an estimate of it into this one is what turned a measurement into an assumption.
+  let wallClockSeconds = 0;
+  let firstMultiverseWallClock = 0;
+  let firstUniverseWallClock = 0;
+  let surface = progressionSurface(engine);
 
   const stopReached = () => {
     if (stop === 'first_universe') return engine.state.meta.universesTotal >= 1;
@@ -370,6 +415,9 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
     const result = playRun(engine, { seed: runSeed, trigger: plan.trigger, accelerate: plan.accelerate, chase: plan.chase });
     runIndex++;
     simulatedSeconds += result.elapsed;
+    // A player runs at the fastest speed they have earned; that is the whole point of putting speed on
+    // Machine Insight rather than on a Machine upgrade that prestige eats.
+    wallClockSeconds += result.elapsed / Math.max(1, engine.maxSimulationSpeed());
     const affordableBefore = maximumPurchasableMachineLevels(engine);
     const containmentBefore = containmentRating(engine);
     const purchased = spendMachineCurrencies(engine, plan.machine);
@@ -409,7 +457,10 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
         insight: engine.machineInsight(),
         totalRuns: runIndex,
       });
-      if (!firstUniverseRun) { firstUniverseRun = runIndex; firstUniverseSeconds = simulatedSeconds; }
+      if (!firstUniverseRun) { firstUniverseRun = runIndex; firstUniverseSeconds = simulatedSeconds; firstUniverseWallClock = wallClockSeconds; }
+      const nowSurface = progressionSurface(engine);
+      universes[universes.length - 1].surfaceAdded = [...nowSurface].filter(entry => !surface.has(entry));
+      surface = nowSurface;
       const now = new Set(engine.state.meta.progression.unlockedSystems);
       for (const id of now) if (!seenSystems.has(id)) unlockTimeline.push({ run: runIndex, universe: engine.state.meta.universesTotal, system: id });
       seenSystems = now;
@@ -419,13 +470,14 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
       lastMultiverseRun = runIndex;
       engine.consumeMultiverse();
       multiverses = engine.state.meta.multiversesConsumed;
-      if (!firstMultiverseRun) { firstMultiverseRun = runIndex; firstMultiverseSeconds = simulatedSeconds; }
+      if (!firstMultiverseRun) { firstMultiverseRun = runIndex; firstMultiverseSeconds = simulatedSeconds; firstMultiverseWallClock = wallClockSeconds; }
       spendAxioms(engine);
       spendResidue(engine, plan.machine);
     }
     const now = new Set(engine.state.meta.progression.unlockedSystems);
     for (const id of now) if (!seenSystems.has(id)) unlockTimeline.push({ run: runIndex, universe: engine.state.meta.universesTotal, system: id });
     seenSystems = now;
+    surface = progressionSurface(engine);
   }
 
   return {
@@ -434,8 +486,9 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
     convergenceRequirements: engine.convergenceRequirements(),
     milestonesCompleted: Object.keys(engine.state.meta.progression.milestones).length,
     totalRuns: runIndex,
-    firstUniverseRun, firstUniverseSeconds,
-    firstMultiverseRun, firstMultiverseSeconds,
+    firstUniverseRun, firstUniverseSeconds, firstUniverseWallClock,
+    firstMultiverseRun, firstMultiverseSeconds, firstMultiverseWallClock,
+    wallClockSeconds,
     universesTotal: engine.state.meta.universesTotal,
     multiverses,
     insight: engine.machineInsight(),

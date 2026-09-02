@@ -47,6 +47,21 @@ export const PREDICTION_MITIGATION_MAX = 0.5;
 export function predictionMitigation(level) {
     return Math.min(PREDICTION_MITIGATION_MAX, PREDICTION_MITIGATION_PER_LEVEL * Math.max(0, Number(level) || 0));
 }
+/**
+ * What a Probe costs a Machine that has a Prediction Core, in Control.
+ *
+ * Softening a probed intervention was not enough on its own. Measured across the campaign harness, a
+ * player who probed every intervention finished *behind* one who never probed: the safest branch is
+ * already the one being taken, so there is little damage left to mitigate, while the Probe itself
+ * spent the Control a vent needed. Information that costs the run is not information the player wants.
+ *
+ * So the module buys the looking as well as the seeing: at level 2 a Probe is free, and the Core stops
+ * competing with the tactical budget it is supposed to inform.
+ */
+export function probeControlCost(predictionLevel) {
+    const level = Math.max(0, Math.trunc(Number(predictionLevel) || 0));
+    return Math.max(0, TACTICAL_ACTIONS.probe.cost - Math.max(0, level - 1));
+}
 export const ACCELERATE_ENTROPY_BASE = 3;
 export const ACCELERATE_ENTROPY_PER_ERA = 3;
 /**
@@ -164,7 +179,12 @@ export function tacticalRisk(civ, id) {
     return tacticalActionCopy(id)?.risk ?? TACTICAL_ACTIONS[id].risk;
 }
 export function tacticalAvailability(civ, id) {
-    const definition = TACTICAL_ACTIONS[id];
+    const base = TACTICAL_ACTIONS[id];
+    // Probe is the one action whose price a Machine upgrade moves, so the cost the rail shows and the
+    // cost `applyTacticalAction` deducts both come from here rather than from the catalog.
+    const definition = id === 'probe'
+        ? { ...base, cost: probeControlCost(civ.predictionLevel) }
+        : base;
     const reasons = text().tacticalActions.reasons;
     if (civ.tactical.controlCapacity < definition.cost) {
         return { enabled: false, reason: fill(reasons.requiresControl, { cost: definition.cost }), cost: definition.cost };

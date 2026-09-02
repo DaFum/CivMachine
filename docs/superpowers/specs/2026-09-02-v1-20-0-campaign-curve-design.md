@@ -180,16 +180,44 @@ Measured across sixteen seeds and eleven strategies.
 
 Prestige cadence, in Civilizations consumed: 5-7 for the first Universe, then 3 each for the second,
 third and fourth on a survival- or balance-tilted build, before the Multiverse resets the Universe
-layer and the shape repeats. Yield- and utility-tilted builds hold a flat 6 instead of accelerating —
-they never buy the Containment that lengthens a run, so their credits per run do not rise. That is the
-cost of the tilt rather than a hole in it: both still reach the Multiverse, at 23-24 Civilizations
-against 14-15 for a survival build.
+layer and the shape repeats.
 
-Fifteen Civilizations to the first Multiverse. Great Convergence readiness at 67 Civilizations, 16
-Universes and 4 Multiverses, or about 6.2 hours of 1x cultivation before the player's own decision
-time — against 27 Civilizations and 6.0 hours on v1.19.0, so the campaign now delivers its length as
-many meaningful runs rather than a few very long ones. The gate is bound by the Axiom requirement (all
-six at level 1, roughly fifteen Axioms) rather than by the two Multiverses it names.
+Yield- and utility-tilted builds need more Civilizations — 19 to 21 to the first Multiverse against 15
+to 16 — but not more *time*: every tilt arrives within 27 to 30 wall-clock minutes of cultivation,
+because their runs are shorter. Measured on the four axes the mandate names, at the first Multiverse:
+
+| Tilt | Civilizations | Wall-clock min | Credits/min | Resources/min |
+| --- | ---: | ---: | ---: | ---: |
+| survival_first | 16 | 29 | 3.17 | 6597 |
+| defensive_spread | 15 | 30 | 3.15 | 6212 |
+| lattice_rush | 16 | 28 | 3.21 | 6139 |
+| development_first | 18 | 27 | 3.31 | 6258 |
+| balanced | 17 | 27 | 3.17 | 5751 |
+| utility_first | 19 | 28 | 3.17 | 5619 |
+| yield_first | 21 | 27 | 3.03 | 5701 |
+
+No tilt leads on all four. The spread is 1.40x on Civilizations, 1.11x on wall-clock, 1.09x on Credits
+per minute and 1.17x on resources per minute — a build is a different shape of the same hour, which is
+what the mandate asked for. `campaign.test.mjs` pins all four.
+
+One thing this table cannot show: the modelled player takes the safest branch of every intervention,
+so foresight is worth nothing to them and `utility_first` is measured with Prediction Core doing
+nothing at all. Modelling them probing anyway was tried and measured *worse* — a Probe that costs
+Control competes with the vent keeping the run alive — which is a finding about the module rather than
+the build, and is why Prediction Core now makes a Probe free from level 2. The utility row is a floor
+on that build, not its value.
+
+Sixteen to twenty-one Civilizations to the first Multiverse depending on tilt, at 27-30 minutes of
+wall-clock cultivation for all of them.
+
+Great Convergence readiness sits at 83 Civilizations, 20 Universes and 5 Multiverses: 7.7 hours of
+simulated cultivation, but only **1.9 hours actually waited through**, because simulation speed is
+permanent progression and a player runs at 4x for most of the campaign. The remaining length is about
+2,500 intervention decisions and 83 purchase phases. Whether that adds up to the historical 8-12 hour
+reference depends on how long a decision takes — under 5 hours at 5 seconds each, over 10 at 12 — and
+that is not a quantity this harness can measure, so it reports the two halves separately rather than
+multiplying them into one confident figure. The gate is bound by the Axiom requirement (all six at
+level 1, roughly fifteen Axioms) rather than by the two Multiverses it names.
 
 The seven purchase tilts span 5 to 7 Civilizations to the first Universe — a 1.40x spread. The line
 that needs the fewest Civilizations (survival-first) and the line that needs the least simulated time

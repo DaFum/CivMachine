@@ -549,9 +549,9 @@ const ENGLISH = {
                     },
                     "probe": {
                         "term": "Probe (3)",
-                        "what": "Reveals the risk directions of the current intervention’s choices for 1 Control.",
+                        "what": "Reveals the risk directions of the current intervention's choices for 1 Control, or free once Prediction Core reaches level 2.",
                         "where": "Third button in the rail; the result appears inside the intervention card.",
-                        "why": "Without a Prediction Core this is the only way to see what a choice will do before taking it."
+                        "why": "A probed intervention also lands softer -- 12% less of what it would have cost per Prediction Core level, to a maximum of half -- so foresight is worth spending Control on rather than only worth reading."
                     },
                     "vent": {
                         "term": "Entropy Vent (4)",
@@ -847,6 +847,7 @@ const ENGLISH = {
             "consumeFirstUniverse": "Consume the first Universe.",
             "unlockAxiomaticManipulation": "Unlock Axiomatic Manipulation.",
             "machineInsightRequirement": "Machine Insight {amount}",
+            "universesRequirement": "{amount} Universes consumed",
             "discoverResource": "discover {resource}",
             "requirementJoiner": " and ",
             "availableAfterRefresh": "Available after current progression refresh.",
@@ -5252,9 +5253,9 @@ const GERMAN = {
                     },
                     "probe": {
                         "term": "Probe (3)",
-                        "what": "Zeigt für 1 Control die Risikorichtungen der Auswahlmöglichkeiten der aktuellen Intervention.",
+                        "what": "Zeigt für 1 Control die Risikorichtungen der aktuellen Intervention — ab Prediction Core Level 2 kostenlos.",
                         "where": "Dritte Schaltfläche im Bereich; das Ergebnis erscheint in der Interventionskarte.",
-                        "why": "Ohne Prediction Core ist dies die einzige Möglichkeit, Auswirkungen einer Auswahl vor der Entscheidung zu sehen."
+                        "why": "Eine mit Probe untersuchte Intervention trifft zudem milder — 12 % weniger von dem, was sie gekostet hätte, pro Prediction-Core-Level, maximal die Hälfte. Vorausschau lohnt damit den Control-Einsatz und nicht nur das Lesen."
                     },
                     "vent": {
                         "term": "Entropy Vent (4)",
@@ -5550,6 +5551,7 @@ const GERMAN = {
             "consumeFirstUniverse": "Das erste Universe verbrauchen.",
             "unlockAxiomaticManipulation": "Axiomatic Manipulation freischalten.",
             "machineInsightRequirement": "Machine Insight {amount}",
+            "universesRequirement": "{amount} Universes verbraucht",
             "discoverResource": "{resource} identifizieren",
             "requirementJoiner": " und ",
             "availableAfterRefresh": "Nach der aktuellen Fortschrittsaktualisierung verfügbar.",

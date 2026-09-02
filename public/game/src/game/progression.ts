@@ -2,11 +2,21 @@ import { evaluateMilestones } from './milestones.js';
 import { directiveCopy, fill, matrixCopy, milestoneCopy, resourceName, text, upgradeCopy } from '../data/i18n.js';
 import type { GameState, Layer } from './types.js';
 
-const MACHINE: Record<string,{insight:number;resource?:string}> = {
+const MACHINE: Record<string,{insight:number;resource?:string;universes?:number}> = {
   reality_lattice:{insight:0}, historical_compressor:{insight:0}, temporal_injector:{insight:0}, prediction_core:{insight:1,resource:'cognition'}, cognitive_extractor:{insight:4,resource:'cognition'}, paradox_sieve:{insight:5,resource:'paradox'}, awareness_scrubber:{insight:4,resource:'cognition'}, sanity_protocol:{insight:5,resource:'cognition'}, cosmic_muffling:{insight:6,resource:'paradox'}, contingency_vat:{insight:8,resource:'paradox'}, cultivation_accelerator:{insight:9,resource:'existence'}, existence_furnace:{insight:10,resource:'existence'}
 };
-const UNIVERSE: Record<string,{insight:number}> = { wide_lattice:{insight:7}, twin_harvest:{insight:8}, stable_constants:{insight:10}, archive_of_screams:{insight:11}, paradox_rights:{insight:12}, bureaucracy_of_gods:{insight:13}, residue_refinery:{insight:14}, inherited_time:{insight:15} };
-const AXIOM: Record<string,{insight:number}> = { axiom_stability:{insight:18}, axiom_recursive_memory:{insight:19}, axiom_paradox_food:{insight:20}, axiom_compassionate_accounting:{insight:21}, axiom_impossible_birth:{insight:22}, axiom_multiple_choice:{insight:23} };
+// Machine Insight cannot pace the Universe layer, because a player who has earned a Universe has long
+// since cleared every insight gate in it: measured, consuming the first Universe revealed one system,
+// one currency and all eight upgrades in the same step. Universes consumed is the clock that actually
+// ticks at this layer, so each Universe reveals two upgrades and the layer takes four to open. The
+// insight numbers stay as a floor -- they are what stops a fast prestige from outrunning the Machine.
+const UNIVERSE: Record<string,{insight:number;universes:number}> = {
+  wide_lattice:{insight:7,universes:1}, twin_harvest:{insight:8,universes:1},
+  stable_constants:{insight:10,universes:2}, archive_of_screams:{insight:11,universes:2},
+  bureaucracy_of_gods:{insight:13,universes:3}, paradox_rights:{insight:12,universes:3},
+  residue_refinery:{insight:14,universes:4}, inherited_time:{insight:15,universes:4},
+};
+const AXIOM: Record<string,{insight:number;universes?:number}> = { axiom_stability:{insight:18}, axiom_recursive_memory:{insight:19}, axiom_paradox_food:{insight:20}, axiom_compassionate_accounting:{insight:21}, axiom_impossible_birth:{insight:22}, axiom_multiple_choice:{insight:23} };
 export const DIRECTIVE_INSIGHT:Record<string,number>={accelerated_development:3,cognitive_extraction:3,stable_cultivation:3,paradox_prospecting:8,quiet_machine:10,temporal_pressure:12};
 export const MATRIX_INSIGHT:Record<string,number>={neural_bloom:7,industrial_genome:7,adaptive_aberration:7,museum_seed:11,lunar_synapse:13,post_causal_spore:15};
 export const AXIOM_KNOWLEDGE:Record<string,number>={axiom_stability:18,axiom_recursive_memory:19,axiom_paradox_food:20,axiom_compassionate_accounting:21,axiom_impossible_birth:22,axiom_multiple_choice:23};
@@ -16,10 +26,11 @@ export class Progression {
   static systemUnlocked(state:GameState,id:string){ return state.meta.progression.unlockedSystems.includes(id); }
   static resourceDiscovered(state:GameState,id:string){ return state.meta.progression.discoveredResources.includes(id); }
   static canUseUpgrade(state:GameState,layer:Layer,id:string):boolean {
-    const rules: Record<string,{insight:number;resource?:string}> = layer==='machine'?MACHINE:layer==='universe'?UNIVERSE:AXIOM; const rule=rules[id]; if(!rule)return false;
+    const rules: Record<string,ProgressionRule> = layer==='machine'?MACHINE:layer==='universe'?UNIVERSE:AXIOM; const rule=rules[id]; if(!rule)return false;
     if(layer==='universe'&&!this.systemUnlocked(state,'universe_upgrades'))return false;
     if(layer==='axiom'&&!this.systemUnlocked(state,'axioms'))return false;
     if(this.machineInsight(state)<rule.insight)return false;
+    if(rule.universes!==undefined&&state.meta.universesTotal<rule.universes)return false;
     if('resource' in rule && rule.resource && !this.resourceDiscovered(state,rule.resource))return false;
     return true;
   }
@@ -59,7 +70,9 @@ export class Progression {
 
 export interface VisibleUpgradeEntry { definition:any; status:'available'|'locked'; reason:string; }
 
-export function progressionRulesForLayer(layer:Layer): Record<string,{insight:number;resource?:string}> {
+export interface ProgressionRule { insight:number; resource?:string; universes?:number; }
+
+export function progressionRulesForLayer(layer:Layer): Record<string,ProgressionRule> {
   return layer==='machine'?MACHINE:layer==='universe'?UNIVERSE:AXIOM;
 }
 
@@ -69,6 +82,7 @@ export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):strin
   if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return copy.consumeFirstUniverse;
   if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return copy.unlockAxiomaticManipulation;
   const req:string[]=[]; if(Progression.machineInsight(state)<rule.insight) req.push(fill(copy.machineInsightRequirement,{amount:rule.insight}));
+  if(rule.universes!==undefined&&state.meta.universesTotal<rule.universes) req.push(fill(copy.universesRequirement,{amount:rule.universes}));
   if(rule.resource&&!Progression.resourceDiscovered(state,rule.resource)) req.push(fill(copy.discoverResource,{resource:resourceName(rule.resource)??rule.resource.replaceAll('_',' ')}));
   return req.length?req.join(copy.requirementJoiner):copy.availableAfterRefresh;
 }

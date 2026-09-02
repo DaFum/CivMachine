@@ -211,9 +211,9 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
       {
         id: 'probe',
         term: 'Probe (3)',
-        what: 'Reveals the risk directions of the current intervention’s choices for 1 Control.',
+        what: "Reveals the risk directions of the current intervention's choices for 1 Control, or free once Prediction Core reaches level 2.",
         where: 'Third button in the rail; the result appears inside the intervention card.',
-        why: 'Without a Prediction Core this is the only way to see what a choice will do before taking it.',
+        why: "A probed intervention also lands softer -- 12% less of what it would have cost per Prediction Core level, to a maximum of half -- so foresight is worth spending Control on rather than only worth reading.",
       },
       {
         id: 'vent',
