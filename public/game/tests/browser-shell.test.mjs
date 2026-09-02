@@ -62,7 +62,13 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   // Atmosphere and impulses are redrawn every throttled frame instead.
   assert.match(world, /drawDynamicContent/);
   assert.match(world, /drawConsequenceImpact/);
-  assert.match(world, /DYNAMIC_FRAME_MS\s*=\s*33/);
+  // Frame pacing moved next to the quality controller that measures it: the interval is now a
+  // function of the tier and of the renderer's own average draw cost, so 30 FPS is the floor a
+  // device is held to rather than a literal in the draw loop.
+  assert.match(world, /dynamicFrameIntervalMs\(this\.quality\.tier,\s*this\.quality\.averageCostMs,\s*currentReducedMotion\)/);
+  const quality = await readFile(new URL('../src/render/quality.ts', import.meta.url), 'utf8');
+  assert.match(quality, /DYNAMIC_FRAME_MS\s*=\s*33/);
+  assert.match(quality, /REDUCED_MOTION_FRAME_MS\s*=\s*180/);
   assert.match(world, /prefers-reduced-motion/);
   assert.match(world, /worldImpulse/);
 });

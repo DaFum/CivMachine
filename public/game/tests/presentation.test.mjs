@@ -5,18 +5,18 @@ import { GameEngine } from '../dist/game/engine.js';
 import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js';
 import { developmentStage, liveWorldSample, worldWidthMultiplier, worldSnapshot } from '../dist/render/world-model.js';
 import { structuralWorldKey, worldPresentation } from '../dist/render/world-presentation.js';
-import { consequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
+import { consequenceImpact, drawConsequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { LOCALIZATION } from '../dist/data/localization.js';
-import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS } from '../dist/render/primitives.js';
+import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS, valueNoise, ridgeNoise, shade, tint } from '../dist/render/primitives.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
-import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER } from '../dist/render/settlements.js';
+import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
-import { RenderQualityController, qualityFactors } from '../dist/render/quality.js';
+import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
 import { worldMemorySignature } from '../dist/render/world-memory.js';
 import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
@@ -1277,6 +1277,14 @@ test('the passive phase-transition cue is small, transient and reduced-motion sa
   const strokes = during.filter(([name]) => name === 'line' || name === 'strokeCircle');
   assert.ok(strokes.length <= 8, `the cue drew ${strokes.length} strokes`);
   assert.equal(during.filter(([name]) => name === 'fillRect').length, 0, 'no full-screen wash');
+  // The same guarantee, restated for the gradient primitives: a graded rectangle over the frame is
+  // still a wash, and would flatten every layer under the cue for as long as it runs.
+  assert.equal(during.filter(([name]) => name === 'fillLinearGradientRect').length, 0, 'no graded full-screen wash either');
+  // The cue is allowed exactly one light field, and it must be the horizon's.
+  assert.equal(during.filter(([name]) => name === 'fillRadialGlow').length, 1, 'the horizon light field is the cue\'s one glow');
+  // Fixed cost: the deepest phase must not buy more strokes than the shallowest.
+  const deep = draw(3, 4, 1200, false).filter(([name]) => name === 'line' || name === 'strokeCircle');
+  assert.equal(deep.length, strokes.length, 'the cue costs the same at every phase');
 
   // Transient: nothing after the 1500 ms window, and nothing at all without a real transition.
   assert.equal(draw(1, 2, 2600, false).length, 0, 'the cue must expire');
@@ -1286,4 +1294,225 @@ test('the passive phase-transition cue is small, transient and reduced-motion sa
   // Reduced motion keeps the cue but freezes it: same shape, shorter window.
   assert.ok(draw(1, 2, 1200, true).length > 0);
   assert.equal(draw(1, 2, 1400, true).length, 0, 'reduced motion ends the cue inside 320 ms');
+});
+
+
+test('value noise is deterministic, bounded and smooth between lattice points', () => {
+  assert.equal(valueNoise(4.25, 9), valueNoise(4.25, 9));
+  assert.notEqual(valueNoise(4.25, 9), valueNoise(4.25, 10));
+  for (const x of [0, .5, 1.75, 12.4, 118.9]) {
+    const value = ridgeNoise(x, 77);
+    assert.ok(value >= 0 && value <= 1, `ridgeNoise left 0..1 at ${x}: ${value}`);
+  }
+  // Smoothness is the whole point: a ridge built on hash01 alone steps, which is what made the old
+  // terrain read as a row of identical triangles.
+  let maxStep = 0;
+  let previous = valueNoise(0, 5);
+  for (let i = 1; i <= 200; i++) {
+    const value = valueNoise(i * .05, 5);
+    maxStep = Math.max(maxStep, Math.abs(value - previous));
+    previous = value;
+  }
+  assert.ok(maxStep < .12, `value noise jumped by ${maxStep} over a 0.05 step`);
+  assert.equal(shade(0xffffff, 1), 0x000000);
+  assert.equal(tint(0x000000, 1), 0xffffff);
+});
+
+test('the drawing vocabulary carries gradient polygons and open polylines', () => {
+  const calls = [];
+  const context = {
+    set fillStyle(value) { calls.push(['fillStyle', typeof value === 'object' ? 'gradient' : value]); },
+    set strokeStyle(value) { calls.push(['strokeStyle', value]); },
+    set lineWidth(value) {},
+    fillRect: () => calls.push(['fillRect']),
+    beginPath: () => calls.push(['beginPath']),
+    moveTo: (...args) => calls.push(['moveTo', ...args]),
+    lineTo: (...args) => calls.push(['lineTo', ...args]),
+    closePath: () => calls.push(['closePath']),
+    fill: () => calls.push(['fill']),
+    stroke: () => calls.push(['stroke']),
+    arc: () => calls.push(['arc']),
+    createLinearGradient: (...args) => { calls.push(['createLinearGradient', ...args]); return { addColorStop: (o, c) => calls.push(['addColorStop', o, c]) }; },
+  };
+  const surface = canvasSurface(context, (value, alpha = 1) => `#${value.toString(16)}@${alpha}`);
+  const ridge = [[0, 100], [10, 60], [20, 80], [30, 100]];
+  surface.fillLinearGradientPoly(ridge, [{ offset: 0, color: 0x102030 }, { offset: 1, color: 0x405060, alpha: .5 }], 0, 60, 0, 100);
+  assert.deepEqual(calls[0], ['createLinearGradient', 0, 60, 0, 100]);
+  assert.deepEqual(calls[1], ['addColorStop', 0, '#102030@1']);
+  assert.deepEqual(calls[2], ['addColorStop', 1, '#405060@0.5']);
+  assert.deepEqual(calls[3], ['fillStyle', 'gradient']);
+  assert.deepEqual(calls[4], ['beginPath']);
+  assert.deepEqual(calls[5], ['moveTo', 0, 100]);
+  assert.equal(calls.filter(([name]) => name === 'lineTo').length, 3);
+  assert.deepEqual(calls[calls.length - 2], ['closePath']);
+  assert.deepEqual(calls[calls.length - 1], ['fill']);
+
+  // A rim light is one open path, not one stroke per segment.
+  calls.length = 0;
+  surface.strokePoly(ridge);
+  assert.deepEqual(calls.filter(([name]) => name === 'beginPath').length, 1);
+  assert.deepEqual(calls[calls.length - 1], ['stroke']);
+  assert.equal(calls.filter(([name]) => name === 'closePath').length, 0, 'a rim light must not close its path');
+
+  // Degenerate input draws nothing rather than emitting a broken path.
+  calls.length = 0;
+  surface.strokePoly([[1, 1]]);
+  surface.fillLinearGradientPoly([[1, 1]], [{ offset: 0, color: 0 }], 0, 0, 0, 1);
+  assert.equal(calls.length, 0);
+});
+
+test('frame pacing keeps 30 FPS as the floor and earns more only from measured cost', () => {
+  assert.equal(DYNAMIC_FRAME_MS, 33);
+  // Reduced motion wins outright: nothing is moving, so nothing needs repainting quickly.
+  assert.equal(dynamicFrameIntervalMs(0, 1, true), REDUCED_MOTION_FRAME_MS);
+  assert.equal(dynamicFrameIntervalMs(3, 1, true), REDUCED_MOTION_FRAME_MS);
+  // An unmeasured renderer starts at 30 FPS rather than assuming the device can afford more.
+  assert.equal(dynamicFrameIntervalMs(0, 0, false), DYNAMIC_FRAME_MS);
+  assert.equal(dynamicFrameIntervalMs(0, 2.5, false), DYNAMIC_FRAME_MS_SMOOTH);
+  // Below one display interval, or the throttle drops every second frame and 30 FPS is all a device
+  // can ever reach however cheap its frames are.
+  assert.ok(DYNAMIC_FRAME_MS_SMOOTH < 1000 / 60, `${DYNAMIC_FRAME_MS_SMOOTH} ms cannot exceed 30 FPS on a 60 Hz display`);
+  // A frame that costs real time, or any degraded tier, is held to 30 FPS.
+  assert.equal(dynamicFrameIntervalMs(0, 12, false), DYNAMIC_FRAME_MS);
+  for (const tier of [1, 2, 3]) assert.equal(dynamicFrameIntervalMs(tier, 1, false), DYNAMIC_FRAME_MS);
+});
+
+test('quality tiers shed the new lighting cosmetics monotonically and never all of them', () => {
+  let previousWindows = Infinity;
+  let previousGlow = Infinity;
+  for (const tier of [0, 1, 2, 3]) {
+    const factors = qualityFactors(tier);
+    assert.ok(factors.windowFraction > 0, `tier ${tier} switched the city off`);
+    assert.ok(factors.windowFraction <= previousWindows, `tier ${tier} animates more windows than tier ${tier - 1}`);
+    assert.ok(factors.glowDetail <= previousGlow, `tier ${tier} draws more glow than tier ${tier - 1}`);
+    previousWindows = factors.windowFraction;
+    previousGlow = factors.glowDetail;
+  }
+  assert.equal(qualityFactors(0).windowFraction, 1);
+  assert.equal(qualityFactors(0).glowDetail, 1);
+  assert.equal(qualityFactors(3).glowDetail, 0, 'the lowest tier keeps the light and drops its falloff');
+});
+
+test('outskirts fill the land between settlements deterministically and stay bounded', () => {
+  const civ = lateCiv(6101);
+  civ.development = 900; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 900);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 520, snapshot);
+  const first = worldOutskirts(civ, snapshot.worldWidth, snapshot, settlements);
+  const second = worldOutskirts(civ, snapshot.worldWidth, snapshot, settlements);
+  assert.deepEqual(first, second, 'the same world must produce the same outskirts');
+  assert.ok(first.length > 0, 'a four-viewport world must not be empty ground');
+  assert.ok(first.length <= MAX_OUTSKIRTS, `outskirts exceeded their budget at ${first.length}`);
+  for (const prop of first) {
+    assert.ok(prop.x >= 0 && prop.x <= snapshot.worldWidth, `prop left the world at ${prop.x}`);
+    assert.ok(['field', 'pylon', 'rocks', 'ruin', 'grove'].includes(prop.kind), `unknown prop ${prop.kind}`);
+    assert.ok(prop.scale > 0 && prop.scale <= 1.4);
+  }
+  // Props reach the far end of the world, which is the emptiness they exist to close.
+  const farthest = first.reduce((max, prop) => Math.max(max, prop.x), 0);
+  assert.ok(farthest > snapshot.worldWidth * .7, `nothing stands past ${Math.round(farthest)} of ${snapshot.worldWidth}`);
+  assert.ok(OUTSKIRT_WIDTH > 0);
+  // A different seed lays out a different land.
+  const other = worldOutskirts(lateCiv(6102), snapshot.worldWidth, snapshot, settlements);
+  assert.notDeepEqual(first, other);
+});
+
+test('settlements compose into districts with gaps instead of an evenly spaced row', () => {
+  const civ = lateCiv(6201);
+  civ.development = 900; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 800, snapshot);
+  const capital = [...settlements].sort((a, b) => b.structures.length - a.structures.length)[0];
+  assert.ok(capital.structures.length >= 8, 'the fixture needs a settlement big enough to have districts');
+
+  const xs = capital.structures.map(structure => structure.x).sort((a, b) => a - b);
+  const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+  const mean = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+  const widest = Math.max(...gaps);
+  assert.ok(widest > mean * 1.8, `the widest gap ${widest.toFixed(1)} is no bigger than the mean ${mean.toFixed(1)}: the row is still evenly spaced`);
+
+  // Skyline hierarchy: the core is taller than the outskirts, and every district is represented.
+  const districts = new Set(capital.structures.map(structure => structure.district));
+  assert.ok(districts.has('core'), 'a settlement must have a core');
+  const average = list => list.reduce((sum, structure) => sum + structure.height, 0) / Math.max(1, list.length);
+  const core = capital.structures.filter(structure => structure.district === 'core');
+  const edge = capital.structures.filter(structure => structure.district === 'edge');
+  if (edge.length) assert.ok(average(core) > average(edge), 'the core must dominate the skyline');
+
+  // Every structure carries the two fields the lighting and the material depend on.
+  for (const structure of capital.structures) {
+    assert.ok(structure.lightPhase >= 0 && structure.lightPhase < 1, 'a structure needs its own lighting phase');
+    assert.ok(['back', 'mid', 'front'].includes(structure.depthLane));
+    assert.ok(Math.abs(structure.x - capital.centerX) <= capital.radius + 1, 'a plot must stay inside its settlement');
+  }
+  assert.ok(settlements[0].lightPhase >= 0 && settlements[0].lightPhase < 1);
+});
+
+test('use decides silhouette: farms lie low, industry keeps its mass, the core builds high', () => {
+  const civ = lateCiv(6301);
+  civ.development = 900; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const structures = settlementLayout(civ, snapshot.worldWidth, 800, snapshot).flatMap(settlement => settlement.structures);
+  const tallest = kind => structures.filter(structure => structure.kind === kind).reduce((max, structure) => Math.max(max, structure.height), 0);
+  const dwellings = tallest('dwelling');
+  assert.ok(dwellings > 0, 'the fixture must contain dwellings');
+  if (tallest('farm') > 0) assert.ok(tallest('farm') < dwellings * .8, 'a farm must not compete with the skyline');
+  if (tallest('industry') > 0) assert.ok(tallest('industry') < dwellings, 'industry keeps a low heavy mass');
+});
+
+test('a portrait viewport keeps its sky: the skyline is budgeted from the aspect ratio', () => {
+  const civ = lateCiv(6401);
+  civ.development = 900; civ.era = 4;
+  // A phone in portrait: 390 x 844. The world is derived from the viewport, so the layout is asked
+  // for the same world the renderer would build.
+  const portraitSnapshot = worldSnapshot(civ, 390);
+  const portrait = settlementLayout(civ, portraitSnapshot.worldWidth, 844, portraitSnapshot);
+  const portraitCrown = portrait.flatMap(s => s.structures).reduce((max, structure) => Math.max(max, structure.height), 0);
+  assert.ok(portraitCrown <= 844 * .41, `a portrait skyline reached ${Math.round(portraitCrown)} of 844`);
+
+  const desktopSnapshot = worldSnapshot(civ, 1440);
+  const desktop = settlementLayout(civ, desktopSnapshot.worldWidth, 800, desktopSnapshot);
+  const desktopCrown = desktop.flatMap(s => s.structures).reduce((max, structure) => Math.max(max, structure.height), 0);
+  assert.ok(desktopCrown / 800 > portraitCrown / 844, 'a desktop viewport may spend more of its height on skyline');
+
+  // And settlements keep room between them however narrow the world gets, or the whole world becomes
+  // one unbroken wall of buildings.
+  for (let i = 1; i < portrait.length; i++) {
+    const gap = portrait[i].centerX - portrait[i - 1].centerX;
+    assert.ok(portrait[i].radius + portrait[i - 1].radius < gap * 1.15, `settlements ${i - 1} and ${i} overlap completely`);
+  }
+});
+
+test('a consequence is shaped by the settlement it happens to, not by the middle of the screen', () => {
+  const calls = [];
+  const surface = new Proxy({}, { get: (_t, name) => (...args) => { calls.push([name, ...args]); return surface; } });
+  const feedback = { sequence: 5, eventId: 'growth:urban', tone: 'positive', consequence: { significance: 'turning_point', tags: ['urban_growth'], signatureProfile: 'growth' } };
+  const draw = anchor => {
+    calls.length = 0;
+    drawConsequenceImpact(surface, feedback, 100, 200, 900, 520, 0x6fe7e1, false, 0, 3600, anchor);
+    return calls.filter(([name]) => name === 'line').map(([, x1, y1]) => ({ x: x1, y: y1 }));
+  };
+
+  // Growth rises out of the plots the settlement actually stands on.
+  const plots = [{ centerX: 400, radius: 160, structures: [{ x: 330, width: 20, height: 120 }, { x: 470, width: 20, height: 90 }] }];
+  const onPlots = draw(plots);
+  assert.ok(onPlots.some(point => Math.abs(point.x - 330) < 1), 'growth must stand on a real plot');
+  assert.ok(onPlots.some(point => Math.abs(point.x - 470) < 1));
+
+  // With no structures to stand on it still lands on the settlement rather than mid-screen.
+  const bare = draw([{ centerX: 400 }]);
+  assert.ok(bare.length > 0);
+  assert.ok(bare.every(point => Number.isFinite(point.x) && Number.isFinite(point.y)));
+  assert.ok(bare.some(point => Math.abs(point.x - 400) < 200), 'the impact must sit on the settlement');
+
+  // A taller skyline lifts the cue with it.
+  const shortSkyline = { centerX: 400, radius: 120, structures: [{ x: 400, width: 20, height: 60 }] };
+  const tallSkyline = { centerX: 400, radius: 120, structures: [{ x: 400, width: 20, height: 200 }] };
+  const identity = { sequence: 6, eventId: 'identity:shift', tone: 'neutral', consequence: { significance: 'turning_point', tags: ['religious_shift'], signatureProfile: 'identity' } };
+  const ringY = anchor => {
+    calls.length = 0;
+    drawConsequenceImpact(surface, identity, 100, 200, 900, 520, 0x6fe7e1, false, 0, 3600, [anchor]);
+    return calls.find(([name]) => name === 'strokeCircle')[2];
+  };
+  assert.ok(ringY(tallSkyline) < ringY(shortSkyline), 'a taller settlement carries its consequence higher');
 });

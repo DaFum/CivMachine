@@ -24,7 +24,8 @@ this, so run it before claiming a game change works.
   panel column is read from the catalog, and it is deliberately not in `structuralWorldKey` because
   the canvases draw no text.
 - **Per-frame work must stay cheap.** Ticking must not write `localStorage` or rebuild interactive
-  controls every frame.
+  controls every frame. The world's animated layer is bounded by counts rather than by the world:
+  `public/game/src/render/AGENTS.md` has the budgets and the frame-pacing rule.
 - **Explanation is presentation, and presentation is one-directional.** `state.tutorial`, `state.help`,
   `machine.lastRunReport` and `Civilization.trace` exist so the player can see what happened and why.
   No progression, pressure, harvest or scheduler rule may read any of them —

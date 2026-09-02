@@ -7,7 +7,7 @@ import { GameEngine } from '../dist/game/engine.js';
 // The canvas doubles carry `setAttribute` because the renderer marks its three layers aria-hidden:
 // the host element owns the accessible name, so the layers themselves are decoration.
 
-const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio'];
+const DOM_KEYS = ['window', 'document', 'ResizeObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio', 'matchMedia'];
 
 function developedCivilization(seed = 404) {
   const civ = GameEngine.createCivilizationForTest(seed);
@@ -304,6 +304,8 @@ test('consequence impacts remain bounded, visible, and finite when panning', asy
     fillRect: (...args) => calls.push(['fillRect', ...args]),
     strokeRect: (...args) => calls.push(['strokeRect', ...args]),
     fillTriangle: (...args) => calls.push(['fillTriangle', ...args]),
+    // A light field is bounded by its outer radius, so it is held to the same extents as a circle.
+    fillRadialGlow: (cx, cy, _inner, outer) => calls.push(['fillRadialGlow', cx, cy, outer]),
   };
 
   const sampleFeedbacks = [
@@ -336,7 +338,7 @@ test('consequence impacts remain bounded, visible, and finite when panning', asy
           const [x1, , x2] = args;
           minX = Math.min(x1, x2);
           maxX = Math.max(x1, x2);
-        } else if (name === 'strokeCircle' || name === 'fillCircle') {
+        } else if (name === 'strokeCircle' || name === 'fillCircle' || name === 'fillRadialGlow') {
           const [cx, , radius] = args;
           assert.ok(Number.isFinite(radius) && radius > 0, `profile '${profile}' scroll ${scroll}: ${name} radius=${radius} invalid`);
           minX = cx - radius;
@@ -1055,4 +1057,106 @@ test('memory and identity scenery keep the reference strip redraw under its ceil
     `the window must contain memory/identity primitives: ${exposed(viaFull).length} with memory vs ${exposed(bare).length} without`);
   assert.ok(exposed(viaFull).length > 0, 'the reference redraw must paint something in the strip');
   assert.deepEqual(exposed(viaStrip), exposed(viaFull), 'the strip redraw dropped or moved primitives the full redraw paints');
+});
+
+
+test('haze covers a four-viewport world with no gap, however few bands the tier allows', async () => {
+  // The coverage bug this pins: band width used to be a fixed 450 px whatever the world measured, so
+  // a stage-4 world -- four viewports across -- carrying the two bands the lowest tier allows had
+  // atmosphere over about a quarter of itself and bare sky over the rest.
+  const { drawHazeBands } = await import('../dist/render/world.js');
+  const { applyQualityToLiveSample, worldSnapshot } = await import('../dist/render/world-model.js');
+  const { worldPresentation } = await import('../dist/render/world-presentation.js');
+
+  const civ = developedCivilization(404);
+  civ.development = 900;
+  civ.era = 4;
+  const snapshot = worldSnapshot(civ, 900);
+  const presentation = worldPresentation(civ);
+  const worldWidth = snapshot.worldWidth;
+  assert.ok(worldWidth >= 3600, `stage-4 world was only ${worldWidth}px`);
+
+  const coverage = (sample, time) => {
+    const spans = [];
+    const surface = new Proxy({}, { get: (_t, name) => (...args) => {
+      if (name === 'fillRect') spans.push([args[0], args[0] + args[2]]);
+      return surface;
+    } });
+    drawHazeBands(surface, sample, presentation, 900, 520, time, { from: 0, to: worldWidth }, false);
+    spans.sort((a, b) => a[0] - b[0]);
+    let covered = 0, widestGap = 0, cursor = 0;
+    for (const [from, to] of spans) {
+      const start = Math.max(cursor, Math.max(0, from));
+      if (start > cursor) widestGap = Math.max(widestGap, start - cursor);
+      if (to > cursor) { covered += Math.max(0, Math.min(worldWidth, to) - start); cursor = Math.min(worldWidth, to); }
+    }
+    if (cursor < worldWidth) widestGap = Math.max(widestGap, worldWidth - cursor);
+    return { covered: covered / worldWidth, widestGap, bands: spans.length };
+  };
+
+  // Every tier, and several points in the drift cycle, so a band's wrap cannot hide a gap.
+  for (const tier of [0, 1, 2, 3]) {
+    const sample = applyQualityToLiveSample(snapshot, tier);
+    for (const time of [0, 4000, 26000, 120000]) {
+      const { covered, widestGap, bands } = coverage(sample, time);
+      assert.ok(bands > 0, `tier ${tier} drew no haze at all`);
+      assert.ok(covered > .9, `tier ${tier} at t=${time} covered only ${(covered * 100).toFixed(1)}% of the world`);
+      assert.ok(widestGap < 500, `tier ${tier} at t=${time} left a ${Math.round(widestGap)}px hole in the atmosphere`);
+    }
+  }
+
+  // The far end of a broad world is the section the old fixed width abandoned first.
+  const farView = { from: worldWidth - 900, to: worldWidth };
+  const farSpans = [];
+  const farSurface = new Proxy({}, { get: (_t, name) => (...args) => { if (name === 'fillRect') farSpans.push(args[0]); return farSurface; } });
+  drawHazeBands(farSurface, applyQualityToLiveSample(snapshot, 3), presentation, 900, 520, 9000, farView, false);
+  assert.ok(farSpans.length > 0, 'the last viewport of the world must still have haze');
+});
+
+// One dynamic frame for a civilization, positioned in screen coordinates, with reduced motion on or
+// off. Used to prove that reduced motion freezes the layer without emptying it.
+async function dynamicFrameAt(seed, time, reducedMotion, tag) {
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [trackingContext([]), trackingContext([]), trackingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.matchMedia = query => ({ matches: reducedMotion && query.includes('reduced-motion'), addEventListener: () => {}, removeEventListener: () => {} });
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? trackingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    dynamicCalls.length = 0;
+    frame(time);
+    controller.destroy();
+  });
+  return dynamicCalls;
+}
+
+test('reduced motion freezes the animated layer without dropping any of it', async () => {
+  const early = await dynamicFrameAt(2121, 4000, true, 'rm-a');
+  const later = await dynamicFrameAt(2121, 40000, true, 'rm-b');
+  assert.ok(early.length > 100, `a reduced-motion frame drew only ${early.length} primitives`);
+  assert.deepEqual(early, later, 'reduced motion must not move anything as time passes');
+
+  // And the same world with motion allowed is not frozen -- otherwise the assertion above would
+  // pass for a renderer that had simply stopped drawing.
+  const moving = await dynamicFrameAt(2121, 40000, false, 'rm-c');
+  assert.notDeepEqual(await dynamicFrameAt(2121, 4000, false, 'rm-d'), moving, 'the animated layer must animate');
+  assert.ok(moving.length > 100);
+});
+
+test('the animated layer is a pure function of the world and the clock', async () => {
+  const first = await dynamicFrameAt(3131, 5000, false, 'det-a');
+  const second = await dynamicFrameAt(3131, 5000, false, 'det-b');
+  assert.deepEqual(first, second, 'the same world at the same time must draw the same frame');
+  const other = await dynamicFrameAt(3132, 5000, false, 'det-c');
+  assert.notDeepEqual(first, other, 'a different seed must draw a different world');
 });

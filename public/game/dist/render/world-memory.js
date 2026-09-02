@@ -1,4 +1,5 @@
 import { sanitizeWorldMemory } from '../game/world-memory.js';
+import { mixColor, shade } from './primitives.js';
 /**
  * The structural half of saved memory: what a mark or scar *is*, never how many decisions have gone
  * past. `sequence` climbs on every completed decision, so folding it in would rebuild every cached
@@ -56,6 +57,12 @@ function drawMark(surface, mark, x, ground, accent) {
         for (let i = 0; i < 2 + s; i++) {
             surface.lineStyle(1.3, mark.repaired ? 0x73e6bd : 0x8ee66b, alpha).line(x + i * 8 - 12, ground + 10, x + i * 10 - 18, ground - 22 - s * 6);
         }
+        // Blight reaches the foreground the player looks across, not only the strip it stands on: the
+        // ground in front of the mark is stained and its growth is bent over.
+        surface.fillStyle(mark.repaired ? 0x1d3a2c : 0x2a2a16, mark.repaired ? .3 : .5).fillRect(x - 26 - s * 5, ground + 12, 52 + s * 10, 10 + s * 3);
+        for (let i = 0; i < 3; i++) {
+            surface.lineStyle(1, mark.repaired ? 0x73e6bd : 0x6b6a35, alpha * .7).line(x - 18 + i * 16, ground + 22 + s * 2, x - 12 + i * 16, ground + 14);
+        }
     }
     else {
         surface.lineStyle(1.6, mark.repaired ? 0x73e6bd : 0xee6973, alpha).line(x - 14, ground - 55 - s * 9, x + 5, ground - 28);
@@ -66,6 +73,10 @@ function drawScar(surface, scar, x, ground, accent) {
     const s = scar.strength;
     const alpha = .6 + s * .12;
     if (scar.domain === 'reality') {
+        // The fracture continues past the settlement plane into the near ground, so a reality breach
+        // reads as damage to the terrain rather than as a decal standing on it.
+        surface.lineStyle(1.4, 0xee6973, alpha * .5).line(x - 8, ground + 16, x - 26 - s * 4, ground + 44 + s * 4);
+        surface.lineStyle(1.2, 0xee6973, alpha * .38).line(x + 6, ground + 16, x + 22 + s * 4, ground + 40 + s * 3);
         // Scorched crater baseline extending deep into ground terrain
         surface.fillStyle(0x0a050d, .72).fillRect(x - 30 - s * 8, ground - 2, 60 + s * 16, 18);
         for (let i = 0; i < 3 + s + Math.min(2, scar.evolution); i++) {
@@ -78,11 +89,23 @@ function drawScar(surface, scar, x, ground, accent) {
         surface.fillStyle(0x0e0612, .95).fillRect(x - 32 - s * 8, ground - 14 - s * 8, 64 + s * 16, 18 + s * 8);
         surface.lineStyle(1.5, 0xee6973, alpha).line(x - 32 - s * 8, ground - 14 - s * 8, x + 32 + s * 8, ground);
         surface.lineStyle(1.2, 0xee6973, alpha * .7).line(x - 20 - s * 4, ground, x + 20 + s * 4, ground - 14 - s * 8);
+        // Two broken shells standing in the skyline the settlement kept: what the world lost is part of
+        // its silhouette, not a mark on the floor beside it.
+        for (let i = 0; i < 2; i++) {
+            const shellX = x - 22 - s * 5 + i * (34 + s * 8);
+            const shellHeight = 30 + s * 12 - i * 8;
+            surface.fillStyle(shade(0x120a16, .1), .92).fillRect(shellX, ground - shellHeight, 14 + s * 2, shellHeight);
+            surface.fillStyle(mixColor(0x120a16, 0xee6973, .12), .8).fillTriangle(shellX, ground - shellHeight, shellX + 14 + s * 2, ground - shellHeight + 10, shellX, ground - shellHeight + 14);
+        }
     }
     else {
         surface.fillStyle(0x0a050d, .6).fillRect(x - 24 - s * 5, ground - 6, 48 + s * 10, 10);
         surface.lineStyle(2.2, accent, alpha).strokeCircle(x, ground - 48 - s * 10, 18 + s * 7);
         surface.lineStyle(1.2, accent, alpha * .8).strokeRect(x - 14 - s * 4, ground - 60 - s * 12, 28 + s * 8, 28 + s * 8);
+        // A replaced identity leaves its own monument beside whatever the settlement built instead: a
+        // plinth carrying a broken shaft, in the accent the current path uses.
+        surface.fillStyle(mixColor(0x0a050d, accent, .18), .9).fillRect(x - 9 - s, ground - 22 - s * 4, 18 + s * 2, 22 + s * 4);
+        surface.lineStyle(1.4, accent, alpha * .55).line(x - 9 - s, ground - 22 - s * 4, x + 4, ground - 30 - s * 5);
     }
 }
 /** Persistent geometry, so it belongs on the cached scenery layer that scrolls 1:1 with the world. */
