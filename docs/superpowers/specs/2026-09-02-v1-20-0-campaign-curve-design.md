@@ -197,8 +197,10 @@ because their runs are shorter. Measured on the four axes the mandate names, at 
 | utility_first | 19 | 30 | 2.92 | 5287 |
 
 No tilt Pareto-dominates another: for every pair, whichever is ahead on one axis is behind on
-another. `campaign.test.mjs` checks all twenty-one pairs, not merely whether one tilt holds every
-axis at once, which is the weaker question and passes far too easily.
+another. `campaign.test.mjs` checks every ordered pair of the six tilts the harness can measure --
+thirty comparisons, or fifteen unordered pairs -- rather than merely asking whether one tilt holds
+every axis at once, which is the weaker question and passes far too easily. `utility_first` is the
+seventh tilt and is held to a separate, weaker bar for the reason below.
 
 Two honest caveats, both of which cost real calibration attempts to establish.
 

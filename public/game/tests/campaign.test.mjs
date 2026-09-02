@@ -353,22 +353,27 @@ test('campaign: no purchase tilt is Pareto-dominated by another', () => {
   // safest branch of every intervention, so there is little left for foresight to soften and no reason
   // to spend Control looking -- and a build tilted toward it is therefore measured spending resources
   // on nothing. That is asserted here rather than asserted *about* here, so the exclusion below is
-  // earned by a check instead of by a comment.
-  const withoutCore = () => {
+  // earned by a check instead of by a comment. Twelve seeds and the whole run record, because an
+  // exclusion is only worth what its proof is worth: one seed and two fields would leave room for the
+  // module to be doing something small that the comparison simply did not look at.
+  const buildFor = predictionLevel => {
     const engine = freshCampaignEngine();
     engine.state.meta.progression.machineInsight = 30;
     Object.assign(engine.state.machine.upgradeLevels, { reality_lattice: 2, awareness_scrubber: 1 });
+    if (predictionLevel) engine.state.machine.upgradeLevels.prediction_core = predictionLevel;
     return engine;
   };
-  const withCore = () => {
-    const engine = withoutCore();
-    engine.state.machine.upgradeLevels.prediction_core = 5;
-    return engine;
-  };
-  const bare = playRun(withoutCore(), { seed: 3000 });
-  const cored = playRun(withCore(), { seed: 3000 });
-  assert.equal(cored.elapsed, bare.elapsed, 'if Prediction Core ever starts mattering to this policy, drop the exclusion below');
-  assert.equal(cored.credits, bare.credits);
+  const COMPARED = ['elapsed', 'waited', 'credits', 'depth', 'grade', 'objectiveCompleted', 'era', 'development', 'interventions'];
+  for (let index = 0; index < 12; index++) {
+    const seed = 3000 + index * 97;
+    const bare = playRun(buildFor(0), { seed });
+    const cored = playRun(buildFor(5), { seed });
+    for (const field of COMPARED) {
+      assert.deepEqual(cored[field], bare[field],
+        `Prediction Core changed ${field} on seed ${seed} -- it now matters to this policy, so drop the exclusion below`);
+    }
+    assert.deepEqual(cored.rewards, bare.rewards, `Prediction Core changed the harvest on seed ${seed}`);
+  }
 
   const rows = PURCHASE_POLICIES.map(measure);
   for (const row of rows) {
