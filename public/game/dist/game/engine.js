@@ -9,7 +9,7 @@ import { EXPANDED_INTERVENTIONS } from "../data/expanded-interventions.js";
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS, } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
 import { applyWorldMemory } from "./world-memory.js";
-import { parseSaveText } from "./save-migration.js";
+import { clampSimulationSpeed, parseSaveText } from "./save-migration.js";
 import { Progression, nextSystemPreviews, visibleUpgradeEntries, } from "./progression.js";
 import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention, } from "./intervention-scheduler.js";
@@ -1482,7 +1482,7 @@ export class GameEngine {
         // Whichever is greater: what this save has earned with Machine Insight, or what it had already
         // bought back when Temporal Injector sold simulation speed. The grandfathered floor never
         // decreases, so a returning player never loses a speed they were using.
-        return Math.max(maxSimulationSpeed(this.machineInsight()), Math.max(1, Math.trunc(Number(this.state.meta.progression.simulationSpeedUnlocked ?? 1)) || 1));
+        return Math.max(maxSimulationSpeed(this.machineInsight()), clampSimulationSpeed(this.state.meta.progression.simulationSpeedUnlocked ?? 1));
     }
     setSimulationSpeed(n) {
         this.state.simulationSpeed = Math.max(1, Math.min(this.maxSimulationSpeed(), Math.trunc(n)));

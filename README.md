@@ -59,8 +59,10 @@ onward the survival build is assembled rather than stacked.
 **Entropy Vents get dearer as a run spends them.** Containment sets the cascade horizon, but a run
 that kept resolving interventions kept being handed Stability and Control back, and a flat-priced vent
 turned both straight into more run: at Containment 3, runs finished anywhere between 300 s and 900 s.
-Each vent now costs 35% more Stability than the last -- and pays proportionally more Paradox, so what
-the escalation rations is run length, not the Paradox economy.
+Each vent now costs 3.5 Stability more than the one before it -- 10, 13.5, 17, 20.5, linear in the
+base cost rather than compounding -- and pays proportionally more Paradox, so what the escalation
+rations is run length, not the Paradox economy. A vent the run cannot pay for in full is refused
+rather than part-paid.
 
 Alongside those, three systems that were traps became decisions:
 
@@ -85,7 +87,7 @@ Same modelled player, same seeds, both engines. `npm run balance` prints the ful
 
 | Measure | v1.19.0 | v1.20.0 | Target |
 | --- | ---: | ---: | ---: |
-| First run, seconds | 130 | 130 | unchanged |
+| First run, seconds (median of 60 seeds) | 130 | 130 | unchanged |
 | First run, affordable Machine levels | 3 | 2 | 1-2 |
 | Containment gained per run, median / p90 | 5 / 15 | 1 / 3 | 1-2 / <=3 |
 | Reality Lattice levels bought in one step, worst | 6 | 2 | <=2 |

@@ -11,7 +11,8 @@ held. The loop *above* the run did not, and one run at a time could not show it.
 
 Measured on v1.19.0 from an empty save, with a player who resolves interventions safely, vents when
 Entropy threatens the run, and harvests when the interface's own harvest call says the next
-Cultivation Credit no longer fits:
+Cultivation Credit no longer fits. This is one seed followed run by run, so its first run is 146 s;
+the 130 s quoted in the release notes is the median across sixty seeds of that same first run.
 
 | Run | Duration | Depth | Grade | Credits | Machine levels affordable | Containment after |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
@@ -51,7 +52,7 @@ Deliberately small, and deliberately at the sources rather than at the symptoms.
 
 ### 1. The yield multiplier is concave
 
-```
+```text
 multiplier = 0.25 + 0.22 × 6 × ln(1 + Depth / 6)
 ```
 
@@ -122,7 +123,9 @@ levels would have cost roughly two Universes and been worth over forty thousand 
 ### 5. Entropy Vents escalate
 
 `ventStabilityCost(uses) = 10 × (1 + 0.35 × uses)`, and the Paradox payout scales with the same
-factor. Venting becomes a finite budget rather than a renewable one, which puts run length back under
+factor. The growth is linear in the base cost, not compounding on the previous vent: 10, 13.5, 17,
+20.5 — each vent costs 3.5 more than the one before, which is 35% *of the base*, not 35% more than the
+last one paid. Venting becomes a finite budget rather than a renewable one, which puts run length back under
 the curve Containment governs, and gives Containment a second job: a slower Entropy rate is now worth
 vents as well as seconds. Tying the payout to the price keeps Paradox-per-Stability flat, so what the
 escalation rations is run length, not the Paradox economy — without that, a venting run measured 250

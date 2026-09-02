@@ -38,8 +38,17 @@ console.log('Bands are p10 / median / p90 across seeds.');
 
 const toFirstUniverse = new Map(STRATEGY_IDS.map(strategy =>
   [strategy, SEEDS(WIDE).map(seed => runCampaign({ seed, strategy, stop: 'first_universe' }))]));
-const toFourthUniverse = new Map(STRATEGY_IDS.map(strategy =>
-  [strategy, SEEDS(DEEP).map(seed => runCampaign({ seed, strategy, stop: 'universes:4' }))]));
+// A campaign that ran out of runs before its fourth Universe has no U4 to report, and averaging it in
+// would quietly drag every band toward whatever it managed. Nothing stalls at the committed balance,
+// so this is a guard that speaks up rather than a filter that hides something.
+const toFourthUniverse = new Map(STRATEGY_IDS.map(strategy => {
+  const campaigns = SEEDS(DEEP).map(seed => runCampaign({ seed, strategy, stop: 'universes:4' }));
+  const complete = campaigns.filter(campaign => campaign.universesTotal >= 4);
+  if (complete.length !== campaigns.length) {
+    console.log(`WARNING: ${strategy} stalled short of four Universes on ${campaigns.length - complete.length} of ${campaigns.length} seeds; they are excluded below.`);
+  }
+  return [strategy, complete];
+}));
 
 // ---------------------------------------------------------------- 1
 section('1. First run  -- short and dangerous, and worth exactly one real purchase');
@@ -146,7 +155,14 @@ console.log(fewestRuns[0] === leastTime[0]
 // ---------------------------------------------------------------- 9
 if (full) {
   section('9. Great Convergence horizon  -- a whole campaign, from an empty save to the gate');
-  const convergence = SEEDS(6).map(seed => runCampaign({ seed, strategy: 'balanced', stop: 'convergence', maxRuns: 600 }));
+  const attempted = SEEDS(6).map(seed => runCampaign({ seed, strategy: 'balanced', stop: 'convergence', maxRuns: 600 }));
+  const convergence = attempted.filter(campaign => campaign.convergenceUnlocked);
+  if (!convergence.length) {
+    console.log('No seed reached the Great Convergence gate inside the run budget -- the horizon is longer than this sweep can see.');
+  } else {
+    if (convergence.length !== attempted.length) {
+      console.log(`WARNING: ${attempted.length - convergence.length} of ${attempted.length} seeds did not reach the gate; they are excluded below.`);
+    }
   console.log(L('measure', 26) + R('p10 / median / p90', 26));
   console.log(L('civilizations', 26) + R(band(convergence.map(c => c.totalRuns), 0), 26));
   console.log(L('universes', 26) + R(band(convergence.map(c => c.universesTotal), 0), 26));
@@ -155,6 +171,7 @@ if (full) {
   console.log(L('simulated hours', 26) + R(band(convergence.map(c => c.simulatedSeconds / 3600), 2), 26));
   console.log('\nSimulated hours are 1x cultivation time only -- the player also spends real time on');
   console.log('interventions and purchases, and can run at 2x or 4x once Machine Insight allows it.');
+  }
 }
 
 console.log(`\ndone in ${((Date.now() - started) / 1000).toFixed(1)}s\n`);

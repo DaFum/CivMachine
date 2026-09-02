@@ -204,7 +204,7 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
       {
         id: 'accelerate',
         term: 'Accelerate (2)',
-        what: '+200 years and Development for 2 Control, at -4 Stability and +3 Entropy plus 3 per Era.',
+        what: 'Injects years and Development for 2 Control, at -4 Stability and +3 Entropy plus 3 per Era. The injection starts at +200 years and +6 Development and grows with every Temporal Injector level; the rail names the current figures.',
         where: 'Second button in the rail.',
         why: 'The injected years are excluded from the Entropy curve, so it is a one-off price rather than a permanent rate rise.',
       },
@@ -218,7 +218,7 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
       {
         id: 'vent',
         term: 'Entropy Vent (4)',
-        what: '-18 Entropy for 1 Control, paid with 10 Stability and 4 Attention.',
+        what: `-18 Entropy for 1 Control, paid with 4 Attention and 10 Stability for the run's first vent -- every later vent in the same run costs 3.5 Stability more than that one, and pays proportionally more Paradox.`,
         where: 'Fourth button in the rail.',
         why: 'It is the only way to push the cascade back, which makes Stability the currency that actually buys run length.',
       },

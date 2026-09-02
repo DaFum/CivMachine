@@ -543,7 +543,7 @@ const ENGLISH = {
                     },
                     "accelerate": {
                         "term": "Accelerate (2)",
-                        "what": "+200 years and Development for 2 Control, at -4 Stability and +3 Entropy plus 3 per Era.",
+                        "what": "Injects years and Development for 2 Control, at -4 Stability and +3 Entropy plus 3 per Era. The injection starts at +200 years and +6 Development and grows with every Temporal Injector level; the rail names the current figures.",
                         "where": "Second button in the rail.",
                         "why": "The injected years are excluded from the Entropy curve, so it is a one-off price rather than a permanent rate rise."
                     },
@@ -555,7 +555,7 @@ const ENGLISH = {
                     },
                     "vent": {
                         "term": "Entropy Vent (4)",
-                        "what": "-18 Entropy for 1 Control, paid with 10 Stability and 4 Attention.",
+                        "what": "-18 Entropy for 1 Control, paid with 4 Attention and 10 Stability for the run's first vent -- every later vent in the same run costs 3.5 Stability more than that one, and pays proportionally more Paradox.",
                         "where": "Fourth button in the rail.",
                         "why": "It is the only way to push the cascade back, which makes Stability the currency that actually buys run length."
                     },
@@ -664,7 +664,7 @@ const ENGLISH = {
             "entropy_critical": {
                 "headline": "Entropy at {entropy} — the cascade is {secondsToCascade} away.",
                 "cause": "Entropy rises at {entropyRate}/s, and the rate grows with every year the civilization lives.",
-                "advice": "Entropy Vent (4) removes 18 for 1 Control and 10 Stability. Otherwise this is the run’s last window."
+                "advice": "Entropy Vent (4) removes 18 for 1 Control, at the Stability price the rail names -- it rises with every vent this run has already spent. Otherwise this is the run’s last window."
             },
             "harvest_window": {
                 "headline": "Harvest now — Cultivation Credit {nextCredit} no longer fits in the run.",
@@ -691,12 +691,12 @@ const ENGLISH = {
                 "headline": "This run cannot pay yet.",
                 "causeInterventions": "Premature grade: it has resolved {eventChoices} of the 3 interventions a payout needs.",
                 "causeEra": "Premature grade: it is still in {eraName}, and a payout needs Expansion or later.",
-                "causeDepth": "Premature grade: Depth is {depth} and Established starts at 1.5.",
-                "advice": "Keep it alive. Accelerate (2) is the fastest route out of Premature, at +200 years for 2 Control."
+                "causeDepth": "Premature grade: Depth is {depth} and Established starts at {established}.",
+                "advice": "Keep it alive. Accelerate (2) is the fastest route out of Premature, for 2 Control."
             },
             "credit_cap": {
                 "headline": "Cultivation Credits are capped at {credits}.",
-                "cause": "The credit formula stops at 20 regardless of Depth.",
+                "cause": "The credit formula stops at {cap} regardless of Depth, so a Universe always takes at least two of them.",
                 "advice": "Only raw resource yield still grows. Harvest unless a Directive objective is still within reach."
             },
             "closing": {
@@ -1012,7 +1012,8 @@ const ENGLISH = {
             "alreadyProbed": "This intervention has already been probed.",
             "entropyTooLowToVent": "Entropy is too low to vent.",
             "accelerateRisk": "-4 Stability · +{entropy} Entropy",
-            "ventRisk": "-{stability} Stability · +4 Attention"
+            "ventRisk": "-{stability} Stability · +4 Attention",
+            "ventTooExpensive": "The next Entropy Vent costs {stability} Stability, which this run cannot pay."
         }
     },
     "content": {
@@ -5245,7 +5246,7 @@ const GERMAN = {
                     },
                     "accelerate": {
                         "term": "Accelerate (2)",
-                        "what": "+200 Jahre und Development für 2 Control, dafür -4 Stability sowie +3 Entropy plus 3 je Era.",
+                        "what": "Injiziert Jahre und Development für 2 Control, dafür -4 Stability sowie +3 Entropy plus 3 je Era. Die Injektion beginnt bei +200 Jahren und +6 Development und wächst mit jedem Temporal-Injector-Level; das Rail nennt die aktuellen Werte.",
                         "where": "Zweite Schaltfläche im Bereich.",
                         "why": "Die hinzugefügten Jahre fließen nicht in die Entropy-Kurve ein. Die Kosten sind daher einmalig und erhöhen nicht dauerhaft die Rate."
                     },
@@ -5257,7 +5258,7 @@ const GERMAN = {
                     },
                     "vent": {
                         "term": "Entropy Vent (4)",
-                        "what": "-18 Entropy für 1 Control, bezahlt mit 10 Stability und 4 Attention.",
+                        "what": "-18 Entropy für 1 Control, bezahlt mit 4 Attention und 10 Stability für den ersten Vent eines Runs -- jeder weitere Vent im selben Run kostet 3,5 Stability mehr als dieser und zahlt entsprechend mehr Paradox.",
                         "where": "Vierte Schaltfläche im Bereich.",
                         "why": "Dies ist die einzige Möglichkeit, die Cascade hinauszuschieben. Damit wird Stability zur Ressource, die tatsächlich zusätzliche Run-Zeit kauft."
                     },
@@ -5366,7 +5367,7 @@ const GERMAN = {
             "entropy_critical": {
                 "headline": "Entropy bei {entropy} — Cascade in {secondsToCascade}.",
                 "cause": "Entropy steigt mit {entropyRate}/s; die Rate wächst mit jedem Jahr der Zivilisation.",
-                "advice": "Entropy Vent (4) entfernt 18 Entropy für 1 Control und 10 Stability. Andernfalls ist dies das letzte sichere Zeitfenster des Runs."
+                "advice": "Entropy Vent (4) entfernt 18 Entropy für 1 Control, zum Stability-Preis, den das Rail nennt — er steigt mit jedem bereits ausgegebenen Vent. Andernfalls ist dies das letzte sichere Zeitfenster des Runs."
             },
             "harvest_window": {
                 "headline": "Jetzt harvesten — Cultivation Credit {nextCredit} passt nicht mehr in den Run.",
@@ -5393,12 +5394,12 @@ const GERMAN = {
                 "headline": "Dieser Run kann noch nicht auszahlen.",
                 "causeInterventions": "Grade Premature: {eventChoices} von 3 für eine Auszahlung notwendigen Interventionen wurden gelöst.",
                 "causeEra": "Grade Premature: Der Run befindet sich noch in {eraName}; eine Auszahlung benötigt Expansion oder später.",
-                "causeDepth": "Grade Premature: Depth liegt bei {depth}; Established beginnt bei 1,5.",
-                "advice": "Run am Leben halten. Accelerate (2) ist mit +200 Jahren für 2 Control der schnellste Weg aus Premature."
+                "causeDepth": "Grade Premature: Depth liegt bei {depth}; Established beginnt bei {established}.",
+                "advice": "Run am Leben halten. Accelerate (2) ist für 2 Control der schnellste Weg aus Premature."
             },
             "credit_cap": {
                 "headline": "Cultivation Credits sind bei {credits} gedeckelt.",
-                "cause": "Die Credit-Formel endet unabhängig von Depth bei 20.",
+                "cause": "Die Credit-Formel endet unabhängig von Depth bei {cap}; ein Universe kostet deshalb immer mindestens zwei davon.",
                 "advice": "Nur der rohe Ressourcenertrag wächst weiter. Harvest auslösen, sofern kein Directive-Ziel mehr erreichbar ist."
             },
             "closing": {
@@ -5518,7 +5519,7 @@ const GERMAN = {
                 "abandoned": "Ein Abbruch speichert nichts. Selbst ein chaotischer Harvest bei Grade Premature liefert mindestens 8 Causal Mass; ein Run sollte daher statt einer Freigabe immer kollabiert werden.",
                 "prematureOneIntervention": "Der Run löste {eventChoices} Intervention. Drei Interventionen plus Era Expansion sind die Mindestanforderung, bevor ein Harvest Cultivation Credits auszahlt.",
                 "prematureManyInterventions": "Der Run löste {eventChoices} Interventionen. Drei Interventionen plus Era Expansion sind die Mindestanforderung, bevor ein Harvest Cultivation Credits auszahlt.",
-                "prematureEra": "Der Run verließ {era} nicht. Eine Auszahlung benötigt Expansion bei 2.500 Jahren — Accelerate (2) liefert pro Nutzung 200 Jahre.",
+                "prematureEra": "Der Run verließ {era} nicht. Eine Auszahlung benötigt Expansion bei 2.500 Jahren — Accelerate (2) injiziert pro Nutzung mindestens 200 Jahre, mit Temporal Injector mehr.",
                 "prematureDepth": "Cultivation Depth endete bei {depth}; Established beginnt bei {established} beziehungsweise Development {development}.",
                 "stabilityCollapse": "Stability, nicht Entropy, beendete diesen Run — sie erreichte bei Entropy {entropy} null. Stabilize (1) liefert +14 für 2 Control; dieser Run gab {ventStability} Stability für {vents} Entropy Vents aus. Jeder Vent kostet mehr als der vorige, das Budget ist also endlich — Containment ist das, was es streckt.",
                 "entropyCascade": "Entropy erreichte 100 und die Cascade übernahm den Rest. Containment Upgrades reduzieren die Rate dauerhaft; Entropy Vent (4) entfernt jeweils nur 18.",
@@ -5714,7 +5715,8 @@ const GERMAN = {
             "alreadyProbed": "Diese Intervention wurde bereits mit Probe untersucht.",
             "entropyTooLowToVent": "Entropy ist für Vent zu niedrig.",
             "accelerateRisk": "-4 Stability · +{entropy} Entropy",
-            "ventRisk": "-{stability} Stability · +4 Attention"
+            "ventRisk": "-{stability} Stability · +4 Attention",
+            "ventTooExpensive": "Der nächste Entropy Vent kostet {stability} Stability und ist damit nicht mehr bezahlbar."
         }
     },
     "content": {

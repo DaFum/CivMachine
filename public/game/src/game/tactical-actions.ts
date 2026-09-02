@@ -20,6 +20,11 @@ export const VENT_ATTENTION_COST = 4;
  * Escalating the price makes venting a finite budget rather than a renewable one, which puts run
  * length back under the curve Containment actually governs -- and gives Containment its second job,
  * since a slower Entropy rate is now worth vents as well as seconds.
+ *
+ * The growth is linear in the base cost rather than compounding on the previous vent: 10, 13.5, 17,
+ * 20.5, each one 3.5 dearer than the last. `tacticalAvailability` refuses a vent the run cannot pay
+ * for in full, because the Paradox payout scales with this price and a part-paid vent would hand over
+ * the whole escalated yield for whatever Stability happened to be left.
  */
 export const VENT_COST_ESCALATION = 0.35;
 // Paradox is the scarcest of the four harvests and venting is the only action that deliberately
@@ -212,6 +217,17 @@ export function tacticalAvailability(civ: Civilization, id: TacticalActionId): T
   }
   if (id === 'vent' && civ.tactical.entropy < VENT_MIN_ENTROPY) {
     return { enabled: false, reason: reasons.entropyTooLowToVent, cost: definition.cost };
+  }
+  // A vent has to be paid for in full, because since v1.20.0 its Paradox payout scales with its
+  // price. Without this, venting at 3 Stability against a 31 Stability price banked the whole 3.1x
+  // payout for a tenth of the cost and then collapsed the run -- which is exactly the flat
+  // Paradox-per-Stability the escalation was introduced to preserve, inverted.
+  if (id === 'vent' && civ.stats.stability < ventStabilityCost(civ.tactical.actionUsage.vent)) {
+    return {
+      enabled: false,
+      reason: fill(reasons.ventTooExpensive, { stability: Math.round(ventStabilityCost(civ.tactical.actionUsage.vent)) }),
+      cost: definition.cost,
+    };
   }
   return { enabled: true, reason: '', cost: definition.cost };
 }

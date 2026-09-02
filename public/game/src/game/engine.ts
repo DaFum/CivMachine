@@ -35,7 +35,7 @@ import {
 } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
 import { applyWorldMemory } from "./world-memory.js";
-import { parseSaveText } from "./save-migration.js";
+import { clampSimulationSpeed, parseSaveText } from "./save-migration.js";
 import {
   Progression,
   nextSystemPreviews,
@@ -1754,7 +1754,7 @@ export class GameEngine {
     // decreases, so a returning player never loses a speed they were using.
     return Math.max(
       maxSimulationSpeed(this.machineInsight()),
-      Math.max(1, Math.trunc(Number(this.state.meta.progression.simulationSpeedUnlocked ?? 1)) || 1),
+      clampSimulationSpeed(this.state.meta.progression.simulationSpeedUnlocked ?? 1),
     );
   }
   setSimulationSpeed(n: number) {

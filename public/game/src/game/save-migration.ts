@@ -70,6 +70,14 @@ export const SAVE_MIGRATIONS: SaveMigrationStep[] = [
   { from: 4, to: 5, id: 'v4_to_v5_simulation_speed_from_insight', apply: raw => grandfatherSimulationSpeed(raw) },
 ];
 
+export const MAX_SIMULATION_SPEED = 8;
+
+export function clampSimulationSpeed(value: number): number {
+  const speed = Number(value);
+  if (!Number.isFinite(speed)) return 1;
+  return Math.max(1, Math.min(MAX_SIMULATION_SPEED, Math.trunc(speed)));
+}
+
 export function legacySimulationSpeed(temporalInjectorLevel: number): number {
   const level = Math.max(0, Math.trunc(Number(temporalInjectorLevel) || 0));
   return level >= 3 ? 4 : level >= 1 ? 2 : 1;
@@ -84,7 +92,12 @@ function grandfatherSimulationSpeed(raw: RawSave): RawSave {
   if (!meta) return raw;
   const progression = isPlainObject(meta.progression) ? meta.progression : null;
   if (!progression) return raw;
-  progression.simulationSpeedUnlocked = Math.max(earned, Number(progression.simulationSpeedUnlocked ?? 1) || 1);
+  // The stored value is as untrusted as the rest of the payload, and the engine reads this one as a
+  // floor on simulation speed -- so it is clamped to the same 1..8 band `normalizeState` already
+  // holds `simulationSpeed` to, rather than being trusted to be a speed at all.
+  const stored = Number(progression.simulationSpeedUnlocked ?? 1);
+  const previous = Number.isFinite(stored) ? Math.trunc(stored) : 1;
+  progression.simulationSpeedUnlocked = clampSimulationSpeed(Math.max(earned, previous));
   return raw;
 }
 
@@ -290,7 +303,13 @@ export function normalizeState(raw: RawSave, log: RepairLog): { state: GameState
   if (!PHASES.includes(state.phase)) state.phase = log.repair('state.phase', 'machine');
   // A phase with nothing to show would leave the player on an empty screen with no way back.
   if (state.phase === 'civilization' && !state.civilization) state.phase = log.repair('state.phase', 'machine');
-  state.simulationSpeed = Math.max(1, Math.min(8, Math.trunc(state.simulationSpeed) || 1));
+  state.simulationSpeed = clampSimulationSpeed(state.simulationSpeed);
+  const unlocked = state.meta.progression.simulationSpeedUnlocked;
+  if (unlocked !== undefined) {
+    const repaired = clampSimulationSpeed(unlocked);
+    if (repaired !== unlocked) log.repair('meta.progression.simulationSpeedUnlocked', repaired);
+    state.meta.progression.simulationSpeedUnlocked = repaired;
+  }
   // Onboarding state is rebuilt against this build's step list: an unknown status or a step id this
   // version no longer has would otherwise point the tutorial at nothing.
   state.tutorial = normalizeTutorialState(state.tutorial);

@@ -4,22 +4,18 @@
 // save played forward through many runs, Machine purchases, Universes, Multiverses and Axioms, under
 // a named purchase policy. Everything here is deterministic -- a (policy, seed) pair always produces
 // the same campaign -- so a balance change shows up as a moved number rather than as a feeling.
-import { GameEngine } from '../dist/game/engine.js';
-import { Progression } from '../dist/game/progression.js';
-import { upgradeCost } from '../dist/game/rules.js';
 import { cultivationDepth, harvestUrgency } from '../dist/game/harvest-quality.js';
 import { entropyRate, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
 import { VENT_COST_ESCALATION, VENT_ENTROPY_RELIEF, ventStabilityCost } from '../dist/game/tactical-actions.js';
-import { safestChoiceIndex } from './balance-harness.mjs';
+import { freshEngine, maximumPurchasableMachineLevels, safestChoiceIndex } from './balance-harness.mjs';
+
+export { maximumPurchasableMachineLevels };
 
 export const RESOURCE_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
 
-export function freshCampaignEngine() {
-  return new GameEngine({
-    autosave: false,
-    storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-  });
-}
+// The campaign layer builds engines the same way every other test does; `balance-harness` owns that
+// fixture, so this is an alias rather than a second construction site that can drift from it.
+export const freshCampaignEngine = freshEngine;
 
 export function percentile(values, fraction) {
   if (!values.length) return 0;
@@ -107,9 +103,12 @@ const HARVEST_TRIGGERS = {
   urgent: state => state === 'harvest' || state === 'capped',
   // Bank early and start the next run sooner. Trades depth for wall-clock throughput.
   cautious: state => state === 'harvest' || state === 'closing' || state === 'capped',
-  // Never harvest voluntarily: ride the run into the cascade and take the chaotic penalty. This is
-  // the deliberately deep-run strategy, and it is meant to be a real trade rather than a trap.
-  cascade: state => state === 'capped',
+  // The deliberately deep line: ignore the harvest call entirely and keep going. It stops only where
+  // continuing stops paying prestige -- the Cultivation Credit cap -- or where the run collapses on its
+  // own. It is deliberately *not* "ride into the cascade regardless": past the cap a controlled harvest
+  // strictly beats a chaotic one, so no player rides through it and modelling that would measure a
+  // mistake rather than a strategy.
+  deep: state => state === 'capped',
 };
 
 /**
@@ -307,35 +306,6 @@ export function spendAxioms(engine) {
   return purchased;
 }
 
-/**
- * The most Machine levels the current bank could buy if it were spent perfectly, per currency. This
- * is the "purchase power" the first-run economy tests bound, and the campaign report reuses it so
- * one number means one thing everywhere.
- */
-export function maximumPurchasableMachineLevels(engine) {
-  const groups = new Map();
-  for (const definition of engine.catalog('machine')) {
-    if (!Progression.canUseUpgrade(engine.state, 'machine', definition.id)) continue;
-    const currency = String(definition.currency);
-    groups.set(currency, [...(groups.get(currency) ?? []), definition]);
-  }
-  const maximize = (definitions, index, remaining) => {
-    if (index >= definitions.length) return 0;
-    const definition = definitions[index];
-    let best = 0;
-    let spent = 0;
-    for (let levels = 0; levels <= Number(definition.max_level); levels++) {
-      if (spent > remaining) break;
-      best = Math.max(best, levels + maximize(definitions, index + 1, remaining - spent));
-      spent += upgradeCost(Number(definition.base_cost), Number(definition.growth), levels + machineLevel(engine, definition.id));
-    }
-    return best;
-  };
-  let total = 0;
-  for (const [currency, definitions] of groups) total += maximize(definitions, 0, engine.currencyAmount(currency));
-  return total;
-}
-
 export function containmentRating(engine) { return engine.runtimeBonuses().containmentRating; }
 
 export function unlockedSystemCount(engine) { return engine.state.meta.progression.unlockedSystems.length; }
@@ -354,8 +324,8 @@ export const STRATEGIES = {
   aggressive_accelerate: { machine: 'development_first', trigger: 'urgent', accelerate: true },
   // Conservative safe play: bank the credit early rather than reach for the next one.
   conservative: { machine: 'survival_first', trigger: 'cautious', accelerate: false },
-  // Deliberately deep: ride every run to the cascade and eat the chaotic penalty.
-  deep_run: { machine: 'balanced', trigger: 'cascade', accelerate: false },
+  // Deliberately deep: ignore the harvest call and run to the Cultivation Credit cap.
+  deep_run: { machine: 'balanced', trigger: 'deep', accelerate: false },
   // Directive-optimizing: steer every intervention toward the selected objective's bonus credit and
   // yield multiplier rather than toward the safest branch.
   directive_chaser: { machine: 'balanced', trigger: 'urgent', accelerate: false, chase: true },

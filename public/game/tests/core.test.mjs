@@ -38,39 +38,11 @@ import { CONSEQUENCE_PROFILES, consequenceProfileFor, consequenceProfileById } f
 import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
 import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
-import { freshEngine, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
+import { freshEngine, maximumPurchasableMachineLevels, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
 function percentile(values, fraction) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
-}
-
-function maximumPurchasableMachineLevels(engine) {
-  const groups = new Map();
-  for (const definition of engine.catalog('machine')) {
-    if (!Progression.canUseUpgrade(engine.state, 'machine', definition.id)) continue;
-    const currency = String(definition.currency);
-    groups.set(currency, [...(groups.get(currency) ?? []), definition]);
-  }
-
-  const maximizeCurrency = (definitions, index, remaining) => {
-    if (index >= definitions.length) return 0;
-    const definition = definitions[index];
-    let best = 0;
-    let spent = 0;
-    for (let levels = 0; levels <= Number(definition.max_level); levels++) {
-      if (spent > remaining) break;
-      best = Math.max(best, levels + maximizeCurrency(definitions, index + 1, remaining - spent));
-      spent += upgradeCost(Number(definition.base_cost), Number(definition.growth), levels);
-    }
-    return best;
-  };
-
-  let total = 0;
-  for (const [currency, definitions] of groups) {
-    total += maximizeCurrency(definitions, 0, engine.currencyAmount(currency));
-  }
-  return total;
 }
 
 function simulatedBalanceRun(seed, { accelerateWheneverAvailable = false, collapse = false } = {}) {
@@ -1770,9 +1742,18 @@ test('Vent gives the credit-optimal playstyle a Paradox source', () => {
   const vented = venting.state.machine.lastHarvest.rewards;
   const plain = without.state.machine.lastHarvest.rewards;
   assert.ok(vented.paradox > plain.paradox * 1.4, `venting must lift Paradox: ${vented.paradox} vs ${plain.paradox}`);
-  // Venting now costs run length as well as Stability, so the trade has to be visible in both
-  // directions: more Paradox, and a shallower run for it.
-  assert.ok(vented.causal_mass < plain.causal_mass, 'venting every opportunity must cost run depth');
+
+  // The decision venting asks is *when*, not *whether*, so the ordering has to hold: never venting is
+  // worst, venting on every opportunity is better, and venting only when Entropy actually threatens
+  // the run is best. Before the affordability guard the middle rung was below the first -- spending
+  // the whole escalating budget at once drained Stability to zero and ended the run early -- which
+  // made "vent on the alarm" a trap rather than a decision.
+  const managed = build();
+  runCivilization(managed, { seed: 4141, policy: ['safe', 'manage'] });
+  const managedRewards = managed.state.machine.lastHarvest.rewards;
+  assert.ok(vented.causal_mass > plain.causal_mass, 'venting must extend the run, not end it');
+  assert.ok(managedRewards.causal_mass > vented.causal_mass, 'venting on need must beat venting on sight');
+  assert.ok(managedRewards.paradox > vented.paradox, 'and must still out-earn it in Paradox');
   const share = resources => resources.paradox / (resources.causal_mass + resources.cognition + resources.existence);
   assert.ok(share(vented) > share(plain), 'venting must raise the Paradox share of a harvest');
 });

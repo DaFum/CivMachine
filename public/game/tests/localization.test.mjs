@@ -233,13 +233,11 @@ const EFFECTIVE_UPGRADES = [
   ...balancedAxiomUpgrades(CONTENT.axiom_upgrades),
 ];
 
-const objectiveSource = id => DIRECTIVE_OBJECTIVES[id].isComplete.toString();
-
 test('runtime-visible Directive objective copy mirrors the predicates it describes', () => {
   // English is the source locale, so its sentence must be the source sentence: the objective card is
-  // read from the catalog, and `isComplete` is read from the module. If those two drift, the player is
-  // told to reach one target and paid for another -- which is precisely what rebalancing an objective
-  // without touching its copy produces.
+  // read from the catalog and `isComplete` from the module, and when those drift the player is told to
+  // reach one target and paid for another. That is exactly what rebalancing an objective without
+  // touching its copy produced, and it is what this pins.
   for (const [id, objective] of Object.entries(DIRECTIVE_OBJECTIVES)) {
     const en = LOCALIZATION.en.content.directives.objectives[id];
     assert.equal(en.title, objective.title, `${id}.title must match the runtime objective`);
@@ -248,27 +246,18 @@ test('runtime-visible Directive objective copy mirrors the predicates it describ
       `${id} needs a German objective description`);
   }
 
-  // And the numbers in the sentence have to be the numbers in the predicate. A description that names
-  // a threshold the predicate does not use is the same failure wearing a translation.
-  const thresholds = {
-    accelerated_development: ['400'],
-    cognitive_extraction: ['45'],
-    stable_cultivation: ['80', '70'],
-    paradox_prospecting: ['50'],
-    quiet_machine: ['45'],
-    temporal_pressure: ['300', 'eight'],
-  };
-  for (const [id, expected] of Object.entries(thresholds)) {
-    for (const locale of ['en', 'de']) {
-      const description = LOCALIZATION[locale].content.directives.objectives[id].description;
-      for (const value of expected) {
-        if (value === 'eight') continue; // spelled out, and differently per language
-        assert.ok(description.includes(value), `${locale}.${id} must name the threshold ${value}: ${description}`);
-      }
-    }
-    for (const value of expected) {
-      if (value === 'eight') continue;
-      assert.ok(String(objectiveSource(id)).includes(value), `${id} predicate must actually use ${value}`);
+  // The German sentence has no source to be compared against, so it is held to the thresholds instead:
+  // every number the English description states has to appear in the translation too. Whether the
+  // predicates themselves are correct at their boundaries is settled in core.test.mjs, which exercises
+  // each one on both sides of every threshold -- including the era and intervention-count conditions
+  // that are not numbers in the sentence at all.
+  for (const id of Object.keys(DIRECTIVE_OBJECTIVES)) {
+    const english = LOCALIZATION.en.content.directives.objectives[id].description;
+    const german = LOCALIZATION.de.content.directives.objectives[id].description;
+    const numbers = english.match(/\d+/g) ?? [];
+    assert.ok(numbers.length > 0, `${id} must state at least one threshold`);
+    for (const value of numbers) {
+      assert.ok(german.includes(value), `de.${id} must state the same threshold ${value}: ${german}`);
     }
   }
 });
