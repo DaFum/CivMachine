@@ -1,4 +1,8 @@
+import { DEPTH_BANDS, DEPTH_CREDIT_CAP } from './harvest-quality.js';
 import { fill, harvestGradeLabel, text } from '../data/i18n.js';
+// Both numbers below are balance constants the guidance quotes, so it reads them rather than
+// restating them: the Established boundary has already moved once, and the credit cap with it.
+const ESTABLISHED_DEPTH = (DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1]).minDepth;
 // Every number that reaches a sentence goes through one of these. The ladder is documented as total,
 // which has to include the formatting: a single raw interpolation is all it takes to print `NaN` at
 // the player, and these sentences are the surface that is supposed to make the panels checkable.
@@ -114,7 +118,7 @@ export function civilizationSituation(input) {
                 ? fill(copy.premature.causeInterventions, { eventChoices: count(input.eventChoices) })
                 : input.era <= 0
                     ? fill(copy.premature.causeEra, { eraName: input.eraName })
-                    : fill(copy.premature.causeDepth, { depth: one(input.depth) }),
+                    : fill(copy.premature.causeDepth, { depth: one(input.depth), established: one(ESTABLISHED_DEPTH) }),
             advice: copy.premature.advice,
         };
     }
@@ -123,7 +127,7 @@ export function civilizationSituation(input) {
             id: 'credit_cap',
             severity: 'watch',
             headline: fill(copy.credit_cap.headline, { credits: count(input.credits) }),
-            cause: copy.credit_cap.cause,
+            cause: fill(copy.credit_cap.cause, { cap: count(DEPTH_CREDIT_CAP) }),
             advice: copy.credit_cap.advice,
         };
     }

@@ -1,5 +1,9 @@
 import { civilizationDramaPhase, dramaPhaseLabel } from './drama.js';
-import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, HARVEST_GRADE_LABELS } from './harvest-quality.js';
+import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from './harvest-quality.js';
+import { ventStabilityCost } from './tactical-actions.js';
+
+// The first band that pays a Cultivation Credit, and therefore the one a Premature run is short of.
+const ESTABLISHED_BAND = DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1]!;
 import { RESOURCE_KEYS } from './rules.js';
 import { eraName, fill, harvestGradeLabel, text } from '../data/i18n.js';
 import type {
@@ -158,6 +162,13 @@ export interface RunReportContext {
   eraNames: ReadonlyArray<string>;
   dramaLabels: ReadonlyArray<string>;
   resourceLabels: Readonly<Record<string, string>>;
+  /**
+   * The harvest resources the Machine has identified. The report is a player-facing surface and
+   * progression already tracks discovery separately, so building the breakdown from `RESOURCE_KEYS`
+   * named Existence in every report from the first run -- several hours before anything in the game
+   * had told the player it exists. What is not discovered is not listed.
+   */
+  discoveredResources: ReadonlyArray<string>;
   traitNames: string[];
   pathName: string;
   objectiveTitle: string;
@@ -180,10 +191,25 @@ export function runLessons(civ: Civilization, context: RunReportContext, depth: 
       ? fill(civ.eventChoices === 1 ? copy.prematureOneIntervention : copy.prematureManyInterventions, { eventChoices: civ.eventChoices })
       : civ.era <= 0
         ? fill(copy.prematureEra, { era: context.eraNames[0] ?? eraName('emergence') ?? '' })
-        : fill(copy.prematureDepth, { depth: depth.toFixed(1) }));
+        : fill(copy.prematureDepth, {
+          depth: depth.toFixed(1),
+          // Read from the bands rather than written into the sentence: the boundary moved once
+          // already, and a lesson that names a Depth the player cannot reach is worse than no lesson.
+          established: ESTABLISHED_BAND.minDepth.toFixed(2),
+          development: Math.ceil(ESTABLISHED_BAND.minDepth * DEPTH_DEVELOPMENT_SCALE),
+        }));
   }
   if (context.reason === 'stability_collapse') {
-    lessons.push(fill(copy.stabilityCollapse, { entropy: civ.tactical.entropy.toFixed(0) }));
+    // What the vents actually cost this run, not what the first one would have: the price escalates,
+    // so a flat number would understate exactly the run that lost to it.
+    const vents = Math.max(0, Math.trunc(Number(civ.tactical.actionUsage?.vent ?? 0)));
+    let ventStability = 0;
+    for (let index = 0; index < vents; index++) ventStability += ventStabilityCost(index);
+    lessons.push(fill(copy.stabilityCollapse, {
+      entropy: civ.tactical.entropy.toFixed(0),
+      vents,
+      ventStability: Math.round(ventStability),
+    }));
   }
   if (civ.tactical.entropy >= 100 && context.reason !== 'stability_collapse') {
     lessons.push(copy.entropyCascade);
@@ -195,15 +221,18 @@ export function runLessons(civ: Civilization, context: RunReportContext, depth: 
       { control: unusedControl, actions: totalActions }));
   }
   if (context.objectiveTitle && !context.details.objectiveCompleted && grade !== 'premature') {
-    const objectiveCredits = Math.max(1, Math.round(credits * 0.15) + 1);
-    lessons.push(fill(objectiveCredits === 1 ? copy.directiveOneCredit : copy.directiveManyCredits,
-      { objectiveTitle: context.objectiveTitle, credits: objectiveCredits }));
+    // The two rewards, exactly as the harvest pays them. The previous sentence folded them into one
+    // estimated credit figure -- `round(credits * 0.15) + 1`, described as "about N credits" -- which
+    // is not a quantity the game computes anywhere: the multiplier applies to harvest resources and
+    // the credit is a flat +1. An explanation of a reward has to name the reward.
+    lessons.push(fill(copy.directiveNotMet, { objectiveTitle: context.objectiveTitle }));
   }
   if (nextBand && grade !== 'premature' && context.reason === 'controlled_harvest') {
     lessons.push(fill(copy.nextBand, {
       grade: harvestGradeLabel(nextBand.grade) ?? HARVEST_GRADE_LABELS[nextBand.grade],
-      minDepth: nextBand.minDepth,
+      minDepth: Number(nextBand.minDepth.toFixed(2)),
       distance: (nextBand.minDepth - depth).toFixed(1),
+      credits: nextBand.credits,
     }));
   }
   if (credits >= DEPTH_CREDIT_CAP) {
@@ -225,8 +254,9 @@ export function buildRunReport(civ: Civilization, context: RunReportContext): Ru
   const depth = context.details.depth;
   const credits = context.details.credits;
   const rewards = context.details.rewards;
-  const resourceTotal = RESOURCE_KEYS.reduce((sum, key) => sum + Math.max(0, rewards[key] ?? 0), 0);
-  const resources: RunReportResource[] = RESOURCE_KEYS.map(key => {
+  const visible = RESOURCE_KEYS.filter(key => context.discoveredResources.includes(key));
+  const resourceTotal = visible.reduce((sum, key) => sum + Math.max(0, rewards[key] ?? 0), 0);
+  const resources: RunReportResource[] = visible.map(key => {
     const amount = Math.max(0, rewards[key] ?? 0);
     return {
       key,
@@ -244,6 +274,9 @@ export function buildRunReport(civ: Civilization, context: RunReportContext): Ru
     chaotic: context.chaotic,
     terminal: Boolean(civ.terminal),
     elapsedSeconds: Math.round(Math.max(0, civ.elapsedSeconds) * 10) / 10,
+    // Wall-clock, and 0 for a run that was already in progress when this field arrived -- the report
+    // omits the line rather than inventing a measurement it never took.
+    realSeconds: Math.round(Math.max(0, Number(civ.realSeconds) || 0) * 10) / 10,
     years: Math.trunc(Math.max(0, civ.years)),
     era: civ.era,
     eraName: context.eraNames[civ.era] ?? fill(text().reports.runReport.arc.eraFallback, { era: civ.era }),

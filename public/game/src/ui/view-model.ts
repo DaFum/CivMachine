@@ -3,8 +3,8 @@ import { milestoneProgress } from '../game/milestones.js';
 import { factionProfile, speciesProfile } from '../game/lore.js';
 import { objectiveForDirective } from '../game/run-directives.js';
 import { entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../game/pressure.js';
-import { DEPTH_BANDS, DEPTH_YIELD_BASE, DEPTH_YIELD_RATE, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, harvestUrgency } from '../game/harvest-quality.js';
-import { TACTICAL_ACTIONS, VENT_ENTROPY_RELIEF, VENT_STABILITY_COST, tacticalActionText, tacticalRisk } from '../game/tactical-actions.js';
+import { DEPTH_BANDS, HARVEST_GRADE_LABELS, cultivationDepth, depthBand, depthYieldMultiplier, harvestUrgency } from '../game/harvest-quality.js';
+import { TACTICAL_ACTIONS, VENT_COST_ESCALATION, VENT_ENTROPY_RELIEF, tacticalActionText, tacticalRisk, tacticalSummary, ventStabilityCost } from '../game/tactical-actions.js';
 import { civilizationSituation, machineSituation } from '../game/guidance.js';
 import { localizeDecisionFeedback } from '../game/decision-feedback.js';
 import { eraLabel } from '../game/engine.js';
@@ -75,7 +75,10 @@ function nextDepthBand(depth: number) {
     grade: upcoming.grade,
     label: harvestGradeLabel(upcoming.grade) ?? HARVEST_GRADE_LABELS[upcoming.grade],
     depthNeeded: upcoming.minDepth,
-    yieldMultiplier: DEPTH_YIELD_BASE + DEPTH_YIELD_RATE * upcoming.minDepth,
+    // The Credit the band pays. Since v1.20.0 a grade boundary *is* a credit step, so the forecast
+    // can name the economic reward instead of leaving the player to infer it from a multiplier.
+    credits: upcoming.credits,
+    yieldMultiplier: depthYieldMultiplier(upcoming.minDepth),
   };
 }
 
@@ -142,6 +145,7 @@ function buildTacticalViewModel(engine: GameEngine, civ: Civilization | null, bo
     actions: (Object.keys(TACTICAL_ACTIONS) as Array<keyof typeof TACTICAL_ACTIONS>).map(id=>({
       ...TACTICAL_ACTIONS[id],
       ...tacticalActionText(id),
+      summary: tacticalSummary(id, bonuses),
       risk: tacticalRisk(civ, id),
       ...engine.tacticalAvailability(id),
     })),
@@ -166,7 +170,8 @@ function buildHarvestViewModel(engine: GameEngine, civ: Civilization | null, con
       stability: civ.stats.stability,
       controlCapacity: civ.tactical.controlCapacity,
       ventEntropyRelief: VENT_ENTROPY_RELIEF,
-      ventStabilityCost: VENT_STABILITY_COST,
+      ventStabilityCost: ventStabilityCost(civ.tactical.actionUsage.vent),
+      ventCostEscalation: VENT_COST_ESCALATION,
       entropy: civ.tactical.entropy,
       premature: controlledHarvest?.grade === 'premature',
     }),
@@ -285,6 +290,10 @@ export function buildViewModel(engine: GameEngine) {
     resources: buildResourcesViewModel(engine),
     simulationSpeed: state.simulationSpeed,
     maxSimulationSpeed: engine.maxSimulationSpeed(),
+    simulationSpeedOptions: engine.simulationSpeedOptions(),
+    // Which harvest resources the Machine has identified. Every surface that names a resource -- the
+    // bar, the live harvest breakdown, the run report -- reads this rather than the full key list.
+    visibleResourceKeys: engine.visibleResources(),
     civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
     cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
     universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
@@ -383,6 +392,9 @@ export function civilizationRenderKey(vm: ReturnType<typeof buildViewModel>): st
     cosmicCondition,
     vm.simulationSpeed,
     vm.maxSimulationSpeed,
+    // A discrete state, not a ticking one: identifying a resource happens a handful of times in a
+    // save, and the harvest breakdown has to gain its column when it does.
+    vm.visibleResourceKeys.join(','),
     civilization.traits.map((trait) => trait.id).join(','),
     civilization.institutions.join(','),
     vm.feedback?.sequence ?? 0,

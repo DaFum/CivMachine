@@ -1,7 +1,11 @@
 import { CivilizationPaths } from './paths.js';
 export const RESOURCE_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000];
+// The era identifiers, in era order, beside the thresholds that define them. They are catalog keys
+// and the label of last resort, so they stay a plain constant -- one filled from the catalog at
+// import time would keep the language the page booted in. `engine.eraLabel` reads the copy.
+export const ERA_IDS = ['emergence', 'expansion', 'transcendence', 'apotheosis'];
 export function eraForYears(years) {
     const safe = Math.max(0, Number(years) || 0);
     for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--)
@@ -33,7 +37,11 @@ export function createNewState() {
                 knownDirectives: [], knownBreedingMatrices: [], knownAxioms: [], milestones: {}, announcedUnlocks: [],
                 controlledHarvestsTotal: 0, chaoticHarvestsTotal: 0,
                 seenDominantPaths: [], bestDepth: 0, bestGrade: '', maxDevelopment: 0, maxEra: 0,
-                objectivesCompleted: 0, longestRunSeconds: 0, maxEndgamesInRun: 0
+                objectivesCompleted: 0, longestRunSeconds: 0, maxEndgamesInRun: 0,
+                // Simulation speed is permanent progression, earned with Machine Insight. A fresh save has
+                // none; this field exists so a v4 save that bought its speed from Temporal Injector -- a
+                // Machine upgrade, and therefore lost at every prestige -- keeps what it paid for.
+                simulationSpeedUnlocked: 1
             }
         },
         civilization: null,
@@ -49,7 +57,7 @@ export function createNewState() {
 // every field a `Civilization` must carry is declared exactly once -- here.
 export function createCivilizationTemplate(seed) {
     return {
-        seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
+        seed, rngState: seed, elapsedSeconds: 0, realSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
         eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0,
         traits: [], institutions: [], flags: [], scheduledEvents: [], history: [],
         stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 },
@@ -61,8 +69,25 @@ export function createCivilizationTemplate(seed) {
         directiveId: '', directiveObjective: { id: '', completed: false }, terminal: false, runInterventionUses: {}
     };
 }
-export function upgradeCost(baseCost, growth, level) {
-    return Math.max(1, Math.round(baseCost * Math.pow(Math.max(1, growth), Math.max(0, level))));
+/**
+ * What the next level of an upgrade costs.
+ *
+ * A geometric curve is the right shape for most modules, but not for one that sells the same +1
+ * Containment at every level: at growth 1.55 the first four Reality Lattice levels cost 520 together,
+ * which one ordinary early run paid in full, and Containment 0 became Containment 4 in a single
+ * purchase step. `ladder` lets an upgrade author its early rungs explicitly and hand the curve back
+ * to `growth` once the authored steps run out, so a steeply progressive early ladder does not have to
+ * be faked with an absurd growth factor that would then explode at the top of the track.
+ */
+export function upgradeCost(baseCost, growth, level, ladder) {
+    const step = Math.max(0, Math.trunc(level) || 0);
+    const rate = Math.max(1, growth);
+    if (ladder?.length) {
+        if (step < ladder.length)
+            return Math.max(1, Math.round(ladder[step]));
+        return Math.max(1, Math.round(ladder[ladder.length - 1] * Math.pow(rate, step - ladder.length + 1)));
+    }
+    return Math.max(1, Math.round(baseCost * Math.pow(rate, step)));
 }
 export function calculateHarvest(civ, chaotic, bonuses) {
     const years = Math.max(0, civ.years);

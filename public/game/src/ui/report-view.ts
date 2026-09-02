@@ -60,6 +60,10 @@ export function runReportPanel(report: RunReport | null, explain = false, focus 
   if (!report) return '';
   const copy = text().ui.reportView;
   const paid = report.resourceTotal > 0;
+  // Two clocks, and they are not the same number: SIMULATION TIME is accelerated in-game seconds, so
+  // at 4x a five-minute run cost the player well under two. A run recorded before the wall-clock
+  // existed reports 0 and the figure is omitted rather than filled with a measurement never taken.
+  const realSeconds = Math.max(0, Number(report.realSeconds) || 0);
   const resources = report.resources.map(entry => `
     <div class="report-resource">
       <span>${esc(entry.label)}</span>
@@ -94,7 +98,8 @@ export function runReportPanel(report: RunReport | null, explain = false, focus 
     ${explainNote('run_report', explain)}
     ${objective}
     <div class="report-figures">
-      ${figure(copy.lasted, duration(report.elapsedSeconds), fill(copy.civilizationYears, { years: fmt(report.years) }))}
+      ${figure(copy.simulationTime, duration(report.elapsedSeconds), fill(copy.civilizationYears, { years: fmt(report.years) }))}
+      ${realSeconds > 0 ? figure(copy.activeRealTime, duration(realSeconds), copy.activeRealTimeHint) : ''}
       ${figure(copy.endedIn, report.eraName, fill(copy.phase, { phase: report.dramaPhase }))}
       ${figure(copy.development.toUpperCase(), fmt(report.development), fill(copy.peak, { value: fmt(report.peakDevelopment) }))}
       ${figure(text().ui.app.depth, report.depth.toFixed(1), fill(copy.peak, { value: report.peakDepth.toFixed(1) }))}

@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.19.0
+# Reality Consumption Engine — App Edition v1.20.1
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,237 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.20.1 one-phase progression staging
+
+v1.20.0 fixed the campaign curve and a manual five-run playthrough confirmed it: the first Universe
+arrives after five to seven meaningful Civilizations, a bare Machine is clearly weaker than a built
+one, and no single run pays for a prestige. v1.20.1 changes none of that. It fixes what that
+playthrough exposed *beside* the curve -- moments where the game handed over a whole catalog at once,
+or named something it had not revealed, or reported a number that was not the number.
+
+**A prestige reveals a decision, not a catalog.** Breeding Matrices unlock as a system at the second
+Universe, but the six matrices behind it were gated on Machine Insight alone -- and Insight passes 17
+before the first Universe is consumed. Every gate was therefore already clear when the system opened,
+so the prestige meant to introduce one new choice emptied all six at once. They are staggered over
+Universes now, two at the second, third and fourth, with the Insight numbers kept as a floor. The
+same reasoning already applies to the Universe upgrade layer.
+
+**Existence is no longer banked before it exists.** Every harvest credited all four currencies from
+the first run, so Existence accumulated invisibly through the whole Expansion game -- measured, 1714
+units were already in the bank when Transcendence finally named it, and the reveal arrived with
+several runs of purchasing power attached. A resource the Machine has not identified now pays nothing,
+is not listed in the run report, and is not named in the Machine Record. The run that carries a
+civilization into Transcendence is paid its Existence in full; the runs before it are not paid
+retroactively. Measured on the same seeds, the Machine levels affordable in that single step fell from
+**9 to 5**, and the Existence upgrade levels bought in it from **7 to 3**. No global yield was reduced
+to get there, and the Existence Furnace kept its gate: three levels across two families is what an
+ordinary run of that era already funds, and moving the Furnace behind the first Universe was measured
+and rejected because it made the first-Universe step busier rather than the Transcendence step
+quieter.
+
+**A harvest's own discoveries are settled before it is paid.** Paradox is identified *by* the first
+controlled harvest, so gating the payout on identification without ordering the two would have made
+the run that reveals Paradox the one run not paid for it.
+
+**Next Discoveries reads the rules it describes.** The runtime requirements were an `if` chain and the
+sentences on screen were hand-written strings beside it, so the preview promised Breeding Matrices
+after "your first Universe" while the rule asked for two, and Multiverse prestige had moved to three
+Universes while its preview still said two. Both now come from one table of structured requirements:
+the runtime checks it and the interface composes its sentence from it, in either language.
+
+**An Entropy threshold is logged as the threshold.** A tick advances Entropy past the line before the
+crossing is noticed, and the record printed the Entropy on the clock -- 27 and 29 for the 25 crisis,
+51 and 54 for the 50. The pressure system returns the threshold it actually crossed, and every
+crossing in a tick is reported rather than only the last.
+
+**Two clocks, both named.** `LASTED` was simulation time presented as though it were wall-clock, which
+at 4x understated nothing and overstated everything. The report shows `SIMULATION TIME` (accelerated
+in-game seconds) and, when it was measured, `ACTIVE REAL TIME` -- the wall-clock the simulation
+actually ran for. Neither advances while an intervention waits on the player.
+
+**Simulation speed is announced as the progression it is.** 2x at Machine Insight 3 and 4x at 10 are
+unchanged and still survive prestige. Both steps are now visible in the rail from the first run with
+the Insight they cost, and each is announced once when it unlocks. A v4 save that bought its speed
+from Temporal Injector keeps it and is not told about it as news.
+
+**A reward explanation names the reward.** An unmet Directive objective was described as worth "about
+N credits", computed as `round(credits * 0.15) + 1` -- a quantity the game computes nowhere. It now
+states the two rewards it pays: +15% harvest resources and exactly +1 Cultivation Credit.
+
+**An ordinal is not a tally.** `Transcendence Reached 1 / 2` and `Ascendant Harvest 2 / 3` read as
+partly-finished checklists; the numbers were era and grade indices. Those milestones name their state
+now -- `CURRENT: TRANSCENDENCE / TARGET: APOTHEOSIS`, `BEST: TRANSCENDENT / TARGET: ASCENDANT` -- while
+real counts like `3 / 10 controlled harvests` stay counts. No milestone reward changed.
+
+**The run phase no longer borrows an Era's name.** Drama phases 0 and 1 were called Emergence and
+Expansion against Eras EMERGENCE and EXPANSION, so a single report could discuss two unrelated systems
+in the same words. They are Founding and Growth; the ids and trace values are untouched.
+
+**The Civilization Record no longer prints the same line twice.** 103 of the catalog's 310
+`path_history` entries are authored as `"<title> -> <label>"`, which is word for word what the record's
+automatic choice line already writes -- so a third of the interventions carrying path copy logged their
+sentence twice in a row. The duplicate is dropped where the two sentences meet rather than rewritten in
+103 content entries and their translations: the duplication is a property of the pair, it holds in both
+locales because both sides are composed from the same localized title and label, and it cannot return
+with new content. Path copy that says something new is still recorded.
+
+`aggressive_human` joins the campaign strategy table: Accelerate at every opportunity, the Development
+purchase tilt, and every intervention steered toward the Directive objective -- the combination the
+manual playthrough used and no existing row modelled. It is added beside `aggressive_accelerate` and
+`directive_chaser`, not in place of either.
+
+### Measured, before and after
+
+`npm run balance` prints the full table; the campaign regressions assert the bands.
+
+| Measure | v1.20.0 | v1.20.1 | Target |
+| --- | ---: | ---: | ---: |
+| Civilizations to the first Universe (purchase tilts) | 5-6 | 5-6 | 5-7 |
+| Systems unlocked in the first-Universe step | 1 | 1 | 1-2 |
+| Breeding Matrices unlocked at the second Universe | 6 | 2 | <=2 |
+| Breeding Matrices at U2 / U3 / U4 | 6 / 6 / 6 | 2 / 4 / 6 | staggered |
+| Existence in the bank when it is first revealed | 1714 | 608 | earned this run |
+| Machine levels affordable at the first Transcendence | 9 | 5 | <=7 |
+| Existence upgrade levels bought in that step | 7 | 3 | <=4 |
+| Machine Insight gained at the first Transcendence | 3 | 3 | unchanged |
+| Cultivation Credits from one run, worst | 10 | 10 | < 18 |
+| Reality Lattice levels bought in one step, worst | 2 | 2 | <=2 |
+| Civilizations to the first Multiverse (survival_first) | 15.75 | 15.75 | unchanged |
+| `path_history` entries duplicating the choice line | 103 of 310 | 0 shown | none |
+| Tests | 435 | 458 | -- |
+
+## v1.20.0 the campaign curve
+
+v1.20.0 rebalances the meta-economy above the run. The individual run was healthy; the loop above it
+was not. Measured on v1.19.0 from an empty save, a competent player reached the first Universe in
+**three runs**, and the second of those banked 2480 Causal Mass -- enough to buy 21 Machine levels in
+one purchase step and to take a fresh Machine from Containment 0 to Containment 10.
+
+Five changes close that loop, and a new campaign-level test suite holds it closed.
+
+**Depth pays less the deeper it goes.** Raw harvest value already scales with Development, and
+Development scales with run length, so multiplying it by a yield multiplier that *also* rose linearly
+with Depth made a run quadratic in its own duration. The multiplier is now concave: within a few
+percent of the old straight line for the Depth an opening run reaches, and 2.7x lower at the Depth
+v1.19.0 reached on run three.
+
+**Cultivation Credits cap at 10, not 20.** A Universe costs 18. The old cap sat above it, so a single
+long run paid for a whole prestige; two successful Civilizations are now the arithmetic floor for a
+Universe at every stage of the game.
+
+**Every Harvest Grade boundary is a Cultivation Credit step.** Grades and credits used to be
+independent curves that disagreed by design -- a run 0.4 Depth from TRANSCENDENT was still 1.4 Depth
+from its next Credit, so the louder signal was the less valuable one. ESTABLISHED, TRANSCENDENT,
+ASCENDANT and SINGULAR now sit exactly on credits 1, 3, 6 and 10, and the live rail and the run report
+name the credit a band pays.
+
+**Containment is priced as the compounding stat it is.** Reality Lattice still opens at 60 Causal
+Mass, because a first weak run has to afford one real survival improvement -- but the ladder then
+climbs 600, 1800, 4500 rather than 93, 144, 223, and the other three Containment modules are laddered
+with it so that pricing one does not simply move the stacking to the next. From the second purchase
+onward the survival build is assembled rather than stacked.
+
+**Entropy Vents get dearer as a run spends them.** Containment sets the cascade horizon, but a run
+that kept resolving interventions kept being handed Stability and Control back, and a flat-priced vent
+turned both straight into more run: at Containment 3, runs finished anywhere between 300 s and 900 s.
+Each vent now costs 3.5 Stability more than the one before it -- 10, 13.5, 17, 20.5, linear in the
+base cost rather than compounding -- and pays proportionally more Paradox, so what the escalation
+rations is run length, not the Paradox economy. A vent the run cannot pay for in full is refused
+rather than part-paid.
+
+Alongside those, three systems that were traps became decisions:
+
+- **Simulation speed is permanent progression.** 2x at Machine Insight 3, 4x at 10. It used to be sold
+  by Temporal Injector, a Machine upgrade -- which meant re-buying the same fast-forward button after
+  every Universe. Temporal Injector now buys what it is named after: a Temporal Injection worth 1150
+  years and 48 Development at level 3, against 450 and 6 before. Saves that had already bought 2x or
+  4x keep it; see the save note below.
+- **Prediction Core pays out.** An intervention you spent Control probing lands 12% softer per level,
+  to a maximum of 50%. The module still does nothing at all until you Probe, which is its identity.
+- **Accelerated Development no longer solves its own objective.** It multiplied Development and then
+  asked for Development; the objective now asks for Development 400 *in the Transcendence era*, which
+  is the half the Directive cannot buy for the player. On a bare Machine it clears no runs at all.
+
+The first Universe also stopped arriving as an avalanche: it unlocks Universe upgrades and nothing
+else. Breeding Matrices wait for the second Universe, Multiverse prestige for the third, and Existence
+is now identified when a civilization first reaches Transcendence rather than in the same step.
+
+### Measured, before and after
+
+Same modelled player, same seeds, both engines. `npm run balance` prints the full table.
+
+| Measure | v1.19.0 | v1.20.0 | Target |
+| --- | ---: | ---: | ---: |
+| First run, seconds (median of 60 seeds) | 130 | 130 | unchanged |
+| First run, affordable Machine levels | 3 | 2 | 1-2 |
+| Containment gained per run, median / p90 | 5 / 15 | 1 / 3 | 1-2 / <=3 |
+| Reality Lattice levels bought in one step, worst | 6 | 2 | <=2 |
+| Cultivation Credits from one run, worst | 20 | 10 | < 18 |
+| Civilizations to the first Universe | 3 | 5 | 5-7 |
+| Civilizations per Universe, U2 / U3 / U4 | 2 / 2 / 1 | 3 / 3 / 3 | 3-4 then ~2 |
+| Systems unlocked in the first-Universe step | 2 | 1 | 1-2 |
+| Deep run at a mature build, minutes | 27+ | 11.5-13.1 | 12-15 |
+| Civilizations to the first Multiverse | 8 | 15 | measured |
+| Civilizations to Great Convergence readiness | 27 | 83 | measured |
+| Simulated hours to Convergence readiness | 6.0 | 7.7 | measured |
+| Cultivation actually waited through | 6.0 | 2.0 | measured |
+| Strongest line to the first Universe | deep_run, 2 runs | survival_first, 5 runs | no runaway |
+| Spread across the seven purchase tilts | 1.33x | 1.40x | no dominant build |
+
+The run lifecycle the curve now produces, measured by build:
+
+| Build | Containment | Run length | Depth | Credits | Grade |
+| --- | ---: | ---: | ---: | ---: | --- |
+| bare Machine | 0 | 2.1 min | 1.7 | 1 | ESTABLISHED |
+| early | 2 | 5.8 min | 5.1 | 3 | TRANSCENDENT |
+| mid | 4 | 9.1 min | 10.0 | 6 | ASCENDANT |
+| mature | 8 | 11.7 min | 16.7 | 10 | SINGULAR |
+
+### How long the campaign is
+
+The earlier draft of these notes said 6.2 simulated hours and assumed a player's decision time closed
+the gap to the 8-12 hour reference. That was an assumption wearing a number, and this release is the
+one that makes it wrong: simulation speed is permanent progression now, so a player runs at 4x for
+most of a campaign and does *not* sit through simulated time at all.
+
+Measured to Great Convergence readiness, balanced tilt:
+
+| | |
+| --- | ---: |
+| Civilizations | 83 |
+| Universes / Multiverses | 20 / 5 |
+| Simulated cultivation | 7.7 h |
+| **Cultivation actually waited through, at the speeds the player has earned** | **2.0 h** |
+| Intervention decisions | ~2,500 |
+| Purchase phases | 83 |
+
+So the campaign's length is not waiting; it is roughly 2 hours of cultivation plus about 2,500
+decisions. Wall-clock is charged per tick rather than per run, because Machine Insight can cross a
+speed threshold mid-run and billing the whole run at the speed it ended on would credit the player
+with seconds they did sit through. Whether that totals 8-12 hours depends entirely on how long a decision takes, which is the
+one quantity a simulation cannot measure -- at 5 seconds each it is under 5 hours, at 12 seconds each
+it is over 10. The harness reports the two halves separately and does not multiply them together into
+a single confident figure.
+
+No grind was added to reach a target. If the number wants to move, the honest levers are the decision
+count and the Convergence gate, not the clock.
+
+### Saves
+
+`SAVE_VERSION` is 5. Balance changes alone never invalidate a save, and nothing here deletes earned
+value: purchased levels, Machine Insight, milestones, Universes and Axioms all carry forward
+untouched. The one reinterpretation is Temporal Injector, which no longer means "2x simulation speed",
+so the v4 -> v5 step records the speed a save had already unlocked and the engine keeps honouring it
+whatever Machine Insight says. A recorded Harvest Grade is likewise kept, even where the new bands
+would place the same Depth one band lower.
+
+### Balance tooling
+
+`npm run balance` simulates whole campaigns -- an empty save played forward through Machine purchases,
+Universes, Multiverses and Axioms under eleven named strategies -- and prints the curve.
+`npm run balance:full` widens the seed set and adds the Great Convergence horizon.
+`public/game/tests/campaign.test.mjs` asserts the bands in CI.
 
 ## v1.19.0 mobile UX & game-focus pass
 

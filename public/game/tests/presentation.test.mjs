@@ -792,7 +792,10 @@ test('the view model forecasts the cascade and the next depth band', () => {
   assert.equal(vm.harvest.depth, 5);
   assert.equal(vm.harvest.depthBand, 'transcendent');
   assert.equal(vm.harvest.nextBand.grade, 'ascendant');
-  assert.equal(vm.harvest.nextBand.depthNeeded, 9);
+  assert.equal(vm.harvest.nextBand.depthNeeded, 10);
+  // The forecast names the Credit the band pays: since v1.20.0 a grade boundary is a credit step, so
+  // the player is never told a band is close while the money is not.
+  assert.equal(vm.harvest.nextBand.credits, 6);
   assert.ok(vm.harvest.nextBand.yieldMultiplier > vm.harvest.controlled.multiplier);
 });
 

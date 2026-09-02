@@ -2,6 +2,9 @@ import { clampStats } from './effects.js';
 import { fill, text as catalog } from '../data/i18n.js';
 import { SAVE_VERSION, createCivilizationTemplate, createNewState, eraForYears } from './rules.js';
 import { validRunTrace } from './run-report.js';
+// The speed rules live beside the other simulation-speed constants, not here: this module reads them
+// to repair a stored save, it does not own them.
+import { clampSimulationSpeed, simulationSpeedInsightFor } from './tactical-actions.js';
 import { normalizeTutorialState } from './tutorial.js';
 import type { Civilization, GameState, Phase, WorldMemoryState } from './types.js';
 
@@ -61,7 +64,47 @@ export const SAVE_MIGRATIONS: SaveMigrationStep[] = [
   { from: 1, to: 2, id: 'v1_to_v2_structural', apply: raw => raw },
   { from: 2, to: 3, id: 'v2_to_v3_structural', apply: raw => raw },
   { from: 3, to: 4, id: 'v3_to_v4_structural', apply: raw => raw },
+  // v1.20.0 moved simulation speed off Temporal Injector and onto Machine Insight. The module is
+  // still owned and still does something -- it buys a stronger Temporal Injection now -- but the
+  // capability it used to sell is read from somewhere else, so a save written before the change has
+  // to hand that capability over explicitly. Without this step a player who had bought 2x or 4x would
+  // load into 1x and be told nothing, which is exactly the silent deletion of purchased value the
+  // migration contract exists to prevent.
+  { from: 4, to: 5, id: 'v4_to_v5_simulation_speed_from_insight', apply: raw => grandfatherSimulationSpeed(raw) },
 ];
+
+export function legacySimulationSpeed(temporalInjectorLevel: number): number {
+  const level = Math.max(0, Math.trunc(Number(temporalInjectorLevel) || 0));
+  return level >= 3 ? 4 : level >= 1 ? 2 : 1;
+}
+
+function grandfatherSimulationSpeed(raw: RawSave): RawSave {
+  const machine = isPlainObject(raw.machine) ? raw.machine : null;
+  const levels = machine && isPlainObject(machine.upgradeLevels) ? machine.upgradeLevels : null;
+  const earned = legacySimulationSpeed(Number(levels?.temporal_injector ?? 0));
+  if (earned <= 1) return raw;
+  const meta = isPlainObject(raw.meta) ? raw.meta : null;
+  if (!meta) return raw;
+  const progression = isPlainObject(meta.progression) ? meta.progression : null;
+  if (!progression) return raw;
+  // The stored value is as untrusted as the rest of the payload, and the engine reads this one as a
+  // floor on simulation speed -- so it is clamped to the same 1..8 band `normalizeState` already
+  // holds `simulationSpeed` to, rather than being trusted to be a speed at all.
+  const stored = Number(progression.simulationSpeedUnlocked ?? 1);
+  const previous = Number.isFinite(stored) ? Math.trunc(stored) : 1;
+  const speed = clampSimulationSpeed(Math.max(earned, previous));
+  progression.simulationSpeedUnlocked = speed;
+  // A speed this save already owned is not news. `Progression.refresh` announces each speed step the
+  // first time it becomes usable, and without this a returning player would be told about a
+  // capability they had been playing with for a version.
+  const announced = Array.isArray(progression.announcedUnlocks) ? progression.announcedUnlocks : (progression.announcedUnlocks = []);
+  for (const step of [2, 4]) {
+    if (speed < step || simulationSpeedInsightFor(step) === 0) continue;
+    const id = `capability:simulation_speed_${step}`;
+    if (!announced.includes(id)) announced.push(id);
+  }
+  return raw;
+}
 
 export const OLDEST_MIGRATABLE_SAVE_VERSION = SAVE_MIGRATIONS.length ? SAVE_MIGRATIONS[0]!.from : SAVE_VERSION;
 
@@ -265,7 +308,13 @@ export function normalizeState(raw: RawSave, log: RepairLog): { state: GameState
   if (!PHASES.includes(state.phase)) state.phase = log.repair('state.phase', 'machine');
   // A phase with nothing to show would leave the player on an empty screen with no way back.
   if (state.phase === 'civilization' && !state.civilization) state.phase = log.repair('state.phase', 'machine');
-  state.simulationSpeed = Math.max(1, Math.min(8, Math.trunc(state.simulationSpeed) || 1));
+  state.simulationSpeed = clampSimulationSpeed(state.simulationSpeed);
+  const unlocked = state.meta.progression.simulationSpeedUnlocked;
+  if (unlocked !== undefined) {
+    const repaired = clampSimulationSpeed(unlocked);
+    if (repaired !== unlocked) log.repair('meta.progression.simulationSpeedUnlocked', repaired);
+    state.meta.progression.simulationSpeedUnlocked = repaired;
+  }
   // Onboarding state is rebuilt against this build's step list: an unknown status or a step id this
   // version no longer has would otherwise point the tutorial at nothing.
   state.tutorial = normalizeTutorialState(state.tutorial);

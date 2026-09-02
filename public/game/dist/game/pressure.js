@@ -44,16 +44,16 @@ export function advancePressure(civ, bonuses, deltaSeconds) {
     const rate = entropyRate(pressureYears(civ), bonuses.containmentRating, Boolean(civ.terminal));
     const after = Math.max(0, Math.min(100, before + rate * Math.max(0, deltaSeconds)));
     civ.tactical.entropy = after;
-    const queuedCrises = [];
+    const crises = [];
     for (const threshold of ENTROPY_THRESHOLDS) {
         if (after >= threshold && !civ.tactical.triggeredCrises.includes(threshold)) {
             civ.tactical.triggeredCrises.push(threshold);
             const crisisId = ENTROPY_CRISIS_IDS[threshold];
             if (crisisId)
-                queuedCrises.push(crisisId);
+                crises.push({ threshold, crisisId });
         }
     }
-    return { before, after, rate, queuedCrises };
+    return { before, after, rate, crises, queuedCrises: crises.map(entry => entry.crisisId) };
 }
 export function cascadeDecay(entropy, stabilityMax) {
     return entropy >= 100 ? CASCADE_DECAY_FRACTION * Math.max(1, Number(stabilityMax) || 1) : 0;

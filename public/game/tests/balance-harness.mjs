@@ -1,4 +1,7 @@
 import { GameEngine } from '../dist/game/engine.js';
+import { ventStabilityCost } from '../dist/game/tactical-actions.js';
+import { Progression } from '../dist/game/progression.js';
+import { upgradeCost } from '../dist/game/rules.js';
 
 export function freshEngine() {
   return new GameEngine({
@@ -35,6 +38,11 @@ export function withUpgrades(engine, machineLevels = {}, universeLevels = {}) {
 
 // policy: 'safe' resolves interventions only. 'vent', 'stabilize', 'accelerate' and
 // 'reserve' additionally spend the named action at every opportunity.
+//
+// 'manage' is the one that models a player rather than a stress test: it vents when Entropy actually
+// threatens the run and Stability can still pay the next -- escalating -- vent. Since v1.20.0 vents
+// are a finite budget, so 'vent' means "spend the whole budget immediately", which is a legitimate
+// Paradox-farming line but is no longer how a long run is played.
 export function runCivilization(engine, { seed = 0, policy = ['safe'], harvestAt = 'never', dt = 0.25, maxSeconds = 2400 } = {}) {
   const runBuild = engine.state.machine.runBuild;
   if (engine.systemUnlocked('directives') && runBuild.directiveOfferIds.length && !runBuild.selectedDirective) {
@@ -60,6 +68,11 @@ export function runCivilization(engine, { seed = 0, policy = ['safe'], harvestAt
       continue;
     }
     if (policy.includes('vent')) engine.useTacticalAction('vent');
+    if (policy.includes('manage')) {
+      const nextVent = ventStabilityCost(civ.tactical.actionUsage.vent);
+      if (civ.tactical.entropy >= 55 && civ.stats.stability > 25 + nextVent) engine.useTacticalAction('vent');
+      else if (civ.stats.stability < 30) engine.useTacticalAction('stabilize');
+    }
     if (policy.includes('stabilize')) engine.useTacticalAction('stabilize');
     if (policy.includes('accelerate')) engine.useTacticalAction('accelerate');
     if (policy.includes('reserve') && typeof engine.runInterventions === 'function') {
@@ -76,4 +89,39 @@ export function runCivilization(engine, { seed = 0, policy = ['safe'], harvestAt
     eventIds,
     harvest: { ...engine.state.machine.lastHarvest },
   };
+}
+
+// The most Machine levels the current bank could buy if it were spent perfectly, per currency.
+//
+// Two things this has to get right, and both were once wrong. It prices through `cost_ladder`, because
+// a module that authors its own rungs is charged those rungs -- pricing Reality Lattice geometrically
+// read 60/114/217 where the game charges 60/600/1800 and overstated purchase power accordingly. And it
+// counts only levels the Machine does not already own: `max_level` is a ceiling, not an allowance.
+export function maximumPurchasableMachineLevels(engine) {
+  const groups = new Map();
+  for (const definition of engine.catalog('machine')) {
+    if (!Progression.canUseUpgrade(engine.state, 'machine', definition.id)) continue;
+    const currency = String(definition.currency);
+    groups.set(currency, [...(groups.get(currency) ?? []), definition]);
+  }
+
+  const maximize = (definitions, index, remaining) => {
+    if (index >= definitions.length) return 0;
+    const definition = definitions[index];
+    const owned = engine.upgradeLevel('machine', definition.id);
+    const headroom = Math.max(0, Number(definition.max_level) - owned);
+    const ladder = Array.isArray(definition.cost_ladder) ? definition.cost_ladder : undefined;
+    let best = 0;
+    let spent = 0;
+    for (let levels = 0; levels <= headroom; levels++) {
+      if (spent > remaining) break;
+      best = Math.max(best, levels + maximize(definitions, index + 1, remaining - spent));
+      spent += upgradeCost(Number(definition.base_cost), Number(definition.growth), owned + levels, ladder);
+    }
+    return best;
+  };
+
+  let total = 0;
+  for (const [currency, definitions] of groups) total += maximize(definitions, 0, engine.currencyAmount(currency));
+  return total;
 }

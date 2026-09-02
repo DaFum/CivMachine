@@ -98,7 +98,9 @@ from the catalog on boot and on each switch, and the localization test fails if 
 - **TypeScript stays on 6.x** (TS 7 makes lint fail outright) and **ESLint stays on 9.x** (ESLint 10
   breaks the bundled `eslint-plugin-react`). `@types/node` tracks the Node major in use, not latest.
 - Read the matching document in `docs/superpowers/specs/` before changing balance or progression —
-  the numbers the tests pin come from there.
+  the numbers the tests pin come from there. Balance above the single run lives in
+  `public/game/tests/campaign-harness.mjs`; measure a change with `npm run balance` before arguing
+  about it, and expect `campaign.test.mjs` to fail if the curve leaves its band.
 - Player-facing explanation lives in `data/help-topics.ts` and `game/tutorial.ts`, and both are pinned
   by `public/game/tests/onboarding.test.mjs` against the surfaces they describe: a new world-strip
   column, a new `EXPLAIN_NOTES` entry or a tutorial step with no anchor fails the build rather than

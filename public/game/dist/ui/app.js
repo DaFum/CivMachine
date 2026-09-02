@@ -9,8 +9,12 @@ import { runReportPanel } from './report-view.js';
 // The short resource names the harvest grid uses. `ui.viewModel.resources` is the long form the
 // resource bar prints, so these are their own catalog entries rather than a truncation of those.
 const resourceShort = () => { const t = text().ui.app; return { causal_mass: t.resourceCausal, cognition: t.resourceCognition, paradox: t.resourceParadox, existence: t.resourceExistence }; };
+// Which resources a harvest breakdown may name -- filtered by what the Machine has identified, the
+// same rule the resource bar and the run report follow. Listing all four named Existence in the live
+// panel from the first run, hours before anything had revealed it.
 const CONTROLLED_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
 const CHAOTIC_KEYS = ['causal_mass', 'paradox'];
+const visibleKeys = (vm, keys) => keys.filter(key => vm.visibleResourceKeys.includes(key));
 // Reserve cost and harvest yield both move with Cultivation Depth on every tick. They must not enter
 // the structural render key -- that would rebuild the DOM continuously -- so they are written through
 // the live refresh instead, from the same builders the structural render uses.
@@ -215,8 +219,26 @@ export function createGameUI(engine, world) {
     };
     const upgrades = (entries, layer) => entries.map(entry => { const t = text().ui.app; const d = entry.definition; const level = engine.upgradeLevel(layer, d.id), cost = engine.upgradeCost(layer, d.id), max = Number(d.max_level); const locked = entry.status === 'locked'; return `<article class="upgrade ${locked ? 'locked' : ''}"><div><h4>${esc(d.name)}</h4><p>${esc(d.description)}</p>${locked ? `<small>🔒 ${esc(entry.reason)}</small>` : `<small>${esc(currencyName(d.currency))} ${fmt(cost)} · ${esc(fill(t.level, { level, max }))}</small>`}</div><button data-action="upgrade" data-layer="${layer}" data-id="${esc(d.id)}" ${locked || level >= max || !engine.canPurchaseUpgrade(layer, d.id) ? 'disabled' : ''}>${esc(level >= max ? t.max : locked ? t.locked : t.install)}</button></article>`; }).join('');
     const optionCards = (items, kind, selected, locked) => items.map(x => { const t = text().ui.app; return `<article class="build-option ${selected === x.id ? 'selected' : ''}"><h4>${esc(x.name)}</h4><p>${esc(x.description)}</p>${x.objective ? `<div class="objective-brief"><span>${esc(t.directiveObjective)}</span><b>${esc(x.objective.title)}</b><small>${esc(x.objective.description)}</small></div>` : ''}<button data-action="${kind}" data-id="${esc(x.id)}" ${locked || selected === x.id ? 'disabled' : ''}>${esc(selected === x.id ? t.active : locked ? t.lockedForRun : t.select)}</button></article>`; }).join('');
-    const milestoneRegister = (vm) => { const t = text().ui.app; const groups = ['CULTIVATION', 'HARVEST', 'PATHS', 'PRESTIGE', 'CONVERGENCE']; const sections = groups.map(group => { const entries = vm.milestones.entries.filter((entry) => entry.group === group); if (!entries.length)
-        return ''; const insight = (value) => esc(fill(t.insightAward, { amount: value })); const open = entries.filter((entry) => !entry.completed).map((entry) => `<article class="milestone"><div><b>${esc(entry.title)}</b><p>${esc(entry.description)}</p></div><div class="milestone-progress"><div class="meter"><i style="width:${pct(entry.current, entry.target)}"></i></div><small>${fmt(entry.current)} / ${fmt(entry.target)} · ${insight(entry.insight)}</small></div></article>`).join(''); const done = entries.filter((entry) => entry.completed).map((entry) => `<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>${insight(entry.insight)}</small></article>`).join(''); return `<div class="milestone-group"><span class="panel-kicker">${esc(milestoneGroupLabel(group) ?? group)}</span>${open}${done}</div>`; }).join(''); return card(esc(t.milestoneRegister), `<div class="milestone-register">${explainNote('milestones', vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary, { completed: vm.milestones.completed, total: vm.milestones.total }))}</p>${sections}</div>`, 'milestone-card'); };
+    const milestoneRegister = (vm) => {
+        const t = text().ui.app;
+        const groups = ['CULTIVATION', 'HARVEST', 'PATHS', 'PRESTIGE', 'CONVERGENCE'];
+        const sections = groups.map(group => {
+            const entries = vm.milestones.entries.filter((entry) => entry.group === group);
+            if (!entries.length)
+                return '';
+            const insight = (value) => esc(fill(t.insightAward, { amount: value }));
+            const progressText = (entry) => entry.display === 'count'
+                ? `${fmt(entry.current)} / ${fmt(entry.target)}`
+                // An ordinal is a state, not a tally: "2 / 3" read as two of three tasks done when what it
+                // meant was "you are in Transcendence, this wants Apotheosis". The meter still tracks the
+                // ordinal, because the distance is real -- only the counter was a lie.
+                : `${esc(entry.currentTerm)}: ${esc(entry.currentLabel)} → ${esc(entry.targetTerm)}: ${esc(entry.targetLabel)}`;
+            const open = entries.filter((entry) => !entry.completed).map((entry) => `<article class="milestone milestone-${esc(entry.display)}"><div><b>${esc(entry.title)}</b><p>${esc(entry.description)}</p></div><div class="milestone-progress"><div class="meter"><i style="width:${pct(entry.current, entry.target)}"></i></div><small>${progressText(entry)} · ${insight(entry.insight)}</small></div></article>`).join('');
+            const done = entries.filter((entry) => entry.completed).map((entry) => `<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>${insight(entry.insight)}</small></article>`).join('');
+            return `<div class="milestone-group"><span class="panel-kicker">${esc(milestoneGroupLabel(group) ?? group)}</span>${open}${done}</div>`;
+        }).join('');
+        return card(esc(t.milestoneRegister), `<div class="milestone-register">${explainNote('milestones', vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary, { completed: vm.milestones.completed, total: vm.milestones.total }))}</p>${sections}</div>`, 'milestone-card');
+    };
     const convergenceCard = (vm) => { if (!vm.convergence.visible)
         return ''; const t = text().ui.app; const rows = vm.convergence.requirements.map((entry) => `<li class="${entry.met ? 'met' : 'open'}"><span>${entry.met ? '\u2713' : '\u25CB'} ${esc(entry.label)}</span><b>${fmt(entry.current)} / ${fmt(entry.target)}</b></li>`).join(''); return card(esc(t.greatConvergence), `<div class="convergence-card"><p>${esc(fill(t.convergenceDescription, { targetDepth: vm.convergence.targetDepth.toFixed(1) }))}</p><ul class="convergence-requirements">${rows}</ul><button class="primary big" data-action="convergence" ${vm.convergence.unlocked ? '' : 'disabled'}>${esc(t.initiateGreatConvergence)}</button>${vm.convergence.unlocked ? '' : `<p class="start-reason" role="status">${esc(vm.convergence.reason)}</p>`}${vm.convergence.convergences ? `<small>${esc(fill(t.convergencesAchieved, { count: vm.convergence.convergences }))}</small>` : ''}</div>`, 'convergence-panel'); };
     function renderMachine(vm) {
@@ -281,12 +303,18 @@ export function createGameUI(engine, world) {
     // The harvest readout sits inside the rail rather than in a collapsed panel: it answers the same
     // question as CASCADE IN Xs -- stay or harvest -- and the two are only useful side by side.
     const harvestReadout = (vm) => { const h = vm.harvest; if (!h)
-        return ''; const t = text().ui.app; const next = h.nextBand ? fill(t.nextBand, { grade: `<b>${esc(h.nextBand.label.toUpperCase())}</b>`, depth: h.nextBand.depthNeeded, multiplier: h.nextBand.yieldMultiplier.toFixed(2) }) : esc(t.deepestBandReached); return `<div class="harvest-readout urgency-${esc(h.urgency.state)}${focusClass(vm, '.harvest-readout')}"><span>${esc(t.harvestGrade)} // <b>${esc(gradeText(h.controlled.grade))}</b></span><strong data-live="depth">${h.depth.toFixed(1)}</strong><div class="harvest-meter" aria-hidden="true"><i data-live="harvest-meter" style="width:${pct(h.bandProgress)}"></i></div><small data-live="harvest-summary">${esc(harvestSummaryText(h.controlled))}</small><small class="next-band">${next}</small><p class="harvest-call" role="status" data-live="harvest-call">${esc(urgencyText(h))}</p>${explainNote('harvest_readout', vm.explain)}</div>`; };
+        return ''; const t = text().ui.app; const next = h.nextBand ? fill(t.nextBand, { grade: `<b>${esc(h.nextBand.label.toUpperCase())}</b>`, depth: h.nextBand.depthNeeded.toFixed(1), credits: h.nextBand.credits, multiplier: h.nextBand.yieldMultiplier.toFixed(2) }) : esc(t.deepestBandReached); return `<div class="harvest-readout urgency-${esc(h.urgency.state)}${focusClass(vm, '.harvest-readout')}"><span>${esc(t.harvestGrade)} // <b>${esc(gradeText(h.controlled.grade))}</b></span><strong data-live="depth">${h.depth.toFixed(1)}</strong><div class="harvest-meter" aria-hidden="true"><i data-live="harvest-meter" style="width:${pct(h.bandProgress)}"></i></div><small data-live="harvest-summary">${esc(harvestSummaryText(h.controlled))}</small><small class="next-band">${next}</small><p class="harvest-call" role="status" data-live="harvest-call">${esc(urgencyText(h))}</p>${explainNote('harvest_readout', vm.explain)}</div>`; };
     // The rail used to be one block that answered three different questions at once: what can I spend
     // Control on, how much pressure is building, and when do I stop. It is two now, one per decision:
     // the command rail is what the player spends, the pressure rail is when the run should end -- and
     // the harvest buttons sit under the readout that says whether to press them.
-    const speedRow = (vm) => `<div class="speed-row"><span>${esc(text().ui.app.simulationSpeed)}</span>${[1, 2, 4].filter(x => x <= vm.maxSimulationSpeed).map(x => `<button data-action="speed" data-speed="${x}" class="${vm.simulationSpeed === x ? 'active' : ''}">${x}×</button>`).join('')}</div>`;
+    // Every speed is on screen from the first run, the locked ones carrying the Machine Insight they
+    // cost. Hiding them made 2x and 4x appear out of nowhere the moment a gate cleared, which reads as
+    // a glitch rather than as the permanent progression they are -- and gave the player nothing to aim
+    // at in the meantime. `Progression` announces each step once when it actually unlocks.
+    const speedRow = (vm) => `<div class="speed-row"><span>${esc(text().ui.app.simulationSpeed)}</span>${vm.simulationSpeedOptions.map((option) => option.unlocked
+        ? `<button data-action="speed" data-speed="${option.speed}" class="${vm.simulationSpeed === option.speed ? 'active' : ''}">${option.speed}×</button>`
+        : `<button class="speed-locked" disabled title="${esc(fill(text().ui.app.simulationSpeedLocked, { insight: option.insight }))}">${option.speed}× 🔒 ${esc(fill(text().ui.app.simulationSpeedLocked, { insight: option.insight }))}</button>`).join('')}</div>`;
     const harvestActionSurface = (vm) => {
         const c = text().ui.app;
         const h = vm.harvest;
@@ -338,7 +366,7 @@ export function createGameUI(engine, world) {
       <details class="panel strategic-overview-panel" data-disclosure="strategic-overview"${disclosureAttr('strategic-overview')}><summary>${esc(t.strategicOverview)} <small data-live="overview-summary">STB ${c.stats.stability.toFixed(0)} · SAN ${c.stats.sanity.toFixed(0)}</small></summary>${explainNote('strategic_overview', vm.explain)}<div class="stats-grid">${statBar(t.realityStability, c.stats.stability, c.stats.stabilityMax, 'stability')}${statBar(t.machineAwareness, c.stats.awareness, 100, 'awareness')}${statBar(t.collectiveSanity, c.stats.sanity, 100, 'sanity')}${statBar(t.cosmicAttention, c.stats.attention, 100, 'attention')}</div><div class="overview-line"><span>${esc(t.era)} <b data-live="era">${esc(eraLabel(c.era))}</b></span><span>${esc(t.year)} <b data-live="year">${fmt(c.years)}</b></span><span>${esc(t.development)} <b data-live="development">${c.development.toFixed(1)}</b></span></div><p class="cosmic-line">${esc(c.stats.attention > 65 ? t.externalObserversConverging : c.stats.awareness > 65 ? t.civilizationDangerouslyAware : t.cosmicObservationTolerable)}</p></details>
       <details class="records-intel-panel" data-disclosure="records-intel"${disclosureAttr('records-intel')}><summary>${esc(t.recordsAndIntelligence)}</summary>
         <details data-disclosure="dossier"${disclosureAttr('dossier')}><summary>${esc(t.speciesFactionDossier)}</summary>${card('', `<div class="tag-row">${c.traits.map((trait) => `<span>${esc(trait.name)}</span>`).join('')}</div><h4>${esc(t.emergingTendencies)}</h4><ul class="tendency-list">${tendencies}</ul>${c.institutions.length ? `<h4>${esc(t.institutions)}</h4><p>${c.institutions.map((id) => esc(institutionName(id) ?? id.replaceAll('_', ' '))).join(' · ')}</p>` : ''}`)}</details>
-        <details data-disclosure="harvest-yield"${disclosureAttr('harvest-yield')}><summary>${esc(t.harvestYieldDetail)}</summary>${card('', `${explainNote('harvest_detail', vm.explain)}<p class="panel-note">${esc(t.harvestDetailDescription)}</p><div class="harvest-grid"><div><b>${esc(t.controlled)}</b>${CONTROLLED_KEYS.map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>${esc(t.chaotic)}</b>${CHAOTIC_KEYS.map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>${esc(t.chaoticAutomatic)}</small></div></div>`)}</details>
+        <details data-disclosure="harvest-yield"${disclosureAttr('harvest-yield')}><summary>${esc(t.harvestYieldDetail)}</summary>${card('', `${explainNote('harvest_detail', vm.explain)}<p class="panel-note">${esc(t.harvestDetailDescription)}</p><div class="harvest-grid"><div><b>${esc(t.controlled)}</b>${visibleKeys(vm, CONTROLLED_KEYS).map(key => rewardSpan('controlled', key, harvest)).join('')}</div><div><b>${esc(t.chaotic)}</b>${visibleKeys(vm, CHAOTIC_KEYS).map(key => rewardSpan('chaotic', key, chaotic)).join('')}<small>${esc(t.chaoticAutomatic)}</small></div></div>`)}</details>
         <details data-disclosure="civ-record"${disclosureAttr('civ-record')}><summary>${esc(t.civilizationRecord)}</summary>${card('', `<ol class="history">${c.history.length ? c.history.map((h) => `<li>${esc(h)}</li>`).join('') : `<li>${esc(t.noRecordedHistoryYet)}</li>`}</ol>`)}</details>
         <details data-disclosure="civ-identity"${disclosureAttr('civ-identity')}><summary>${esc(t.civilizationIdentity)}</summary>${card('', `<p><b>${esc(c.species.name)}</b> · ${esc(c.species.bodyType)} · ${esc(c.species.culture)}</p><p>${esc(fill(t.visualMotif, { motif: c.species.motif }))}</p><p><b>${esc(c.faction.name)}</b><br>${esc(fill(t.doctrine, { doctrine: c.faction.doctrine }))}<br>${esc(fill(t.focus, { focus: c.faction.focus }))}</p>`)}</details>
         <details data-disclosure="era-progression"${disclosureAttr('era-progression')}><summary>${esc(t.eraProgression)}</summary>${card('', `<p>${esc(t.eraRanges)}</p><div class="era-track"><i style="width:${Math.min(100, c.years / 14000 * 100)}%"></i></div>`)}</details>
@@ -371,9 +399,9 @@ export function createGameUI(engine, world) {
         setText('[data-live="depth"]', vm.harvest.depth.toFixed(1));
         setText('[data-live="convergence-depth"]', vm.harvest.depth.toFixed(1));
         setText('[data-live="harvest-summary"]', harvestSummaryText(vm.harvest.controlled));
-        for (const key of CONTROLLED_KEYS)
+        for (const key of visibleKeys(vm, CONTROLLED_KEYS))
             setText(`[data-live="harvest-controlled-${key}"]`, rewardText(key, vm.harvest.controlled));
-        for (const key of CHAOTIC_KEYS)
+        for (const key of visibleKeys(vm, CHAOTIC_KEYS))
             setText(`[data-live="harvest-chaotic-${key}"]`, rewardText(key, vm.harvest.chaotic));
         for (const entry of vm.machineReserve) {
             setText(`[data-reserve-cost="${entry.id}"]`, reserveCostText(entry));

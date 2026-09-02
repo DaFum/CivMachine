@@ -233,6 +233,35 @@ const EFFECTIVE_UPGRADES = [
   ...balancedAxiomUpgrades(CONTENT.axiom_upgrades),
 ];
 
+test('runtime-visible Directive objective copy mirrors the predicates it describes', () => {
+  // English is the source locale, so its sentence must be the source sentence: the objective card is
+  // read from the catalog and `isComplete` from the module, and when those drift the player is told to
+  // reach one target and paid for another. That is exactly what rebalancing an objective without
+  // touching its copy produced, and it is what this pins.
+  for (const [id, objective] of Object.entries(DIRECTIVE_OBJECTIVES)) {
+    const en = LOCALIZATION.en.content.directives.objectives[id];
+    assert.equal(en.title, objective.title, `${id}.title must match the runtime objective`);
+    assert.equal(en.description, objective.description, `${id}.description must match the runtime objective`);
+    assert.ok(LOCALIZATION.de.content.directives.objectives[id]?.description?.trim(),
+      `${id} needs a German objective description`);
+  }
+
+  // The German sentence has no source to be compared against, so it is held to the thresholds instead:
+  // every number the English description states has to appear in the translation too. Whether the
+  // predicates themselves are correct at their boundaries is settled in core.test.mjs, which exercises
+  // each one on both sides of every threshold -- including the era and intervention-count conditions
+  // that are not numbers in the sentence at all.
+  for (const id of Object.keys(DIRECTIVE_OBJECTIVES)) {
+    const english = LOCALIZATION.en.content.directives.objectives[id].description;
+    const german = LOCALIZATION.de.content.directives.objectives[id].description;
+    const numbers = english.match(/\d+/g) ?? [];
+    assert.ok(numbers.length > 0, `${id} must state at least one threshold`);
+    for (const value of numbers) {
+      assert.ok(german.includes(value), `de.${id} must state the same threshold ${value}: ${german}`);
+    }
+  }
+});
+
 test('runtime-visible upgrade descriptions mirror the balanced catalogs', () => {
   for (const definition of EFFECTIVE_UPGRADES) {
     assert.equal(LOCALIZATION.en.content.upgrades[definition.id].description, definition.description, `${definition.id}.description must match runtime-visible copy`);
@@ -577,6 +606,9 @@ test('a synthetic decision names itself from the id the engine built it from', (
 test('currencies, grades and unlocked options are named, never spelled out from their id', () => {
   const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
   engine.state.meta.progression.machineInsight = 25;
+  // Breeding Matrices are staggered over Universes as well as Insight, so the fixture has to own the
+  // four Universes the last pair asks for before every option is there to be named.
+  engine.state.meta.universesTotal = 4;
   engine.state.meta.progression.unlockedSystems = ['directives', 'breeding_matrices', 'axioms', 'universe_upgrades'];
   const announcements = [];
   Progression.refresh(engine.state, announcements);
