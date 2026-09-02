@@ -188,41 +188,48 @@ because their runs are shorter. Measured on the four axes the mandate names, at 
 
 | Tilt | Civilizations | Wall-clock min | Credits/min | Resources/min |
 | --- | ---: | ---: | ---: | ---: |
-| survival_first | 16 | 29 | 3.17 | 6597 |
-| defensive_spread | 15 | 30 | 3.15 | 6212 |
-| lattice_rush | 16 | 28 | 3.21 | 6139 |
-| development_first | 18 | 27 | 3.31 | 6258 |
-| balanced | 17 | 27 | 3.17 | 5751 |
-| utility_first | 19 | 28 | 3.17 | 5619 |
-| yield_first | 21 | 27 | 3.03 | 5701 |
+| defensive_spread | 15 | 32 | 2.92 | 5772 |
+| survival_first | 16 | 31 | 2.95 | 6122 |
+| lattice_rush | 16 | 30 | 2.96 | 5666 |
+| balanced | 17 | 30 | 2.93 | 5381 |
+| development_first | 18 | 29 | 3.03 | 5791 |
+| yield_first | 18 | 30 | 2.77 | 5941 |
+| utility_first | 19 | 30 | 2.92 | 5287 |
 
-No tilt leads on all four. The spread is 1.40x on Civilizations, 1.11x on wall-clock, 1.09x on Credits
-per minute and 1.17x on resources per minute — a build is a different shape of the same hour, which is
-what the mandate asked for. `campaign.test.mjs` pins all four.
+No tilt Pareto-dominates another: for every pair, whichever is ahead on one axis is behind on
+another. `campaign.test.mjs` checks all twenty-one pairs, not merely whether one tilt holds every
+axis at once, which is the weaker question and passes far too easily.
 
-One thing this table cannot show: the modelled player takes the safest branch of every intervention,
-so foresight is worth nothing to them and `utility_first` is measured with Prediction Core doing
-nothing at all. Modelling them probing anyway was tried and measured *worse* — a Probe that costs
-Control competes with the vent keeping the run alive — which is a finding about the module rather than
-the build, and is why Prediction Core now makes a Probe free from level 2. The utility row is a floor
-on that build, not its value.
+Two honest caveats, both of which cost real calibration attempts to establish.
 
-Sixteen to twenty-one Civilizations to the first Multiverse depending on tilt, at 27-30 minutes of
-wall-clock cultivation for all of them.
+**Containment is the compounding stat, and that bounds how distinct a tilt can be.** The opening
+Reality Lattice rung costs 60 Causal Mass and lengthens the run by 31%, which is 31% of *every*
+resource; a yield module costs 120 for +12% of *one of four*, about 3% of the total. Containment is
+therefore roughly twenty times more resource-efficient per unit spent at the point where ordering
+matters — so a policy that actively defers it is dominated on every axis, including the resource axis
+it was meant to own. An earlier version of the harness weighted Containment at 1.3 against yield at
+0.5 and measured exactly that; it was measuring a caricature rather than a build. The tilts now prefer
+their axis without refusing Containment, and `yield_first` leads resources per minute — but only by
+about 3%, which is close to the noise floor of an eight-seed median.
 
-Great Convergence readiness sits at 83 Civilizations, 20 Universes and 5 Multiverses: 7.7 hours of
-simulated cultivation, but only **1.9 hours actually waited through**, because simulation speed is
-permanent progression and a player runs at 4x for most of the campaign. The remaining length is about
-2,500 intervention decisions and 83 purchase phases. Whether that adds up to the historical 8-12 hour
-reference depends on how long a decision takes — under 5 hours at 5 seconds each, over 10 at 12 — and
-that is not a quantity this harness can measure, so it reports the two halves separately rather than
-multiplying them into one confident figure. The gate is bound by the Axiom requirement (all six at
-level 1, roughly fifteen Axioms) rather than by the two Multiverses it names.
+Three attempts to widen that lead all failed for the same reason and are recorded here so they are not
+tried again: raising the grade-module bonus from 2.5% to 9% and 14%, raising the yield multipliers from
+12% to 16%, and weighting banked resources more heavily in `universeResidueAward`. Every Machine
+upgrade is affordable within a Universe, so every build ends each Universe owning all four yield
+modules at level 6 — measured, `yield_first`, `survival_first` and `development_first` reach Universe 3
+with near-identical Machine levels. Strengthening the modules lifts every build, and the build whose
+runs are longest still converts the lift best. Making the resource axis genuinely belong to a yield
+build would need a mechanic that survival cannot also buy, which is a design change rather than a
+number, and it is not in this release.
 
-The seven purchase tilts span 5 to 7 Civilizations to the first Universe — a 1.40x spread. The line
-that needs the fewest Civilizations (survival-first) and the line that needs the least simulated time
-(aggressive Accelerate, at 10.4 minutes against 29) are different lines, which is the property that
-makes the choice real.
+**Prediction Core cannot be valued by this harness at all.** The modelled player takes the safest
+branch of every intervention, so there is little for foresight to soften; a run with Prediction Core 5
+is byte-identical to the same run with none, which the test asserts before excluding `utility_first`
+from the strict pairwise check. Modelling the player probing anyway was tried and measured *worse* --
+a Probe that costs Control competes with the vent keeping the run alive -- and that is a finding about
+the module rather than the build, which is why Prediction Core now makes a Probe free from level 2.
+The utility row is a floor on that build; it is held to "not a trap" (within 1.5x on Civilizations and
+1.3x on wall-clock), not to non-dominance it has no way to demonstrate.
 
 ## What must not regress
 

@@ -327,53 +327,84 @@ test('campaign: spending everything on one axis still leaves the others reachabl
     'even a Lattice rush must find something else worth buying');
 });
 
-test('campaign: no purchase tilt wins on every axis of the late campaign', () => {
-  // The single-axis comparison above asks who reaches the first Universe soonest. That is the wrong
-  // question on its own: a build that needs more Civilizations but finishes each one faster is not
-  // behind, it is different. This measures the four axes the rebalance mandate names, at the point the
-  // campaign has actually developed -- the first Multiverse -- and in wall-clock rather than simulated
-  // time, because wall-clock is what the player spends.
+test('campaign: no purchase tilt is Pareto-dominated by another', () => {
+  // The four axes the rebalance mandate names, measured where the campaign has actually developed --
+  // the first Multiverse -- and in wall-clock rather than simulated time, because wall-clock is what
+  // the player spends. "Nobody holds every axis at once" is too weak a bar: a tilt that is no worse on
+  // any axis and better on one is dominant over its neighbour whether or not it leads the table.
   const sum = run => Object.values(run.rewards).reduce((total, value) => total + value, 0);
-  const rows = PURCHASE_POLICIES.map(strategy => {
-    const sweep = campaigns(strategy, 'universes:4', 6);
-    const finite = values => values.filter(Number.isFinite);
+  const finite = values => values.filter(Number.isFinite);
+  const measure = strategy => {
+    // Eight seeds, not six. Measured, the resources-per-minute median is unstable at six -- yield_first
+    // and development_first swap the axis depending on which seeds land -- and stable from eight on.
+    // The margins between tilts on that axis are genuinely thin, so the sample has to be wide enough
+    // to see past the noise rather than wide enough to get the answer.
+    const sweep = campaigns(strategy, 'universes:4', 8);
     return {
       strategy,
-      runsToMultiverse: percentile(finite(sweep.map(c => c.firstMultiverseRun)), 0.5),
+      civilizations: percentile(finite(sweep.map(c => c.firstMultiverseRun)), 0.5),
       wallMinutes: percentile(finite(sweep.map(c => c.firstMultiverseWallClock / 60)), 0.5),
       creditsPerMinute: percentile(finite(sweep.map(c => c.runs.reduce((t, r) => t + r.credits, 0) / (c.wallClockSeconds / 60))), 0.5),
       resourcesPerMinute: percentile(finite(sweep.map(c => c.runs.reduce((t, r) => t + sum(r), 0) / (c.wallClockSeconds / 60))), 0.5),
     };
-  });
+  };
 
+  // Prediction Core is the one Machine module this harness cannot value. The modelled player takes the
+  // safest branch of every intervention, so there is little left for foresight to soften and no reason
+  // to spend Control looking -- and a build tilted toward it is therefore measured spending resources
+  // on nothing. That is asserted here rather than asserted *about* here, so the exclusion below is
+  // earned by a check instead of by a comment.
+  const withoutCore = () => {
+    const engine = freshCampaignEngine();
+    engine.state.meta.progression.machineInsight = 30;
+    Object.assign(engine.state.machine.upgradeLevels, { reality_lattice: 2, awareness_scrubber: 1 });
+    return engine;
+  };
+  const withCore = () => {
+    const engine = withoutCore();
+    engine.state.machine.upgradeLevels.prediction_core = 5;
+    return engine;
+  };
+  const bare = playRun(withoutCore(), { seed: 3000 });
+  const cored = playRun(withCore(), { seed: 3000 });
+  assert.equal(cored.elapsed, bare.elapsed, 'if Prediction Core ever starts mattering to this policy, drop the exclusion below');
+  assert.equal(cored.credits, bare.credits);
+
+  const rows = PURCHASE_POLICIES.map(measure);
   for (const row of rows) {
-    assert.ok(row.runsToMultiverse > 0, `${row.strategy} never reached a Multiverse`);
+    assert.ok(row.civilizations > 0, `${row.strategy} never reached a Multiverse`);
     assert.ok(row.wallMinutes > 0 && Number.isFinite(row.creditsPerMinute), `${row.strategy} produced no throughput`);
   }
 
-  // No tilt may hold every axis at once. One being ahead on two of them is a build; one being ahead on
-  // all four is the others being decoration.
-  const bestRuns = Math.min(...rows.map(r => r.runsToMultiverse));
-  const bestWall = Math.min(...rows.map(r => r.wallMinutes));
-  const bestCredits = Math.max(...rows.map(r => r.creditsPerMinute));
-  const bestResources = Math.max(...rows.map(r => r.resourcesPerMinute));
-  const sweeps = rows.filter(r => r.runsToMultiverse === bestRuns && r.wallMinutes === bestWall
-    && r.creditsPerMinute === bestCredits && r.resourcesPerMinute === bestResources);
-  assert.equal(sweeps.length, 0, `${sweeps.map(r => r.strategy).join(', ')} leads on all four axes`);
+  const dominates = (a, b) => a.civilizations <= b.civilizations
+    && a.wallMinutes <= b.wallMinutes
+    && a.creditsPerMinute >= b.creditsPerMinute
+    && a.resourcesPerMinute >= b.resourcesPerMinute
+    && (a.civilizations < b.civilizations || a.wallMinutes < b.wallMinutes
+      || a.creditsPerMinute > b.creditsPerMinute || a.resourcesPerMinute > b.resourcesPerMinute);
 
-  // And the axes a player feels -- their time, and what that time earns -- have to stay close. Run
-  // count is allowed a wider band: needing more, shorter Civilizations is a legitimate shape of build.
-  const spread = (values, lowerIsBetter) => (lowerIsBetter
-    ? Math.max(...values) / Math.min(...values)
-    : Math.max(...values) / Math.min(...values));
-  assert.ok(spread(rows.map(r => r.wallMinutes)) <= 1.5,
-    `wall-clock to the first Multiverse spans ${spread(rows.map(r => r.wallMinutes)).toFixed(2)}x`);
-  assert.ok(spread(rows.map(r => r.creditsPerMinute)) <= 1.5,
-    `Cultivation Credits per minute span ${spread(rows.map(r => r.creditsPerMinute)).toFixed(2)}x`);
-  assert.ok(spread(rows.map(r => r.resourcesPerMinute)) <= 1.8,
-    `resources per minute span ${spread(rows.map(r => r.resourcesPerMinute)).toFixed(2)}x`);
-  assert.ok(spread(rows.map(r => r.runsToMultiverse)) <= 2,
-    `Civilizations to the first Multiverse span ${spread(rows.map(r => r.runsToMultiverse)).toFixed(2)}x`);
+  const measurable = rows.filter(row => row.strategy !== 'utility_first');
+  const dominated = [];
+  for (const a of measurable) for (const b of measurable) if (a !== b && dominates(a, b)) dominated.push(`${b.strategy} is dominated by ${a.strategy}`);
+  assert.deepEqual(dominated, [], dominated.join(' | '));
+
+  // Utility is held to the weaker bar its measurement supports: not a trap. It buys a module worth
+  // exactly nothing here, so it should still land close, and if it ever falls far behind that is a
+  // real problem rather than an artefact.
+  const utility = rows.find(row => row.strategy === 'utility_first');
+  const bestCivilizations = Math.min(...measurable.map(row => row.civilizations));
+  const bestWall = Math.min(...measurable.map(row => row.wallMinutes));
+  assert.ok(utility.civilizations <= bestCivilizations * 1.5,
+    `utility_first needs ${utility.civilizations} Civilizations against a best of ${bestCivilizations}`);
+  assert.ok(utility.wallMinutes <= bestWall * 1.3,
+    `utility_first spends ${utility.wallMinutes} minutes against a best of ${bestWall}`);
+
+  // And the axes a player feels have to stay close across every tilt.
+  const spread = values => Math.max(...values) / Math.min(...values);
+  assert.ok(spread(rows.map(r => r.wallMinutes)) <= 1.5, `wall-clock spans ${spread(rows.map(r => r.wallMinutes)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.creditsPerMinute)) <= 1.5, `credits per minute span ${spread(rows.map(r => r.creditsPerMinute)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.resourcesPerMinute)) <= 1.8, `resources per minute span ${spread(rows.map(r => r.resourcesPerMinute)).toFixed(2)}x`);
+  assert.ok(spread(rows.map(r => r.civilizations)) <= 2, `Civilizations span ${spread(rows.map(r => r.civilizations)).toFixed(2)}x`);
 });
 
 test('campaign: the strategy table has no universally dominant entry', () => {

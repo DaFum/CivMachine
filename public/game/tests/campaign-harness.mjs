@@ -126,6 +126,7 @@ export function playRun(engine, { seed = 0, trigger = 'urgent', accelerate = fal
   const shouldHarvest = HARVEST_TRIGGERS[trigger] ?? HARVEST_TRIGGERS.urgent;
   const directiveId = engine.state.civilization.directiveId;
   let elapsed = 0;
+  let waited = 0;
   let interventions = 0;
   let iterations = 0;
   const maxIterations = Math.ceil(maxSeconds / dt) * 4;
@@ -157,12 +158,18 @@ export function playRun(engine, { seed = 0, trigger = 'urgent', accelerate = fal
     if (urgency && shouldHarvest(urgency.state)) { engine.harvest(false); break; }
     engine.tick(dt);
     elapsed += dt;
+    // Charged per tick, not per run. A run can begin at 1x, cross Machine Insight 3 partway through
+    // and finish at 2x; billing the whole run at the speed it ended on would credit the player with
+    // seconds they actually sat through.
+    waited += dt / Math.max(1, engine.maxSimulationSpeed());
   }
   if (engine.state.phase === 'civilization') engine.harvest(false);
 
   const harvest = engine.state.machine.lastHarvest ?? {};
   return {
     elapsed,
+    // Cultivation seconds the player sits through, at the speed they had earned as the run went.
+    waited,
     interventions,
     directiveId,
     depth: Number(harvest.depth ?? 0),
@@ -257,8 +264,14 @@ export const MACHINE_POLICIES = {
   defensive_spread: spreadContainment({ containment: 0.6, yield: 1.5, development: 1.6, utility: 2.5 }),
   lattice_rush: latticeRush({ containment: 0.6, yield: 1.5, development: 1.6, utility: 2.5 }),
   development_first: weighted({ development: 0.4, containment: 1.2, yield: 1.5, utility: 2.0 }),
-  yield_first: weighted({ yield: 0.5, containment: 1.3, development: 1.5, utility: 2.5 }),
-  utility_first: weighted({ utility: 0.4, containment: 1.3, yield: 1.5, development: 1.5 }),
+  // These two tilt toward their axis without *refusing* Containment. An earlier version weighted
+  // Containment at 1.3 against yield at 0.5, which is not a build a person plays: Containment is the
+  // compounding stat -- the opening Reality Lattice rung costs 60 and lengthens the run by 31%, worth
+  // 31% of every resource, against a yield module's 120 for +12% of one of four -- so a policy that
+  // defers it by a factor of 2.6 is dominated on every axis including the resource axis it was
+  // supposed to own. That measured a caricature rather than a build.
+  yield_first: weighted({ yield: 0.6, containment: 1.0, development: 1.5, utility: 2.5 }),
+  utility_first: weighted({ utility: 0.5, containment: 1.0, yield: 1.4, development: 1.4 }),
   balanced: weighted({ containment: 1, yield: 1, development: 1, utility: 1 }),
 };
 
@@ -415,9 +428,9 @@ export function runCampaign({ seed = 1, strategy = 'balanced', stop = 'first_uni
     const result = playRun(engine, { seed: runSeed, trigger: plan.trigger, accelerate: plan.accelerate, chase: plan.chase });
     runIndex++;
     simulatedSeconds += result.elapsed;
-    // A player runs at the fastest speed they have earned; that is the whole point of putting speed on
-    // Machine Insight rather than on a Machine upgrade that prestige eats.
-    wallClockSeconds += result.elapsed / Math.max(1, engine.maxSimulationSpeed());
+    // `playRun` bills each tick at the speed in force for that tick, which is the whole point of
+    // putting speed on Machine Insight: it can rise mid-run.
+    wallClockSeconds += result.waited;
     const affordableBefore = maximumPurchasableMachineLevels(engine);
     const containmentBefore = containmentRating(engine);
     const purchased = spendMachineCurrencies(engine, plan.machine);

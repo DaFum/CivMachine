@@ -127,7 +127,7 @@ Same modelled player, same seeds, both engines. `npm run balance` prints the ful
 | Civilizations to the first Multiverse | 8 | 15 | measured |
 | Civilizations to Great Convergence readiness | 27 | 83 | measured |
 | Simulated hours to Convergence readiness | 6.0 | 7.7 | measured |
-| Cultivation actually waited through | 6.0 | 1.9 | measured |
+| Cultivation actually waited through | 6.0 | 2.0 | measured |
 | Strongest line to the first Universe | deep_run, 2 runs | survival_first, 5 runs | no runaway |
 | Spread across the seven purchase tilts | 1.33x | 1.40x | no dominant build |
 
@@ -154,12 +154,14 @@ Measured to Great Convergence readiness, balanced tilt:
 | Civilizations | 83 |
 | Universes / Multiverses | 20 / 5 |
 | Simulated cultivation | 7.7 h |
-| **Cultivation actually waited through, at the speeds the player has earned** | **1.9 h** |
+| **Cultivation actually waited through, at the speeds the player has earned** | **2.0 h** |
 | Intervention decisions | ~2,500 |
 | Purchase phases | 83 |
 
-So the campaign's length is not waiting; it is roughly 1.9 hours of cultivation plus about 2,500
-decisions. Whether that totals 8-12 hours depends entirely on how long a decision takes, which is the
+So the campaign's length is not waiting; it is roughly 2 hours of cultivation plus about 2,500
+decisions. Wall-clock is charged per tick rather than per run, because Machine Insight can cross a
+speed threshold mid-run and billing the whole run at the speed it ended on would credit the player
+with seconds they did sit through. Whether that totals 8-12 hours depends entirely on how long a decision takes, which is the
 one quantity a simulation cannot measure -- at 5 seconds each it is under 5 hours, at 12 seconds each
 it is over 10. The harness reports the two halves separately and does not multiply them together into
 a single confident figure.
