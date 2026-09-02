@@ -1549,8 +1549,32 @@ test('every light a structure emits comes from the world\'s shared light colour'
 
   // And the wiring, not only the capability: the settlement layer must actually hand the shared
   // light down, or every structure quietly falls back to the window colour.
-  const world = await readFile(new URL('../src/render/world.ts', import.meta.url), 'utf8');
-  assert.match(world, /lightColor:\s*colors\.lightSpill/, 'the settlement layer must pass the shared light to drawStructure');
+  const { drawSettlementContent, SPILL_MAX_RADIUS } = await import('../dist/render/world.js');
+  const civ = lateCiv(999);
+  const snapshot = worldSnapshot(civ, 900);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 400, snapshot);
+  const presentation1 = worldPresentation(civ);
+  const presentation2 = {
+    ...presentation1,
+    colors: { ...presentation1.colors, lightSpill: 0x123456 },
+  };
+  const scene1 = { civ, snapshot, presentation: presentation1, settlements, outskirts: [] };
+  const scene2 = { civ, snapshot, presentation: presentation2, settlements, outskirts: [] };
+  const calls1 = [];
+  const calls2 = [];
+  drawSettlementContent(recordingSurface(calls1), scene1, 400, { from: 0, to: snapshot.worldWidth });
+  drawSettlementContent(recordingSurface(calls2), scene2, 400, { from: 0, to: snapshot.worldWidth });
+
+  // Isolate structure light glows (excluding settlement-level light spill where radius is SPILL_MAX_RADIUS)
+  const structureEmissions = calls => calls
+    .filter(([name, _x, _y, _r0, radius]) => name === 'fillRadialGlow' && radius !== SPILL_MAX_RADIUS)
+    .map(([, _x, _y, _r0, _r1, stops]) => stops[0].color);
+
+  const colors1 = structureEmissions(calls1);
+  const colors2 = structureEmissions(calls2);
+  assert.ok(colors1.length > 0, 'the test settlement must contain light-emitting structures');
+  assert.equal(colors1.length, colors2.length, 'structure emission count must match across palette changes');
+  assert.notDeepEqual(colors1, colors2, 'changing lightSpill must change emitted structure light colors');
 
   // Path-identity energy is deliberately *not* the city's light: a reactor core and a temple crown
   // follow the accent, so they stay the dominant path's colour whatever the street lamps do.

@@ -68,7 +68,9 @@ test('world renderer separates cached scenery from throttled atmosphere and deci
   assert.match(world, /dynamicFrameIntervalMs\(this\.quality\.tier,\s*this\.quality\.averageCostMs,\s*currentReducedMotion\)/);
   const quality = await readFile(new URL('../src/render/quality.ts', import.meta.url), 'utf8');
   assert.match(quality, /DYNAMIC_FRAME_MS\s*=\s*33/);
+  assert.match(quality, /DYNAMIC_FRAME_MS_SMOOTH\s*=\s*15/);
   assert.match(quality, /REDUCED_MOTION_FRAME_MS\s*=\s*180/);
+  assert.match(quality, /SMOOTH_FRAME_COST_BUDGET_MS\s*=\s*6/);
   assert.match(world, /prefers-reduced-motion/);
   assert.match(world, /worldImpulse/);
 });

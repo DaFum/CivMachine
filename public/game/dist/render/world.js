@@ -20,7 +20,7 @@ let currentReducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: red
 let currentConstructionDuration = currentReducedMotion ? CONSTRUCTION_REDUCED_MS : CONSTRUCTION_MS;
 // Ground sits low enough that the strip below it stays a framed foreground band rather than
 // a quarter of the viewport filled with nothing.
-const GROUND_RATIO = .78;
+export const GROUND_RATIO = .78;
 // Where the distant terrain meets the sky. Shared, because the sky's horizon light field and the
 // ridgelines it sits behind have to agree on it or the two layers show a seam.
 const HORIZON_RATIO = .69;
@@ -45,13 +45,15 @@ const MOTIF_SLACK = 60;
 // wide one; this margin only absorbs the few marks drawn slightly beyond a declared extent. The
 // strip redraw is checked against a full redraw of the same slice in the render tests, which is what
 // keeps this number honest.
-const SCENERY_SLACK = 48;
+export const SCENERY_SLACK = 48;
 // Half the widest outskirt prop plus the reach of a pylon's cable, so a prop anchored beyond the band
 // edge still paints the part that reaches into it.
 const OUTSKIRT_SLACK = 100;
 // Ceiling on a settlement's light spill radius. A settlement's radius reaches 18% of the world, and a
 // glow that wide would emit a primitive broader than the cull margin covers.
-const SPILL_MAX_RADIUS = 190;
+export const SPILL_MAX_RADIUS = 190;
+export const SPILL_MIN_RADIUS = 50;
+export const SPILL_CROWN_FACTOR = .8;
 // The lattice the near field's furrows and props sit on.
 const FIELD_CELL = 84;
 /**
@@ -301,7 +303,7 @@ function drawOutskirt(surface, prop, ground, presentation) {
         }
     }
 }
-function drawSettlementContent(surface, scene, height, view) {
+export function drawSettlementContent(surface, scene, height, view) {
     const { civ, snapshot, presentation, settlements, outskirts } = scene;
     const worldWidth = snapshot.worldWidth;
     const stage = snapshot.stage;
@@ -370,7 +372,7 @@ function drawSettlementContent(surface, scene, height, view) {
         // skyline and shaped by it -- it rises with the tallest structure instead of sitting on the
         // ground as a patch of fog, and is capped at SPILL_MAX_RADIUS.
         const crown = settlementCrown(settlement, ground);
-        const spillRadius = Math.min(SPILL_MAX_RADIUS, Math.max(50, crown * .8));
+        const spillRadius = Math.min(SPILL_MAX_RADIUS, Math.max(SPILL_MIN_RADIUS, crown * SPILL_CROWN_FACTOR));
         // The first cut has to be the *widest* thing this settlement paints, not its footprint. A tall
         // settlement's glow reaches tens of pixels past its own radius, so a footprint-first guard drops
         // that glow from a narrow strip redraw while a full redraw of the same slice paints it -- and the
@@ -551,7 +553,7 @@ export function drawHazeBands(surface, snapshot, presentation, width, height, an
     // always overlap, whatever the world's width and however many the quality tier allows.
     const bandWidth = Math.min(worldWidth, Math.max(360, bandSpacing * 1.35));
     // Rectangles rather than a gradient per band: a CanvasGradient allocated per band per frame was
-    // measured as the single most expensive thing on this layer. Instead each band is three vertical
+    // measured as the single most expensive thing on this layer. Instead each band is four vertical
     // strata, each tapering horizontally at both ends -- soft in both axes at a fraction of the cost,
     // and without the hard edge a single translucent rectangle drew across the whole sky.
     // Four strata weighted toward the band's lower half: the more steps the alpha climbs in, the less
@@ -605,7 +607,7 @@ export function drawHazeBands(surface, snapshot, presentation, width, height, an
  * road. `windowFraction` is the adaptive-quality lever -- a slow device animates fewer windows and
  * keeps every one of them lit, because a dark city is a different world, not a cheaper one.
  */
-function drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail) {
+function drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail, reducedMotion) {
     if (snapshot.stage === 0)
         return;
     const { civ, settlements } = scene;
@@ -626,7 +628,7 @@ function drawCityLights(surface, scene, snapshot, presentation, ground, animatio
             const phase = (structure.lightPhase ?? hash01(civ.seed + structure.x)) + settlement.lightPhase;
             // A slow sine on a per-structure phase, interpolated rather than switched: no two buildings
             // are in step and none of them blinks. About a fourteen-second cycle.
-            const cycle = currentReducedMotion ? .62 : .5 + .5 * Math.sin(animationTime * .00045 + phase * Math.PI * 2);
+            const cycle = reducedMotion ? .62 : .5 + .5 * Math.sin(animationTime * .00045 + phase * Math.PI * 2);
             const activity = .25 + cycle * .75;
             // How much of this building is awake, from its own activity and the world's light level.
             const windows = Math.max(1, Math.min(3, Math.round((.6 + lightLevel * 2.1) * activity)));
@@ -665,7 +667,7 @@ function drawCityLights(surface, scene, snapshot, presentation, ground, animatio
                 }
             if (!near)
                 continue;
-            const flicker = currentReducedMotion ? 1 : .88 + Math.sin(animationTime * .0009 + lamp * 2.3) * .12;
+            const flicker = reducedMotion ? 1 : .88 + Math.sin(animationTime * .0009 + lamp * 2.3) * .12;
             surface.fillStyle(spill, .5 * flicker).fillCircle(x, ground + 1, 1.5);
             surface.fillStyle(spill, .08 * lightLevel * flicker * (glowDetail > 0 ? 1 : .5)).fillCircle(x, ground + 1, 6 + lightLevel * 4);
             surface.lineStyle(1, shade(spill, .55), .45).line(x, ground + 2, x, ground - 9);
@@ -823,11 +825,11 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     const ground = height * GROUND_RATIO;
     // The composition, back to front. The rule the order encodes: nothing broad and translucent may be
     // painted over fine detail, so the two washes come first and everything that has to stay crisp --
-    // lights, inhabitants, landmarks, impacts -- sits above the atmosphere rather than under it.
+    // inhabitants, landmarks, impacts -- sits above the atmosphere rather than under it.
     // 1. The live-versus-cached state wash.
     drawMoodWash(surface, scene, presentation, view, height);
     // 2. The city's own light, which belongs to the settlements beneath the atmosphere.
-    drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail);
+    drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail, currentReducedMotion);
     // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible
     // structures so a low-Stability world costs a fixed handful of lines rather than one per building.
     if (presentation.signals.structuralStrain > .18) {

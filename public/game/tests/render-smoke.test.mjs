@@ -1172,29 +1172,29 @@ test('a strip redraw paints a settlement glow that reaches in from outside its o
   const { worldSnapshot } = await import('../dist/render/world-model.js');
   const { settlementLayout } = await import('../dist/render/settlements.js');
   const { settlementCrown } = await import('../dist/render/structures.js');
+  const { SPILL_MAX_RADIUS, SPILL_MIN_RADIUS, SPILL_CROWN_FACTOR, GROUND_RATIO, SCENERY_SLACK } = await import('../dist/render/world.js');
 
   const WIDTH = 900, HEIGHT = 520, SEED = 404, NUDGE = 12;
   const civ = developedCivilization(SEED);
   const snapshot = worldSnapshot(civ, WIDTH);
   const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
-  const ground = HEIGHT * 0.78;
+  const ground = HEIGHT * GROUND_RATIO;
 
   // Pick the settlement whose glow overhangs its footprint by the most, and place the viewport so
   // that overhang is the only thing reaching the exposed strip.
   const reach = settlements.map(settlement => {
     const crown = settlementCrown(settlement, ground);
-    const spill = Math.min(190, Math.max(50, crown * 0.8));
+    const spill = Math.min(SPILL_MAX_RADIUS, Math.max(SPILL_MIN_RADIUS, crown * SPILL_CROWN_FACTOR));
     return { settlement, spill, overhang: spill - settlement.radius };
   }).sort((a, b) => b.overhang - a.overhang)[0];
-  assert.ok(reach.overhang > 20, `no settlement's glow overhangs its footprint (best ${reach.overhang.toFixed(0)}px)`);
+  assert.ok(reach.overhang > SCENERY_SLACK, `no settlement's glow overhangs its footprint (best ${reach.overhang.toFixed(0)}px)`);
 
   // Screen x of the settlement centre must put its footprint clear of the strip band (the window plus
   // the band's own slack) while the glow still reaches into the window.
-  const BAND_SLACK = 48;
-  const target = WIDTH + BAND_SLACK + reach.settlement.radius + (reach.overhang - BAND_SLACK) * 0.5;
+  const target = WIDTH + SCENERY_SLACK + reach.settlement.radius + (reach.overhang - SCENERY_SLACK) * 0.5;
   const scroll = Math.round(Math.max(NUDGE, Math.min(snapshot.worldWidth - WIDTH, reach.settlement.centerX - target)));
   const onScreen = reach.settlement.centerX - scroll;
-  assert.ok(onScreen - reach.settlement.radius > WIDTH + BAND_SLACK,
+  assert.ok(onScreen - reach.settlement.radius > WIDTH + SCENERY_SLACK,
     `the footprint still reaches the strip band: left edge at ${(onScreen - reach.settlement.radius).toFixed(0)}`);
   assert.ok(onScreen - reach.spill <= WIDTH,
     `the glow does not reach the viewport: left edge at ${(onScreen - reach.spill).toFixed(0)}`);
