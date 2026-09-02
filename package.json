@@ -14,19 +14,19 @@
     "test": "tsc -p public/game/tsconfig.json && node --test \"tests/**/*.test.mjs\" \"public/game/tests/**/*.test.mjs\""
   },
   "dependencies": {
-    "next": "16.3.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "next": "^16",
+    "react": "^19",
+    "react-dom": "^19"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.3.3",
-    "@types/node": "24.13.3",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
-    "eslint": "9.39.5",
-    "eslint-config-next": "16.3.1",
-    "tailwindcss": "4.3.3",
-    "typescript": "6.0.3"
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^16",
+    "tailwindcss": "^4",
+    "typescript": "^6"
   },
   "type": "module",
   "displayName": "Reality Consumption Engine"
