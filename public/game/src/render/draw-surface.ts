@@ -30,6 +30,14 @@ export interface DrawSurface {
     outerRadius: number,
     stops: ReadonlyArray<GradientStop>
   ): DrawSurface;
+  fillLinearGradientPoly(
+    points: ReadonlyArray<readonly [number, number]>,
+    stops: ReadonlyArray<GradientStop>,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number
+  ): DrawSurface;
   setCompositeOperation(op: GlobalCompositeOperation): DrawSurface;
   strokeRect(x: number, y: number, width: number, height: number): DrawSurface;
   fillCircle(x: number, y: number, radius: number): DrawSurface;
@@ -37,6 +45,7 @@ export interface DrawSurface {
   fillTriangle(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): DrawSurface;
   line(x1: number, y1: number, x2: number, y2: number): DrawSurface;
   fillPoly(points: ReadonlyArray<readonly [number, number]>): DrawSurface;
+  strokePoly(points: ReadonlyArray<readonly [number, number]>): DrawSurface;
   resetState(): void;
 }
 
@@ -154,6 +163,39 @@ export class CachedCanvasSurface implements DrawSurface {
     return this;
   }
 
+  /**
+   * A ridgeline lit from the sky down into its own shadow: one path, one gradient, so a terrain
+   * layer gets vertical lighting without a rectangle per band. The gradient axis is given in the
+   * same space as the points, which is what lets the caller aim it at the horizon.
+   */
+  fillLinearGradientPoly(
+    points: ReadonlyArray<readonly [number, number]>,
+    stops: ReadonlyArray<GradientStop>,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number
+  ): DrawSurface {
+    if (points.length < 2 || !stops.length) return this;
+    if (typeof this.context.createLinearGradient === 'function') {
+      const grad = this.context.createLinearGradient(x0, y0, x1, y1);
+      for (const stop of stops) {
+        const offset = Math.max(0, Math.min(1, Number.isFinite(stop.offset) ? stop.offset : 0));
+        grad.addColorStop(offset, this.toColor(stop.color, stop.alpha ?? 1));
+      }
+      this.context.fillStyle = grad;
+      this.lastFillStyle = '';
+    } else {
+      this.fillStyle(stops[0]!.color, stops[0]!.alpha ?? 1);
+    }
+    this.context.beginPath();
+    this.context.moveTo(points[0]![0], points[0]![1]);
+    for (let i = 1; i < points.length; i++) this.context.lineTo(points[i]![0], points[i]![1]);
+    this.context.closePath();
+    this.context.fill();
+    return this;
+  }
+
   setCompositeOperation(op: GlobalCompositeOperation): DrawSurface {
     if (this.lastCompositeOp !== op) {
       this.context.globalCompositeOperation = op;
@@ -212,6 +254,16 @@ export class CachedCanvasSurface implements DrawSurface {
     for (let i = 1; i < points.length; i++) this.context.lineTo(points[i]![0], points[i]![1]);
     this.context.closePath();
     this.context.fill();
+    return this;
+  }
+
+  /** An open polyline: a ridge rim light or a skyline outline as one path rather than N strokes. */
+  strokePoly(points: ReadonlyArray<readonly [number, number]>): DrawSurface {
+    if (points.length < 2) return this;
+    this.context.beginPath();
+    this.context.moveTo(points[0]![0], points[0]![1]);
+    for (let i = 1; i < points.length; i++) this.context.lineTo(points[i]![0], points[i]![1]);
+    this.context.stroke();
     return this;
   }
 }

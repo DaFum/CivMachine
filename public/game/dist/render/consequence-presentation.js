@@ -120,59 +120,97 @@ export function drawConsequenceImpact(surface, feedback, startTime, time, width,
     const rawCx = anchorWorldX - scroll;
     // Ensure the impulse is visible within the current viewport slice
     const cx = Math.max(80, Math.min(width - 80, rawCx));
-    // Y anchored to ground/skyline level
+    // How far that clamp moved the anchor. Anything drawn from a world position rather than from `cx`
+    // has to move with it, or a partially visible settlement gets its glow pulled on screen while the
+    // geometry that belongs to it stays outside -- which is the opposite of what the clamp is for.
+    const clampShift = cx - rawCx;
     const groundY = height * 0.78;
-    const cy = groundY - 45;
+    // The anchor's own geometry, so a consequence lands on the civilization rather than on the middle
+    // of the screen: its footprint decides how wide the effect is and its skyline how high it reaches.
+    const anchor = settlements.length ? (settlements.find(item => item.centerX === anchorWorldX) ?? settlements[0]) : null;
+    const footprint = Math.max(70, Math.min(width * .42, anchor?.radius ?? 130));
+    let crown = 0;
+    if (anchor?.structures)
+        for (const structure of anchor.structures)
+            crown = Math.max(crown, structure.height);
+    const skyline = Math.max(46, Math.min(height * .42, crown || 90));
+    const cy = groundY - skyline * .55;
     if (impact.kind === 'containment') {
+        // Rings over the settlement, closed by a containment line laid along its own footprint.
         for (let ring = 0; ring < 3; ring++)
-            surface.lineStyle(3 - ring * .6, color, fade * (1 - ring * .16)).strokeCircle(cx, cy, radius * (.72 + ring * .2));
+            surface.lineStyle(3 - ring * .6, color, fade * (1 - ring * .16)).strokeCircle(cx, cy, Math.max(6, radius * (.72 + ring * .2)));
+        surface.lineStyle(2, color, fade * .8).line(cx - footprint, groundY, cx + footprint, groundY);
+        surface.lineStyle(1.2, color, fade * .5).line(cx - footprint, groundY - skyline * .2, cx + footprint, groundY - skyline * .2);
     }
     else if (impact.kind === 'time_streak') {
+        // Streaks travelling across the settlement's own altitude band rather than the whole frame.
         for (let i = 0; i < 7; i++) {
-            const y = height * (.24 + i * .085);
+            const y = groundY - skyline * (.1 + i * .16);
             const shift = impact.staticOnly ? 0 : progress * width * .22;
-            surface.lineStyle(1.2 + (i % 2), color, fade).line(cx - width * .3 + shift, y, cx + width * .3 + shift, y);
+            surface.lineStyle(1.2 + (i % 2), color, fade).line(cx - footprint * 1.4 + shift, y, cx + footprint * 1.4 + shift, y);
         }
     }
     else if (impact.kind === 'scan' || impact.kind === 'surveillance') {
+        // A sweep across the world plus the beam column it comes from, standing on the settlement.
         const y = impact.staticOnly ? cy : height * (.18 + progress * .64);
         surface.lineStyle(2, color, fade).line(cx - width * .38, y, cx + width * .38, y);
-        surface.lineStyle(1, color, fade * .75).strokeCircle(cx, cy, radius * .65);
+        surface.lineStyle(1.4, color, fade * .6).line(cx, groundY, cx, groundY - skyline * 1.3);
+        surface.lineStyle(1, color, fade * .75).strokeCircle(cx, cy, Math.max(6, radius * .65));
     }
     else if (impact.kind === 'vent') {
+        // A release from the ground the settlement stands on, not from a point in the air.
         for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
-            surface.lineStyle(1.6, color, fade).line(cx, cy, cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+            const angle = Math.PI + (i / 5) * Math.PI;
+            surface.lineStyle(1.6, color, fade).line(cx, groundY - 4, cx + Math.cos(angle) * radius, groundY - 4 + Math.sin(angle) * radius);
         }
+        surface.fillCircle(cx, groundY - 4, Math.max(3, radius * .12));
     }
     else if (impact.kind === 'fracture') {
+        // Fractures opening in the ground under the settlement and running up through the air above it.
         for (let i = 0; i < 8; i++) {
-            const x = cx + (hash01(i * 13 + feedback.sequence) - 0.5) * width * 0.4;
-            const bend = (hash01(i * 31 + feedback.sequence) - .5) * width * .07;
-            surface.lineStyle(1.2 + (i % 2), color, fade).line(x, height * .22, x + bend, height * .78);
+            const x = cx + (hash01(i * 13 + feedback.sequence) - .5) * footprint * 2.2;
+            const bend = (hash01(i * 31 + feedback.sequence) - .5) * width * .05;
+            surface.lineStyle(1.2 + (i % 2), color, fade).line(x, groundY + 14, x + bend, groundY - skyline * 1.35);
+            if (i % 3 === 0)
+                surface.lineStyle(1, color, fade * .6).line(x, groundY + 14, x + bend * 2, groundY + 30);
         }
     }
     else if (impact.kind === 'unrest') {
+        // A crowd on the road through the settlement.
         for (let i = 0; i < 12; i++) {
-            const x = cx + (hash01(feedback.sequence + i * 17) - 0.5) * width * 0.35;
-            const y = height * (.48 + hash01(feedback.sequence + i * 29) * .22);
-            surface.fillStyle(color, fade * .72).fillCircle(x, y, 2 + impact.intensity * 2);
+            const x = cx + (hash01(feedback.sequence + i * 17) - .5) * footprint * 1.8;
+            const y = groundY + 4 + hash01(feedback.sequence + i * 29) * 12;
+            surface.fillStyle(color, fade * .72).fillCircle(x, y, Math.max(1, 2 + impact.intensity * 2));
         }
+        surface.lineStyle(1.4, color, fade * .5).line(cx - footprint, groundY + 2, cx + footprint, groundY + 2);
     }
     else if (impact.kind === 'growth') {
+        // New construction rising out of the settlement, on the plots its own structures stand on.
+        const plots = anchor?.structures?.length ? anchor.structures : null;
+        surface.fillRadialGlow(cx, groundY - skyline * .3, 0, Math.max(30, footprint * .8), [
+            { offset: 0, color, alpha: fade * .16 },
+            { offset: 1, color, alpha: 0 },
+        ]);
         for (let i = 0; i < 6; i++) {
-            const x = cx + (i - 2.5) * 35;
-            const top = height * (.58 - progress * .18) - i % 2 * 12;
-            surface.lineStyle(1.4, color, fade).line(x, height * .72, x, top);
+            const x = plots ? (plots[i % plots.length].x - scroll + clampShift) : cx + (i - 2.5) * Math.max(18, footprint * .3);
+            const rise = skyline * (.35 + (i % 3) * .22) * (impact.staticOnly ? .6 : .3 + progress * .7);
+            // Scaffolding: a rising mast with a lit cap and the pad it stands on, so growth reads as
+            // construction on a plot rather than as a line over the city.
+            surface.lineStyle(2.2, color, fade).line(x, groundY, x, groundY - rise);
+            surface.lineStyle(1.2, color, fade * .7).line(x - 6, groundY - rise * .55, x + 6, groundY - rise * .55);
+            surface.fillStyle(color, fade * .8).fillCircle(x, groundY - rise, Math.max(1.4, 2.2 + impact.intensity));
+            surface.fillStyle(color, fade * .35).fillRect(x - 7, groundY - 2, 14, 3);
         }
     }
     else if (impact.kind === 'identity') {
-        surface.lineStyle(2.4, color, fade).strokeCircle(cx, cy, radius);
+        // A pulse over the capital's own crown, framed by the geometry its path builds with.
+        surface.lineStyle(2.4, color, fade).strokeCircle(cx, cy, Math.max(6, radius));
         surface.lineStyle(1.2, color, fade * .8).strokeRect(cx - radius * .42, cy - radius * .42, radius * .84, radius * .84);
+        surface.lineStyle(1.4, color, fade * .55).line(cx, groundY, cx, cy);
     }
     else {
-        surface.lineStyle(2, color, fade).strokeCircle(cx, cy, radius);
-        surface.fillStyle(color, fade * .08).fillCircle(cx, cy, radius * .55);
+        surface.lineStyle(2, color, fade).strokeCircle(cx, cy, Math.max(6, radius));
+        surface.fillStyle(color, fade * .08).fillCircle(cx, cy, Math.max(3, radius * .55));
     }
 }
 /**
@@ -189,18 +227,34 @@ export function drawPhaseTransitionImpact(surface, from, to, startTime, time, wi
         return;
     const progress = reducedMotion ? 0 : Math.max(0, Math.min(1, elapsed / duration));
     const alpha = reducedMotion ? .42 : (1 - progress) * .48;
-    const groundY = height * 0.78;
-    const horizonY = height * 0.68;
-    // Horizon environmental light pulse
-    surface.lineStyle(2 + (to - from) * 0.5, accent, alpha * 0.6).line(0, horizonY, width, horizonY);
-    // Ground city lighting activation pulse
-    surface.lineStyle(1.5, accent, alpha * 0.4).line(0, groundY - 2, width, groundY - 2);
-    const rows = Math.max(2, Math.min(6, to + 2));
-    for (let row = 0; row < rows; row++) {
-        const y = height * (.28 + row * .08);
-        const span = width * (.24 + .12 * to);
-        surface.lineStyle(1.4 + (to - from) * .3, accent, alpha).line(width * .5 - span * .5, y, width * .5 + span * .5, y);
+    const step = Math.max(1, to - from);
+    const groundY = height * .78;
+    const horizonY = height * .68;
+    // A phase is a change in the world, so it is acknowledged by the world: the horizon brightens,
+    // the settlement lights come up, and distant infrastructure resolves out of the haze. Deliberately
+    // built from a light field and a fixed handful of strokes -- never a wash over the whole frame,
+    // which would flatten every layer underneath it for the length of the cue.
+    surface.fillRadialGlow(width * .5, horizonY, 0, Math.max(40, Math.min(width, height) * (.45 + progress * .35)), [
+        { offset: 0, color: accent, alpha: alpha * .34 },
+        { offset: .45, color: accent, alpha: alpha * .12 },
+        { offset: 1, color: accent, alpha: 0 },
+    ]);
+    // The horizon itself, and the ground line where the city lights answer it.
+    surface.lineStyle(2 + step * .5, accent, alpha * .6).line(0, horizonY, width, horizonY);
+    surface.lineStyle(1.5, accent, alpha * .4).line(0, groundY - 2, width, groundY - 2);
+    // Settlement lights activating: three short bars along the skyline, widening as the cue runs.
+    for (let bar = 0; bar < 3; bar++) {
+        const centre = width * (.24 + bar * .26);
+        const half = width * (.05 + .06 * to) * (reducedMotion ? .7 : .35 + progress * .65);
+        surface.lineStyle(1.4 + step * .3, accent, alpha * .9).line(centre - half, groundY - 12 - bar * 9, centre + half, groundY - 12 - bar * 9);
     }
+    // Distant infrastructure resolving out of the haze on either side of the frame.
+    for (let mast = 0; mast < 2; mast++) {
+        const x = width * (mast === 0 ? .18 : .82);
+        const rise = height * (.06 + .03 * to) * (reducedMotion ? .8 : .4 + progress * .6);
+        surface.lineStyle(1.2, accent, alpha * .55).line(x, horizonY, x, horizonY - rise);
+    }
+    // And one ring over the settlement plane, the cue's own centre.
     surface.lineStyle(2, accent, alpha).strokeCircle(width * .5, groundY - 45, Math.min(width, height) * (.14 + to * .035 + progress * .16));
 }
 //# sourceMappingURL=consequence-presentation.js.map

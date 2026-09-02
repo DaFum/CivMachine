@@ -164,14 +164,22 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
   const alpha = (base: number): number => Math.min(1, base * (tier <= 1 ? .7 : tier >= 3 ? 1.15 : 1));
   const detailed = tier >= 3;
   const loop = ambientLoopFraction > 0 ? time : 0;
+  // Each path moves in its own way, not merely in its own colour. A pulse that travels along a chain
+  // is a different civilization from one that breathes, or from one that refuses to move at all --
+  // and at `ambientLoopFraction` 0 every one of them freezes without losing its geometry.
+  const wave = (period: number, offset: number): number => loop === 0 ? .7 : .5 + .5 * Math.sin(loop / period + offset);
   switch (path) {
     case 'machine_faith':
+      // Ritual sequence: the shrine lights come up one after another along the world, like a liturgy
+      // being said down the length of the civilization.
       for (let i = 0; i < 8; i += step) {
         const x = worldWidth * (.08 + i * .12);
         if (!shows(x)) continue;
-        surface.lineStyle(2, accent, alpha(.32)).line(x, ground - 35, x, ground - 90 - (i % 3) * 18);
-        surface.fillStyle(accent, alpha(.42)).fillCircle(x, ground - 95 - (i % 3) * 18, 4);
-        if (detailed) surface.lineStyle(1, accent, alpha(.22)).strokeCircle(x, ground - 95 - (i % 3) * 18, 11);
+        const litY = ground - 95 - (i % 3) * 18;
+        const rite = wave(520, i * .9);
+        surface.lineStyle(2, accent, alpha(.32)).line(x, ground - 35, x, litY + 5);
+        surface.fillStyle(accent, alpha(.28 + rite * .32)).fillCircle(x, litY, 3 + rite * 2);
+        if (detailed) surface.lineStyle(1, accent, alpha(.14 + rite * .16)).strokeCircle(x, litY, 9 + rite * 4);
       }
       break;
     case 'collective_mind': {
@@ -184,17 +192,24 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         if (!shows(a.x) && !shows(b.x)) continue;
         surface.line(a.x, a.y, b.x, b.y);
       }
-      for (const point of points) if (shows(point.x)) {
-        surface.fillStyle(accent, alpha(.5)).fillCircle(point.x, point.y, 3);
-        if (detailed) surface.lineStyle(1, accent, alpha(.2)).strokeCircle(point.x, point.y, 8);
+      // One pulse travelling the chain, so the nodes read as synchronized rather than as dots.
+      const head = loop === 0 ? .35 : ((loop / 3200) % 1);
+      for (const [index, point] of points.entries()) if (shows(point.x)) {
+        const distance = Math.abs(index / Math.max(1, points.length - 1) - head);
+        const carry = Math.max(0, 1 - distance * 5);
+        surface.fillStyle(accent, alpha(.36 + carry * .5)).fillCircle(point.x, point.y, 2.6 + carry * 2.4);
+        if (detailed) surface.lineStyle(1, accent, alpha(.14 + carry * .22)).strokeCircle(point.x, point.y, 7 + carry * 5);
       }
       break;
     }
     case 'temporal_dominion':
+      // Chronal echo: every ring carries a second, offset copy of itself a beat behind.
       for (let i = 0; i < 7; i += step) {
         const x = worldWidth * (.1 + i * .13); const y = height * .22 + (i % 2) * 30;
         if (!shows(x)) continue;
+        const echo = (loop === 0 ? .5 : (loop / 2600 + i * .2) % 1);
         surface.lineStyle(2, accent, alpha(.3)).strokeCircle(x, y, 12 + i * 2);
+        surface.lineStyle(1, accent, alpha(.3 * (1 - echo))).strokeCircle(x + echo * 9, y - echo * 5, 12 + i * 2 + echo * 8);
         surface.lineStyle(1, accent, alpha(.45)).line(x, y, x + Math.cos(loop * .001 + i) * 10, y + Math.sin(loop * .001 + i) * 10);
         if (detailed) surface.lineStyle(1, accent, alpha(.2)).strokeCircle(x, y, 19 + i * 2);
       }
@@ -208,22 +223,29 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'biological_transcendence':
+      // Living light: the growths breathe, each on its own slow cycle.
       for (let i = 0; i < 18; i += step) {
         const x = worldWidth * hash01(civ.seed + i * 13); if (!shows(x)) continue;
-        surface.fillStyle(accent, alpha(.14)).fillCircle(x, ground - 10 - hash01(i * 29) * 80, 8 + hash01(i) * 14);
-        if (detailed) surface.lineStyle(1, accent, alpha(.16)).line(x, ground - 6, x, ground - 10 - hash01(i * 29) * 80);
+        const breath = wave(1400, hash01(i * 7) * 6);
+        const y = ground - 10 - hash01(i * 29) * 80;
+        surface.fillStyle(accent, alpha(.09 + breath * .1)).fillCircle(x, y, (8 + hash01(i) * 14) * (.85 + breath * .25));
+        if (detailed) surface.lineStyle(1, accent, alpha(.16)).line(x, ground - 6, x, y);
       }
       break;
     case 'cosmic_resistance':
+      // Warning lighting sweeping along the defensive line, one emplacement at a time.
       for (let i = 0; i < 12; i += step) {
         const x = worldWidth * (.03 + i * .085);
         if (!shows(x)) continue;
-        surface.fillStyle(accent, alpha(.38)).fillTriangle(x, ground - 48, x + 16, ground - 43, x, ground - 36);
-        surface.lineStyle(1, 0xe5e5e5, alpha(.35)).line(x, ground - 48, x, ground - 26);
+        const warn = loop === 0 ? .4 : Math.max(0, 1 - Math.abs(((loop / 4200) % 1) * 12 - i) * .8);
+        surface.fillStyle(accent, alpha(.3 + warn * .35)).fillTriangle(x, ground - 48, x + 16, ground - 43, x, ground - 36);
+        surface.lineStyle(1, 0xe5e5e5, alpha(.28 + warn * .3)).line(x, ground - 48, x, ground - 26);
         if (detailed) surface.fillStyle(accent, alpha(.24)).fillTriangle(x, ground - 62, x + 12, ground - 58, x, ground - 53);
       }
       break;
     case 'bureaucratic_singularity':
+      // Deliberately motionless. Every other path moves; ordered regularity that never changes is
+      // this one's whole character, and animating it would take that away.
       for (let i = 0; i < 10; i += step) {
         const x = worldWidth * (.06 + i * .095); const y = ground - 70 - (i % 2) * 28;
         if (!shows(x)) continue;
@@ -233,12 +255,14 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'post_mortal_civilization':
+      // Continuity halos: they never go out, they only breathe -- nothing here ends.
       for (let i = 0; i < 9; i += step) {
         const x = worldWidth * (.07 + i * .11); const y = ground - 55 - (i % 3) * 20;
         if (!shows(x)) continue;
-        surface.fillStyle(accent, alpha(.11)).fillCircle(x, y, 11);
-        surface.lineStyle(1, accent, alpha(.34)).strokeCircle(x, y, 7);
-        if (detailed) surface.lineStyle(1, accent, alpha(.2)).strokeCircle(x, y, 15);
+        const persist = wave(2200, i * .5);
+        surface.fillStyle(accent, alpha(.08 + persist * .07)).fillCircle(x, y, 11);
+        surface.lineStyle(1, accent, alpha(.28 + persist * .14)).strokeCircle(x, y, 7);
+        if (detailed) surface.lineStyle(1, accent, alpha(.14 + persist * .12)).strokeCircle(x, y, 15);
       }
       break;
     case 'void_communion':
@@ -251,10 +275,16 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'recursive_simulation':
+      // Nested frames stepping outward: the recursion runs, one frame at a time.
       for (let i = 0; i < 8; i += step) {
         const x = worldWidth * (.07 + i * .115); const y = ground - 75 - (i % 2) * 35;
         if (!shows(x)) continue;
-        for (let ring = 0; ring < (detailed ? 4 : 3); ring++) surface.lineStyle(1, accent, alpha(.18 + .06 * ring)).strokeRect(x - ring * 5, y - ring * 5, 22 + ring * 10, 14 + ring * 10);
+        const rings = detailed ? 4 : 3;
+        const active = loop === 0 ? 1 : Math.floor((loop / 900 + i) % rings);
+        for (let ring = 0; ring < rings; ring++) {
+          surface.lineStyle(ring === active ? 1.6 : 1, accent, alpha(.14 + .05 * ring + (ring === active ? .22 : 0)))
+            .strokeRect(x - ring * 5, y - ring * 5, 22 + ring * 10, 14 + ring * 10);
+        }
       }
       break;
   }

@@ -147,11 +147,11 @@ test('service worker precaches the shell, game, content and deterministic Canvas
   }
 });
 
-test('release metadata identifies browser app v1.20.1', async () => {
+test('release metadata identifies browser app v1.22.0', async () => {
   const rootPackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   // One explicit assertion so an accidental bump is caught; everything below is derived from it, so
   // a deliberate bump is one edit here and one in package.json rather than six scattered literals.
-  assert.equal(rootPackage.version, '1.20.1');
+  assert.equal(rootPackage.version, '1.22.0');
   const version = rootPackage.version;
   const escaped = version.replaceAll('.', '\\.');
 

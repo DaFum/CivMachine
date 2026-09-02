@@ -35,6 +35,36 @@ export function hash01(n: number): number {
   return value - Math.floor(value);
 }
 
+/**
+ * Smooth deterministic value noise over one dimension: `hash01` sampled on the integer lattice and
+ * interpolated with a smoothstep, so a ridgeline built from it undulates instead of stepping. No
+ * library, no `Math.random()` -- the same `x` and `seed` always give the same value.
+ */
+export function valueNoise(x: number, seed: number): number {
+  const cell = Math.floor(x);
+  const t = x - cell;
+  const smooth = t * t * (3 - 2 * t);
+  const a = hash01(seed + cell * 57.13);
+  const b = hash01(seed + (cell + 1) * 57.13);
+  return a + (b - a) * smooth;
+}
+
+/**
+ * Two octaves of `valueNoise`, which is what separates a ridge with large geological forms carrying
+ * finer detail from one regular enough to read as a repeated triangle. Bounded to 0..1.
+ */
+export function ridgeNoise(x: number, seed: number, detail = .45): number {
+  const base = valueNoise(x, seed);
+  const fine = valueNoise(x * 2.7 + 11.3, seed * 1.7 + 31);
+  return Math.max(0, Math.min(1, base * (1 - detail) + fine * detail));
+}
+
+/** `color` pushed toward black. The single name for the darker plane of a 2.5D solid. */
+export function shade(color: number, amount: number): number { return mixColor(color, 0x000000, amount); }
+
+/** `color` pushed toward white. The single name for a rim light or a lit roof edge. */
+export function tint(color: number, amount: number): number { return mixColor(color, 0xffffff, amount); }
+
 export function mixColor(from: number, to: number, amount: number): number {
   const t = Math.max(0, Math.min(1, amount));
   const channel = (shift: number): number => Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t);

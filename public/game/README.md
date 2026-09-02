@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.20.1
+# Reality Consumption Engine — App Edition v1.22.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,44 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.22.0 the civilization diorama
+
+The world is still three stacked canvases of deterministic Canvas 2D, and it still draws the same
+state it always did. What changed is what that state looks like: the sky is a graded atmosphere with
+a horizon light field, a celestial body and a seeded star field; the terrain is three value-noise
+ridgelines with the air between them painted in; and the settlements stand in depth lanes on a
+graded ground plane instead of in a row against one baseline.
+
+**Settlements compose into districts.** Structures are gathered into neighbourhoods with deliberate
+gaps -- one dominant core, secondary districts beside it, agricultural and industrial outskirts at
+the ends -- and each district's tallest structure dominates its own piece of skyline. Use decides
+silhouette: farms lie along the ground, industry keeps a heavy low mass under its chimneys, and only
+the civic and residential structures compete for height.
+
+**The city has its own light.** Windows wake and sleep on per-structure phases interpolated through a
+slow cycle, so no two buildings are in step and none of them blinks; street lamps follow the roads
+where a settlement is actually near; and a settlement puts a glow into the air shaped by the skyline
+that emits it. Development is visible as light.
+
+**The land between settlements is no longer empty.** Fields, groves, pylons, rocks and ruins fill the
+outskirts, and the near field in front of the road carries worked ground and foreground growth --
+scrolled to the far end of a four-viewport world there is a civilization there rather than bare fill.
+
+**Atmospheric haze covers the whole world.** A band is now sized relative to the gap it has to close
+and drifts on one shared speed with a bounded wobble, so consecutive bands always overlap however
+wide the world is, however few bands the quality tier allows, and however long the run has lasted.
+
+**Consequences happen to the civilization.** An impact reads the settlement it lands on: its
+footprint sets the width, its skyline sets the height, and growth rises out of the plots its own
+structures stand on. A Drama Phase change is acknowledged by the world -- the horizon brightens, the
+settlement lights come up, distant infrastructure resolves -- and never by a wash over the frame.
+
+**A capable device may paint at its display's rate.** 30 FPS remains the floor and the architecture;
+a tier-0 renderer whose own measured average draw cost is a fraction of the budget paints every
+animation frame instead. Reduced motion and every degraded tier keep the 30 FPS interval, and the
+new lighting cosmetics -- animated windows and glow falloff -- shed with the tier like particles and
+haze already did. Measured on the reference desktop world: 1.2 ms median draw cost per frame.
 
 ## v1.20.1 one-phase progression staging
 
