@@ -1,7 +1,14 @@
 import { evaluateMilestones } from './milestones.js';
+import { effectiveMaxSimulationSpeed, simulationSpeedInsightFor, SIMULATION_SPEED_STEPS } from './tactical-actions.js';
 import { directiveCopy, fill, matrixCopy, milestoneCopy, resourceName, text, upgradeCopy } from '../data/i18n.js';
 const MACHINE = {
-    reality_lattice: { insight: 0 }, historical_compressor: { insight: 0 }, temporal_injector: { insight: 0 }, prediction_core: { insight: 1, resource: 'cognition' }, cognitive_extractor: { insight: 4, resource: 'cognition' }, paradox_sieve: { insight: 5, resource: 'paradox' }, awareness_scrubber: { insight: 4, resource: 'cognition' }, sanity_protocol: { insight: 5, resource: 'cognition' }, cosmic_muffling: { insight: 6, resource: 'paradox' }, contingency_vat: { insight: 8, resource: 'paradox' }, cultivation_accelerator: { insight: 9, resource: 'existence' }, existence_furnace: { insight: 10, resource: 'existence' }
+    reality_lattice: { insight: 0 }, historical_compressor: { insight: 0 }, temporal_injector: { insight: 0 }, prediction_core: { insight: 1, resource: 'cognition' }, cognitive_extractor: { insight: 4, resource: 'cognition' }, paradox_sieve: { insight: 5, resource: 'paradox' }, awareness_scrubber: { insight: 4, resource: 'cognition' }, sanity_protocol: { insight: 5, resource: 'cognition' }, cosmic_muffling: { insight: 6, resource: 'paradox' }, contingency_vat: { insight: 8, resource: 'paradox' },
+    // The two Existence modules are deliberately one progression step apart. Identifying Existence used
+    // to open both in the same instant, and the Machine's whole Existence economy -- two families, six
+    // levels between them -- became purchasable in the step that also revealed the currency. The
+    // Accelerator arrives with the reveal because a new currency needs something to buy; the Furnace
+    // waits for the first Universe, which is the next thing the player was already working toward.
+    cultivation_accelerator: { insight: 9, resource: 'existence' }, existence_furnace: { insight: 10, resource: 'existence' }
 };
 // Machine Insight cannot pace the Universe layer, because a player who has earned a Universe has long
 // since cleared every insight gate in it: measured, consuming the first Universe revealed one system,
@@ -15,13 +22,86 @@ const UNIVERSE = {
     residue_refinery: { insight: 14, universes: 4 }, inherited_time: { insight: 15, universes: 4 },
 };
 const AXIOM = { axiom_stability: { insight: 18 }, axiom_recursive_memory: { insight: 19 }, axiom_paradox_food: { insight: 20 }, axiom_compassionate_accounting: { insight: 21 }, axiom_impossible_birth: { insight: 22 }, axiom_multiple_choice: { insight: 23 } };
-export const DIRECTIVE_INSIGHT = { accelerated_development: 3, cognitive_extraction: 3, stable_cultivation: 3, paradox_prospecting: 8, quiet_machine: 10, temporal_pressure: 12 };
-export const MATRIX_INSIGHT = { neural_bloom: 7, industrial_genome: 7, adaptive_aberration: 7, museum_seed: 11, lunar_synapse: 13, post_causal_spore: 15 };
-export const AXIOM_KNOWLEDGE = { axiom_stability: 18, axiom_recursive_memory: 19, axiom_paradox_food: 20, axiom_compassionate_accounting: 21, axiom_impossible_birth: 22, axiom_multiple_choice: 23 };
+export const DIRECTIVE_RULES = { accelerated_development: { insight: 3 }, cognitive_extraction: { insight: 3 }, stable_cultivation: { insight: 3 }, paradox_prospecting: { insight: 8 }, quiet_machine: { insight: 10 }, temporal_pressure: { insight: 12 } };
+// Breeding Matrices are staggered over Universes for the same reason the Universe upgrades are.
+// Machine Insight cannot pace them: measured on a fresh save, Insight passed 17 before the first
+// Universe was consumed, so all six insight gates were already clear when the *system* unlocked at
+// the second Universe -- the prestige that was meant to open one new decision emptied the whole
+// catalog. Two per Universe from the second to the fourth; the insight numbers stay as a floor.
+export const MATRIX_RULES = {
+    neural_bloom: { insight: 7, universes: 2 }, industrial_genome: { insight: 7, universes: 2 },
+    adaptive_aberration: { insight: 7, universes: 3 }, museum_seed: { insight: 11, universes: 3 },
+    lunar_synapse: { insight: 13, universes: 4 }, post_causal_spore: { insight: 15, universes: 4 },
+};
+export const AXIOM_RULES = { axiom_stability: { insight: 18 }, axiom_recursive_memory: { insight: 19 }, axiom_paradox_food: { insight: 20 }, axiom_compassionate_accounting: { insight: 21 }, axiom_impossible_birth: { insight: 22 }, axiom_multiple_choice: { insight: 23 } };
+// The unlock ladder, staggered so that no prestige lands more than one new concept at a time.
+// Until v1.20 the first Universe unlocked Universe upgrades *and* Breeding Matrices, revealed
+// Existence *and* Universal Residue, and paid the four Machine Insight that made the next tier of
+// Machine modules purchasable -- four independent systems in the step the player is least equipped
+// to read. Universe upgrades are the reward for the first Universe and now arrive alone; Matrices
+// wait for the second, and Multiverse prestige for the third, where it is still two Universes ahead
+// of the four it needs.
+export const SYSTEM_RULES = {
+    directives: { order: 1, all: [{ kind: 'controlledHarvests', amount: 2 }, { kind: 'insight', amount: 3 }] },
+    universe_prestige: { order: 2, any: [{ kind: 'civilizations', amount: 4 }, { kind: 'insight', amount: 6 }] },
+    universe_upgrades: { order: 3, all: [{ kind: 'universes', amount: 1 }] },
+    breeding_matrices: { order: 4, all: [{ kind: 'universes', amount: 2 }, { kind: 'insight', amount: 7 }] },
+    multiverse_prestige: { order: 5, all: [{ kind: 'universes', amount: 3 }] },
+    axioms: { order: 6, all: [{ kind: 'multiverses', amount: 1 }, { kind: 'insight', amount: 18 }] },
+};
+export function systemRequirementValue(state, kind) {
+    switch (kind) {
+        case 'insight': return state.meta.progression.machineInsight;
+        case 'universes': return state.meta.universesTotal;
+        case 'multiverses': return state.meta.multiversesConsumed;
+        case 'controlledHarvests': return state.meta.progression.controlledHarvestsTotal;
+        case 'civilizations': return state.machine.civilizationsTotal;
+    }
+}
+export function systemRuleMet(state, rule) {
+    if ((rule.all ?? []).some(req => systemRequirementValue(state, req.kind) < req.amount))
+        return false;
+    const any = rule.any ?? [];
+    return any.length === 0 || any.some(req => systemRequirementValue(state, req.kind) >= req.amount);
+}
+/** The clause a requirement reads as, in the active locale. Ids are structure; this is copy. */
+export function systemRequirementText(req) {
+    const clauses = text().reports.progression.requirementClauses[req.kind];
+    return fill(req.amount === 1 ? clauses.one : clauses.many, { amount: req.amount });
+}
+export function systemConditionText(rule) {
+    const copy = text().reports.progression;
+    const parts = (rule.all ?? []).map(systemRequirementText);
+    const any = rule.any ?? [];
+    if (any.length)
+        parts.push(any.map(systemRequirementText).join(copy.requirementAnyJoiner));
+    if (!parts.length)
+        return copy.availableAfterRefresh;
+    // The clauses are written to be joined mid-sentence, so the composed sentence capitalizes its own
+    // first letter rather than each clause carrying a second, sentence-initial form of itself. A clause
+    // that already starts with a digit -- "2 Universes verbrauchen" -- is unaffected.
+    const sentence = fill(copy.requirementSentence, { requirements: parts.join(copy.requirementAllJoiner) });
+    return sentence.charAt(0).toLocaleUpperCase() + sentence.slice(1);
+}
 export class Progression {
     static machineInsight(state) { return state.meta.progression.machineInsight; }
     static systemUnlocked(state, id) { return state.meta.progression.unlockedSystems.includes(id); }
     static resourceDiscovered(state, id) { return state.meta.progression.discoveredResources.includes(id); }
+    /**
+     * What a harvest is allowed to bank: a resource the Machine has not identified yet pays nothing.
+     *
+     * Until v1.20.1 every harvest credited all four currencies from the first run, so Existence
+     * accumulated silently for the whole Expansion game -- measured, 1714 units were already in the
+     * bank when Transcendence finally named it, and the reveal came with several runs of purchasing
+     * power attached. The rewards the report prints are the gated ones, so the account and the bank
+     * still cannot disagree.
+     */
+    static payableRewards(state, rewards) {
+        const out = {};
+        for (const key of Object.keys(rewards))
+            out[key] = this.resourceDiscovered(state, key) ? rewards[key] : 0;
+        return out;
+    }
     static canUseUpgrade(state, layer, id) {
         const rules = layer === 'machine' ? MACHINE : layer === 'universe' ? UNIVERSE : AXIOM;
         const rule = rules[id];
@@ -56,26 +136,39 @@ export class Progression {
         const copy = storage === 'knownDirectives' ? directiveCopy(id) : storage === 'knownBreedingMatrices' ? matrixCopy(id) : upgradeCopy(id);
         return copy?.name ?? id.replaceAll('_', ' ').toUpperCase();
     }
-    static refreshKnown(state, system, thresholds, storage, out) { if (!this.systemUnlocked(state, system))
-        return; const known = state.meta.progression[storage]; for (const [id, need] of Object.entries(thresholds))
-        if (this.machineInsight(state) >= need && !known.includes(id)) {
-            known.push(id);
-            this.announce(state, `option:${id}`, fill(text().reports.progression.newOptionUnlocked, { name: this.optionName(storage, id) }), out);
-        } }
-    // The unlock ladder, staggered so that no prestige lands more than one new concept at a time.
-    // Until v1.20 the first Universe unlocked Universe upgrades *and* Breeding Matrices, revealed
-    // Existence *and* Universal Residue, and paid the four Machine Insight that made the next tier of
-    // Machine modules purchasable -- four independent systems in the step the player is least equipped
-    // to read. Universe upgrades are the reward for the first Universe and now arrive alone; Matrices
-    // wait for the second, and Multiverse prestige for the third, where it is still two Universes ahead
-    // of the four it needs.
-    static refresh(state, out = []) { const p = state.meta.progression; const insight = this.machineInsight(state); if (p.controlledHarvestsTotal >= 2 && insight >= 3)
-        this.unlockSystem(state, 'directives', out); if (state.machine.civilizationsTotal >= 4 || insight >= 6)
-        this.unlockSystem(state, 'universe_prestige', out); if (state.meta.universesTotal >= 1)
-        this.unlockSystem(state, 'universe_upgrades', out); if (state.meta.universesTotal >= 2 && insight >= 7)
-        this.unlockSystem(state, 'breeding_matrices', out); if (state.meta.universesTotal >= 3)
-        this.unlockSystem(state, 'multiverse_prestige', out); if (state.meta.multiversesConsumed >= 1 && insight >= 18)
-        this.unlockSystem(state, 'axioms', out); this.refreshKnown(state, 'directives', DIRECTIVE_INSIGHT, 'knownDirectives', out); this.refreshKnown(state, 'breeding_matrices', MATRIX_INSIGHT, 'knownBreedingMatrices', out); this.refreshKnown(state, 'axioms', AXIOM_KNOWLEDGE, 'knownAxioms', out); return out; }
+    static refreshKnown(state, system, rules, storage, out) { if (!this.systemUnlocked(state, system))
+        return; const known = state.meta.progression[storage]; for (const [id, rule] of Object.entries(rules)) {
+        if (known.includes(id))
+            continue;
+        if (this.machineInsight(state) < rule.insight)
+            continue;
+        if (rule.universes !== undefined && state.meta.universesTotal < rule.universes)
+            continue;
+        known.push(id);
+        this.announce(state, `option:${id}`, fill(text().reports.progression.newOptionUnlocked, { name: this.optionName(storage, id) }), out);
+    } }
+    /**
+     * The permanent capabilities Machine Insight buys outright.
+     *
+     * Simulation speed is progression, not an upgrade, so nothing announces it: the 2x and 4x buttons
+     * simply appeared in the rail the moment the insight gate was cleared, which reads as an accident
+     * rather than as something earned. Announced once per step, by the same `announcedUnlocks` ledger
+     * every other unlock uses, and measured against the speed the save can actually run at -- a v4 save
+     * that bought its speed from Temporal Injector owns it without having earned the insight.
+     */
+    static refreshCapabilities(state, out) {
+        const copy = text().reports.progression;
+        const speed = effectiveMaxSimulationSpeed(this.machineInsight(state), state.meta.progression.simulationSpeedUnlocked ?? 1);
+        for (const step of SIMULATION_SPEED_STEPS) {
+            if (simulationSpeedInsightFor(step) === 0 || speed < step)
+                continue;
+            this.announce(state, `capability:simulation_speed_${step}`, fill(copy.newCapabilityUnlocked, { name: fill(copy.capabilities.simulationSpeed, { speed: step }), note: copy.capabilityNotes.simulationSpeed }), out);
+        }
+    }
+    static refresh(state, out = []) { for (const [id, rule] of this.orderedSystems())
+        if (systemRuleMet(state, rule))
+            this.unlockSystem(state, id, out); this.refreshKnown(state, 'directives', DIRECTIVE_RULES, 'knownDirectives', out); this.refreshKnown(state, 'breeding_matrices', MATRIX_RULES, 'knownBreedingMatrices', out); this.refreshKnown(state, 'axioms', AXIOM_RULES, 'knownAxioms', out); this.refreshCapabilities(state, out); return out; }
+    static orderedSystems() { return Object.entries(SYSTEM_RULES).sort((a, b) => a[1].order - b[1].order); }
     static recordMilestones(state, convergenceUnlocked, out = []) { const result = evaluateMilestones(state, convergenceUnlocked); for (const milestone of result.newlyCompleted)
         if (milestone.insight)
             out.push(fill(text().reports.progression.machineInsightAwarded, { amount: milestone.insight, title: milestoneCopy(milestone.id)?.title ?? milestone.title })); return this.refresh(state, out); }
@@ -141,13 +234,13 @@ export function visibleUpgradeEntries(state, layer, catalog) {
     available.push(...locked.slice(0, 2).map(({ threshold: _t, ...entry }) => entry));
     return available;
 }
+// The conditions are composed from `SYSTEM_RULES`, never authored beside them: what the panel
+// promises is what `refresh` checks, by construction.
 export function nextSystemPreviews(state) {
     const systems = text().reports.progression.systems;
-    const candidates = [
-        ['directives', 3], ['universe_prestige', 6], ['universe_upgrades', 7],
-        ['breeding_matrices', 9], ['multiverse_prestige', 16], ['axioms', 18],
-    ];
-    return candidates.filter(([id]) => !Progression.systemUnlocked(state, id)).sort((a, b) => a[1] - b[1]).slice(0, 2)
-        .map(([id]) => ({ id, name: systems[id].name, condition: systems[id].condition }));
+    return Object.entries(SYSTEM_RULES)
+        .filter(([id]) => !Progression.systemUnlocked(state, id))
+        .sort((a, b) => a[1].order - b[1].order).slice(0, 2)
+        .map(([id, rule]) => ({ id, name: systems[id].name, condition: systemConditionText(rule) }));
 }
 //# sourceMappingURL=progression.js.map

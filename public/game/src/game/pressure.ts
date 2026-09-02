@@ -15,10 +15,24 @@ export const CASCADE_DECAY_FRACTION = 0.07;
 export const TERMINAL_ENTROPY_MULTIPLIER = 1.6;
 const YEARS_PER_SECOND = 25;
 
+/**
+ * A crossed Entropy threshold, carrying the threshold itself rather than the Entropy that happened to
+ * be on the clock when the crossing was noticed. A tick advances Entropy by `rate * dt`, so by the
+ * time the crossing is seen the value has already moved past it -- reconstructing "25" from a
+ * `Math.trunc` of the current Entropy printed 27, 29, 51 and 54 in the Machine Record for thresholds
+ * that are 25 and 50. The threshold is known here and nowhere else, so it is returned from here.
+ */
+export interface QueuedCrisis {
+  threshold: number;
+  crisisId: string;
+}
+
 export interface PressureAdvance {
   before: number;
   after: number;
   rate: number;
+  crises: QueuedCrisis[];
+  /** The crisis ids alone -- what the scheduler queues. `crises` is what the record reports. */
   queuedCrises: string[];
 }
 
@@ -64,15 +78,15 @@ export function advancePressure(
   const rate = entropyRate(pressureYears(civ), bonuses.containmentRating, Boolean(civ.terminal));
   const after = Math.max(0, Math.min(100, before + rate * Math.max(0, deltaSeconds)));
   civ.tactical.entropy = after;
-  const queuedCrises: string[] = [];
+  const crises: QueuedCrisis[] = [];
   for (const threshold of ENTROPY_THRESHOLDS) {
     if (after >= threshold && !civ.tactical.triggeredCrises.includes(threshold)) {
       civ.tactical.triggeredCrises.push(threshold);
       const crisisId = ENTROPY_CRISIS_IDS[threshold];
-      if (crisisId) queuedCrises.push(crisisId);
+      if (crisisId) crises.push({ threshold, crisisId });
     }
   }
-  return { before, after, rate, queuedCrises };
+  return { before, after, rate, crises, queuedCrises: crises.map(entry => entry.crisisId) };
 }
 
 export function cascadeDecay(entropy: number, stabilityMax: number): number {

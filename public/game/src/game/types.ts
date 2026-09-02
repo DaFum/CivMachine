@@ -142,6 +142,10 @@ export interface Civilization {
   seed: number;
   rngState: number;
   elapsedSeconds: number;
+  // Simulation seconds. `tick` advances this by the frame *times* simulation speed, so it is what the
+  // civilization lived through and what every rule is written against -- not what the player sat
+  // through. Optional and defaulted to 0 so an in-progress run from an older save loads unchanged.
+  realSeconds?: number;
   years: number;
   // Years injected by Accelerate rather than lived through. They advance Era and Development but are
   // excluded from the Entropy pressure curve, so Accelerate pays a one-off price instead of a
@@ -369,6 +373,8 @@ export interface RunReport {
   chaotic: boolean;
   terminal: boolean;
   elapsedSeconds: number;
+  /** Wall-clock seconds the simulation actually ran for. 0 on a run that predates the field. */
+  realSeconds: number;
   years: number;
   era: number;
   eraName: string;

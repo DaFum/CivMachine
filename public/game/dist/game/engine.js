@@ -9,15 +9,15 @@ import { EXPANDED_INTERVENTIONS } from "../data/expanded-interventions.js";
 import { EXPANDED_DOMINANT_INTERVENTIONS, EXPANDED_PATH_INTERVENTIONS, } from "../data/expanded-path-interventions.js";
 import { CivilizationPaths } from "./paths.js";
 import { applyWorldMemory } from "./world-memory.js";
-import { clampSimulationSpeed, parseSaveText } from "./save-migration.js";
+import { parseSaveText } from "./save-migration.js";
 import { Progression, nextSystemPreviews, visibleUpgradeEntries, } from "./progression.js";
-import { ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
+import { ERA_IDS, ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention, } from "./intervention-scheduler.js";
 import { buildDecisionFeedback, captureDecisionSnapshot, } from "./decision-feedback.js";
 import { advancePressure, pressureYears } from "./pressure.js";
 import { statDrift } from "./stat-drift.js";
 import { developmentGrowthPerSecond } from "./development.js";
-import { ACCELERATE_DEVELOPMENT, ACCELERATE_YEARS, TACTICAL_ACTIONS, applyTacticalAction, maxSimulationSpeed, predictionMitigation, tacticalAvailability, } from "./tactical-actions.js";
+import { ACCELERATE_DEVELOPMENT, ACCELERATE_YEARS, TACTICAL_ACTIONS, applyTacticalAction, SIMULATION_SPEED_STEPS, effectiveMaxSimulationSpeed, predictionMitigation, simulationSpeedInsightFor, tacticalAvailability, } from "./tactical-actions.js";
 import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, evaluateHarvestQuality, gradeIndex, } from "./harvest-quality.js";
 import { RUN_INTERVENTIONS, applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses, } from "./run-interventions.js";
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective, } from "./run-directives.js";
@@ -26,15 +26,9 @@ import { MILESTONE_CATALOG, completedMilestoneCount } from "./milestones.js";
 import { buildRunReport, recordRunTrace } from "./run-report.js";
 import { acknowledgeStep, advanceTutorial, liveTutorialFacts, newTutorialState, normalizeTutorialState, recordTutorialFact, tutorialView, } from "./tutorial.js";
 import { balancedAxiomUpgrades, balancedDirectives, balancedMachineUpgrades, balancedUniverseUpgrades, } from "./upgrade-balance.js";
-// The era identifiers, in era order. They double as the catalog keys (lowercased) and as the label
-// of last resort, which is why they stay a plain constant while everything read on screen goes
-// through `eraLabel` -- a constant filled at import time would keep the language the page booted in.
-export const ERA_NAMES = [
-    "EMERGENCE",
-    "EXPANSION",
-    "TRANSCENDENCE",
-    "APOTHEOSIS",
-];
+// The era identifiers in upper case, derived from the one ordered list in `rules.ts` rather than
+// spelled out a second time here. Everything read on screen goes through `eraLabel`.
+export const ERA_NAMES = ERA_IDS.map((id) => id.toUpperCase());
 const DRAMA_PHASE_IDS = [
     "emergence",
     "expansion",
@@ -773,23 +767,30 @@ export class GameEngine {
         const civ = this.state.civilization;
         if (!civ || civ.pendingEvent)
             return;
-        const dt = Math.min(delta, 0.25) *
+        const frame = Math.min(delta, 0.25);
+        const dt = frame *
             Math.max(1, Math.min(this.maxSimulationSpeed(), this.state.simulationSpeed));
         const b = this.runtimeBonuses();
         this.tickEmitAccumulator += dt;
         civ.elapsedSeconds += dt;
+        // The two clocks a run has. `elapsedSeconds` is simulation time -- accelerated in-game seconds,
+        // which is what the civilization lived and what every rule is written against. `realSeconds` is
+        // the wall-clock the simulation actually ran for, so a 4x run does not report four minutes of a
+        // player's evening as one. Neither advances while an intervention is open: `tick` returns above.
+        civ.realSeconds = Math.max(0, Number(civ.realSeconds) || 0) + frame;
         civ.years += 25 * dt;
         const pressureBefore = captureDecisionSnapshot(civ);
         const pressure = advancePressure(civ, b, dt);
-        if (pressure.queuedCrises.length) {
-            for (const id of pressure.queuedCrises)
-                if (!civ.scheduledEvents.includes(id))
-                    civ.scheduledEvents.push(id);
-            const thresholdId = pressure.queuedCrises.at(-1);
-            this.worldImpulse = buildDecisionFeedback(++this.feedbackSequence, { id: thresholdId, title: text().reports.engine.entropyThresholdEventTitle }, { label: text().reports.engine.entropyThresholdChoiceLabel }, pressureBefore, captureDecisionSnapshot(civ));
-            this.post(fill(text().reports.engine.entropyThreshold, {
-                entropy: Math.trunc(civ.tactical.entropy),
-            }));
+        if (pressure.crises.length) {
+            for (const crisis of pressure.crises)
+                if (!civ.scheduledEvents.includes(crisis.crisisId))
+                    civ.scheduledEvents.push(crisis.crisisId);
+            const last = pressure.crises.at(-1);
+            this.worldImpulse = buildDecisionFeedback(++this.feedbackSequence, { id: last.crisisId, title: text().reports.engine.entropyThresholdEventTitle }, { label: text().reports.engine.entropyThresholdChoiceLabel }, pressureBefore, captureDecisionSnapshot(civ));
+            // The threshold that was crossed, from the pressure system that knows it -- not the Entropy the
+            // clock happened to be showing when the crossing was noticed, which is always past it.
+            for (const crisis of pressure.crises)
+                this.post(fill(text().reports.engine.entropyThreshold, { entropy: crisis.threshold }));
             this.save();
         }
         const newEra = eraForYears(civ.years);
@@ -1088,11 +1089,27 @@ export class GameEngine {
                 pathName: pathName.toUpperCase(),
             }));
         }
-        if (pr.history)
-            this.appendHistory(civ, fill(text().reports.engine.eventPathHistory, {
+        // The line the record always writes for a resolved intervention. Built here rather than at the
+        // append below because the path-history line has to be compared against it first.
+        const choiceLine = fill(text().reports.engine.choiceHistory, {
+            year: Math.trunc(civ.years),
+            eventTitle: event.title,
+            choiceLabel: choice.label,
+        });
+        if (pr.history) {
+            const pathLine = fill(text().reports.engine.eventPathHistory, {
                 year: Math.trunc(civ.years),
                 history: pr.history,
-            }));
+            });
+            // 103 of the catalog's 310 `path_history` entries are authored as "<title> -> <label>", which is
+            // word for word what `choiceHistory` already writes -- so the Civilization Record printed the
+            // same sentence twice in a row for a third of the interventions that carry path copy. Skipped
+            // where it duplicates rather than rewritten in the content: the duplication is a property of the
+            // two sentences meeting, not of any one entry, it holds in every locale because both sides are
+            // composed from the same localized title and label, and it cannot come back with new content.
+            if (pathLine !== choiceLine)
+                this.appendHistory(civ, pathLine);
+        }
         if (pr.endgameState)
             this.appendHistory(civ, fill(text().reports.engine.pathEndState, {
                 year: Math.trunc(civ.years),
@@ -1105,11 +1122,7 @@ export class GameEngine {
         civ.lastEvent = event.id;
         if (choice.follow_up)
             civ.scheduledEvents.push(choice.follow_up);
-        this.appendHistory(civ, fill(text().reports.engine.choiceHistory, {
-            year: Math.trunc(civ.years),
-            eventTitle: event.title,
-            choiceLabel: choice.label,
-        }));
+        this.appendHistory(civ, choiceLine);
         civ.pendingEvent = "";
         civ.tactical.probedEventId = "";
         civ.tactical.controlCapacity = Math.min(3, civ.tactical.controlCapacity +
@@ -1168,6 +1181,7 @@ export class GameEngine {
             eraNames: ERA_NAMES.map((_, era) => eraLabel(era)),
             dramaLabels: dramaPhaseLabels(),
             resourceLabels: resourceLabels(),
+            discoveredResources: this.visibleResources(),
             traitNames: civ.traits.map((id) => this.traitName(id)),
             pathName: civ.pathState.dominantPath
                 ? CivilizationPaths.displayName(civ.pathState.dominantPath)
@@ -1187,16 +1201,8 @@ export class GameEngine {
         const details = this.previewHarvestDetails(chaotic);
         if (civ.terminal)
             return this.finishTerminalRun(civ, chaotic, details);
-        this.publishRunReport(civ, cause === "collapse"
-            ? "stability_collapse"
-            : chaotic
-                ? "forced_chaotic_harvest"
-                : "controlled_harvest", chaotic, details);
         civ.directiveObjective.completed = details.objectiveCompleted;
         this.recordRunStatistics(civ, details);
-        const rewards = details.rewards;
-        for (const k of RESOURCE_KEYS)
-            this.state.machine.currencies[k] += rewards[k];
         let mutationId = "";
         if (chaotic && this.mutations.length) {
             const rng = new SeededRng(civ.rngState);
@@ -1210,7 +1216,7 @@ export class GameEngine {
         this.state.machine.cultivationCreditsThisUniverse += details.credits;
         const record = {
             chaotic,
-            rewards: { ...rewards },
+            rewards: { ...details.rewards },
             mutation_id: mutationId,
             seed: civ.seed,
             years: Math.trunc(civ.years),
@@ -1224,8 +1230,24 @@ export class GameEngine {
             objective_completed: details.objectiveCompleted,
             reward_multiplier: details.rewardMultiplier,
         };
+        // A harvest's own discoveries are resolved before it is paid, because one of them is caused by
+        // the harvest itself: Paradox is identified by the first controlled harvest, and gating the
+        // payout on identification without settling that first would make the run that reveals Paradox
+        // the one run that is not paid for it.
+        const progressed = Progression.recordHarvest(this.state, record);
+        const rewards = Progression.payableRewards(this.state, details.rewards);
+        record.rewards = { ...rewards };
         this.state.machine.lastHarvest = record;
-        for (const m of Progression.recordHarvest(this.state, record))
+        for (const k of RESOURCE_KEYS)
+            this.state.machine.currencies[k] += rewards[k];
+        // The report is built from what was banked, not from what was rolled: an undiscovered resource
+        // pays nothing and is not named, so the account and the bank cannot disagree.
+        this.publishRunReport(civ, cause === "collapse"
+            ? "stability_collapse"
+            : chaotic
+                ? "forced_chaotic_harvest"
+                : "controlled_harvest", chaotic, { ...details, rewards });
+        for (const m of progressed)
             this.post(m);
         this.refreshConvergenceMilestones();
         this.state.civilization = null;
@@ -1241,12 +1263,16 @@ export class GameEngine {
         }));
         if (details.objectiveCompleted)
             this.post(text().reports.engine.directiveObjectiveComplete);
-        this.post(fill(text().reports.engine.yield, {
-            causal: rewards.causal_mass,
-            cognition: rewards.cognition,
-            paradox: rewards.paradox,
-            existence: rewards.existence,
+        // Composed from the resources the Machine has identified, so the record cannot name a currency
+        // the player has not been shown yet -- and so a new resource needs no new sentence.
+        const banked = RESOURCE_KEYS.filter((key) => this.resourceDiscovered(key)).map((key) => fill(text().reports.engine.yieldEntry, {
+            name: resourceName(key) ?? key,
+            amount: rewards[key],
         }));
+        if (banked.length)
+            this.post(fill(text().reports.engine.yield, {
+                entries: banked.join(text().reports.engine.yieldEntryJoiner),
+            }));
         if (mutationId)
             this.post(fill(text().reports.engine.mutationAcquired, {
                 name: mutationCopy(mutationId)?.name ??
@@ -1479,10 +1505,22 @@ export class GameEngine {
         return this.setExplainMode(!this.state.help.explain);
     }
     maxSimulationSpeed() {
-        // Whichever is greater: what this save has earned with Machine Insight, or what it had already
-        // bought back when Temporal Injector sold simulation speed. The grandfathered floor never
-        // decreases, so a returning player never loses a speed they were using.
-        return Math.max(maxSimulationSpeed(this.machineInsight()), clampSimulationSpeed(this.state.meta.progression.simulationSpeedUnlocked ?? 1));
+        return effectiveMaxSimulationSpeed(this.machineInsight(), this.state.meta.progression.simulationSpeedUnlocked ?? 1);
+    }
+    /**
+     * Every speed the rail draws, unlocked or not, with the Machine Insight the locked ones cost.
+     *
+     * A button that simply appears when a gate clears reads as a bug rather than as progression, so the
+     * locked steps are on screen from the first run with their price on them -- the same rule the
+     * Machine upgrade panel already follows for a locked module.
+     */
+    simulationSpeedOptions() {
+        const max = this.maxSimulationSpeed();
+        return SIMULATION_SPEED_STEPS.map((speed) => ({
+            speed,
+            unlocked: speed <= max,
+            insight: simulationSpeedInsightFor(speed),
+        }));
     }
     setSimulationSpeed(n) {
         this.state.simulationSpeed = Math.max(1, Math.min(this.maxSimulationSpeed(), Math.trunc(n)));

@@ -81,11 +81,34 @@ export const ACCELERATE_YEARS = [200, 420, 720, 1150];
 export const ACCELERATE_DEVELOPMENT = [6, 16, 30, 48];
 /** Simulation speed is permanent progression: earned once with Machine Insight, never re-bought. */
 export const SIMULATION_SPEED_INSIGHT = { double: 3, quadruple: 10 };
+/** The speeds the interface offers, in order. The rail draws every one of them, locked or not. */
+export const SIMULATION_SPEED_STEPS = [1, 2, 4];
+export const MAX_SIMULATION_SPEED = 8;
+export function clampSimulationSpeed(value) {
+    const speed = Number(value);
+    if (!Number.isFinite(speed))
+        return 1;
+    return Math.max(1, Math.min(MAX_SIMULATION_SPEED, Math.trunc(speed)));
+}
 export function maxSimulationSpeed(machineInsight) {
     const insight = Math.max(0, Number(machineInsight) || 0);
     if (insight >= SIMULATION_SPEED_INSIGHT.quadruple)
         return 4;
     return insight >= SIMULATION_SPEED_INSIGHT.double ? 2 : 1;
+}
+/** The Machine Insight a speed step costs, or 0 for the one every save starts with. */
+export function simulationSpeedInsightFor(speed) {
+    if (speed >= 4)
+        return SIMULATION_SPEED_INSIGHT.quadruple;
+    return speed >= 2 ? SIMULATION_SPEED_INSIGHT.double : 0;
+}
+/**
+ * What this save can actually run at: whichever is greater, the speed Machine Insight has earned or
+ * the speed a v4 save had already bought from Temporal Injector before speed became progression. The
+ * grandfathered floor never decreases, so a returning player never loses a speed they were using.
+ */
+export function effectiveMaxSimulationSpeed(machineInsight, unlockedFloor) {
+    return Math.max(maxSimulationSpeed(machineInsight), clampSimulationSpeed(unlockedFloor));
 }
 export const TACTICAL_ACTIONS = {
     stabilize: {

@@ -2,6 +2,10 @@ import { CivilizationPaths } from './paths.js';
 export const RESOURCE_KEYS = ['causal_mass', 'cognition', 'paradox', 'existence'];
 export const SAVE_VERSION = 5;
 export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000];
+// The era identifiers, in era order, beside the thresholds that define them. They are catalog keys
+// and the label of last resort, so they stay a plain constant -- one filled from the catalog at
+// import time would keep the language the page booted in. `engine.eraLabel` reads the copy.
+export const ERA_IDS = ['emergence', 'expansion', 'transcendence', 'apotheosis'];
 export function eraForYears(years) {
     const safe = Math.max(0, Number(years) || 0);
     for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--)
@@ -53,7 +57,7 @@ export function createNewState() {
 // every field a `Civilization` must carry is declared exactly once -- here.
 export function createCivilizationTemplate(seed) {
     return {
-        seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
+        seed, rngState: seed, elapsedSeconds: 0, realSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
         eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0,
         traits: [], institutions: [], flags: [], scheduledEvents: [], history: [],
         stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 },

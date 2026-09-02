@@ -2,6 +2,9 @@ import { clampStats } from './effects.js';
 import { fill, text as catalog } from '../data/i18n.js';
 import { SAVE_VERSION, createCivilizationTemplate, createNewState, eraForYears } from './rules.js';
 import { validRunTrace } from './run-report.js';
+// The speed rules live beside the other simulation-speed constants, not here: this module reads them
+// to repair a stored save, it does not own them.
+import { clampSimulationSpeed, simulationSpeedInsightFor } from './tactical-actions.js';
 import { normalizeTutorialState } from './tutorial.js';
 import type { Civilization, GameState, Phase, WorldMemoryState } from './types.js';
 
@@ -70,14 +73,6 @@ export const SAVE_MIGRATIONS: SaveMigrationStep[] = [
   { from: 4, to: 5, id: 'v4_to_v5_simulation_speed_from_insight', apply: raw => grandfatherSimulationSpeed(raw) },
 ];
 
-export const MAX_SIMULATION_SPEED = 8;
-
-export function clampSimulationSpeed(value: number): number {
-  const speed = Number(value);
-  if (!Number.isFinite(speed)) return 1;
-  return Math.max(1, Math.min(MAX_SIMULATION_SPEED, Math.trunc(speed)));
-}
-
 export function legacySimulationSpeed(temporalInjectorLevel: number): number {
   const level = Math.max(0, Math.trunc(Number(temporalInjectorLevel) || 0));
   return level >= 3 ? 4 : level >= 1 ? 2 : 1;
@@ -97,7 +92,17 @@ function grandfatherSimulationSpeed(raw: RawSave): RawSave {
   // holds `simulationSpeed` to, rather than being trusted to be a speed at all.
   const stored = Number(progression.simulationSpeedUnlocked ?? 1);
   const previous = Number.isFinite(stored) ? Math.trunc(stored) : 1;
-  progression.simulationSpeedUnlocked = clampSimulationSpeed(Math.max(earned, previous));
+  const speed = clampSimulationSpeed(Math.max(earned, previous));
+  progression.simulationSpeedUnlocked = speed;
+  // A speed this save already owned is not news. `Progression.refresh` announces each speed step the
+  // first time it becomes usable, and without this a returning player would be told about a
+  // capability they had been playing with for a version.
+  const announced = Array.isArray(progression.announcedUnlocks) ? progression.announcedUnlocks : (progression.announcedUnlocks = []);
+  for (const step of [2, 4]) {
+    if (speed < step || simulationSpeedInsightFor(step) === 0) continue;
+    const id = `capability:simulation_speed_${step}`;
+    if (!announced.includes(id)) announced.push(id);
+  }
   return raw;
 }
 

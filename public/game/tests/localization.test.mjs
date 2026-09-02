@@ -606,6 +606,9 @@ test('a synthetic decision names itself from the id the engine built it from', (
 test('currencies, grades and unlocked options are named, never spelled out from their id', () => {
   const engine = new GameEngine({ storage: memoryStorage(), autosave: false });
   engine.state.meta.progression.machineInsight = 25;
+  // Breeding Matrices are staggered over Universes as well as Insight, so the fixture has to own the
+  // four Universes the last pair asks for before every option is there to be named.
+  engine.state.meta.universesTotal = 4;
   engine.state.meta.progression.unlockedSystems = ['directives', 'breeding_matrices', 'axioms', 'universe_upgrades'];
   const announcements = [];
   Progression.refresh(engine.state, announcements);

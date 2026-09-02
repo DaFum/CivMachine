@@ -79,6 +79,11 @@ const ENGLISH = {
       "directiveObjective": "DIRECTIVE OBJECTIVE",
       "milestoneRegister": "MILESTONE REGISTER",
       "milestoneSummary": "{completed} of {total} milestones recorded. Each one pays Machine Insight.",
+      "milestoneCurrent": "CURRENT",
+      "milestoneBest": "BEST",
+      "milestoneTarget": "TARGET",
+      "milestoneNoGradeYet": "NONE YET",
+      "simulationSpeedLocked": "Machine Insight {insight}",
       "insightAward": "INSIGHT +{amount}",
       "greatConvergence": "GREAT CONVERGENCE",
       "convergenceDescription": "Terminal cultivation begins in APOTHEOSIS with no yield and 1.6× Entropy. It is won by a controlled harvest at Cultivation Depth {targetDepth} or deeper. Failure costs nothing but the run.",
@@ -259,10 +264,12 @@ const ENGLISH = {
       "harvestGrade": "HARVEST GRADE",
       "harvestSummaryOne": "DEPTH {depth} · ×{multiplier} yield · {credits} Cultivation Credit",
       "harvestSummaryMany": "DEPTH {depth} · ×{multiplier} yield · {credits} Cultivation Credits",
-      "lasted": "LASTED",
+      "simulationTime": "SIMULATION TIME",
       "civilizationYears": "{years} civilization years",
+      "activeRealTime": "ACTIVE REAL TIME",
+      "activeRealTimeHint": "wall-clock the simulation ran",
       "endedIn": "ENDED IN",
-      "phase": "{phase} phase",
+      "phase": "run phase: {phase}",
       "peak": "peak {value}",
       "interventions": "INTERVENTIONS",
       "path": "path: {path}",
@@ -819,8 +826,8 @@ const ENGLISH = {
         "phaseFallback": "Phase {phase}"
       },
       "dramaPhases": {
-        "emergence": "Emergence",
-        "expansion": "Expansion",
+        "emergence": "Founding",
+        "expansion": "Growth",
         "division": "Division",
         "transformation": "Transformation",
         "crisis": "Crisis"
@@ -835,8 +842,7 @@ const ENGLISH = {
         "entropyCascade": "Entropy reached 100 and the cascade took the rest. Containment upgrades divide the rate permanently; Entropy Vent (4) only removes 18 at a time.",
         "unusedControlOneAction": "The run ended with {control} Control unspent after {actions} tactical action. Control does not carry over — an unspent charge is a discarded one.",
         "unusedControlManyActions": "The run ended with {control} Control unspent after {actions} tactical actions. Control does not carry over — an unspent charge is a discarded one.",
-        "directiveOneCredit": "The Directive objective \"{objectiveTitle}\" was not met. It is worth ×1.15 on the whole harvest plus one Cultivation Credit, which at this depth was about {credits} credit.",
-        "directiveManyCredits": "The Directive objective \"{objectiveTitle}\" was not met. It is worth ×1.15 on the whole harvest plus one Cultivation Credit, which at this depth was about {credits} credits.",
+        "directiveNotMet": "The Directive objective \"{objectiveTitle}\" was not met. Completing it would have added +15% harvest resources and exactly +1 Cultivation Credit.",
         "nextBand": "{grade} begins at Depth {minDepth}, which was {distance} away -- and pays Cultivation Credit {credits} at the same moment, because every grade boundary is a credit step. The harvest call in the pressure rail says when that distance stops being reachable.",
         "creditCap": "Cultivation Credits are capped at {cap} and this run hit the cap. Past it only raw resource yield grows, so staying longer buys upgrades rather than prestige.",
         "cleanOneCredit": "Nothing went wrong: {grade} grade at Depth {depth} for {credits} Cultivation Credit. Spend the harvest on Containment for a longer next run, or on the harvest modules for more out of the same one.",
@@ -864,6 +870,38 @@ const ENGLISH = {
       "discoverResource": "discover {resource}",
       "requirementJoiner": " and ",
       "availableAfterRefresh": "Available after current progression refresh.",
+      "newCapabilityUnlocked": "NEW PERMANENT CAPABILITY: {name} // {note}",
+      "capabilities": {
+        "simulationSpeed": "{speed}× SIMULATION SPEED"
+      },
+      "capabilityNotes": {
+        "simulationSpeed": "Simulation speed survives prestige."
+      },
+      "requirementSentence": "{requirements}.",
+      "requirementAllJoiner": " and ",
+      "requirementAnyJoiner": " or ",
+      "requirementClauses": {
+        "insight": {
+          "one": "reach Machine Insight {amount}",
+          "many": "reach Machine Insight {amount}"
+        },
+        "universes": {
+          "one": "consume {amount} Universe",
+          "many": "consume {amount} Universes"
+        },
+        "multiverses": {
+          "one": "collapse {amount} Multiverse",
+          "many": "collapse {amount} Multiverses"
+        },
+        "controlledHarvests": {
+          "one": "complete {amount} Controlled Harvest",
+          "many": "complete {amount} Controlled Harvests"
+        },
+        "civilizations": {
+          "one": "cultivate {amount} Civilization",
+          "many": "cultivate {amount} Civilizations"
+        }
+      },
       "unlockSystemNames": {
         "directives": "DIRECTIVES",
         "universe_prestige": "UNIVERSE PRESTIGE",
@@ -874,28 +912,22 @@ const ENGLISH = {
       },
       "systems": {
         "directives": {
-          "name": "Directive System",
-          "condition": "Complete 2 Controlled Harvests and reach Machine Insight 3."
+          "name": "Directive System"
         },
         "universe_prestige": {
-          "name": "Universe Consumption",
-          "condition": "Earn 18 Cultivation Credits from qualified harvests."
+          "name": "Universe Consumption"
         },
         "universe_upgrades": {
-          "name": "Universe Upgrades",
-          "condition": "Consume your first Universe."
+          "name": "Universe Upgrades"
         },
         "breeding_matrices": {
-          "name": "Breeding Matrices",
-          "condition": "Consume your first Universe and reach Machine Insight 7."
+          "name": "Breeding Matrices"
         },
         "multiverse_prestige": {
-          "name": "Multiverse Consumption",
-          "condition": "Consume 2 Universes."
+          "name": "Multiverse Consumption"
         },
         "axioms": {
-          "name": "Axiom Layer",
-          "condition": "Consume a Multiverse and reach Machine Insight 18."
+          "name": "Axiom Layer"
         }
       }
     },
@@ -931,7 +963,9 @@ const ENGLISH = {
       "realityRewound": "Reality rewound at a cost of {cost} Paradox.",
       "harvestComplete": "{mode} {grade} HARVEST complete. +{credits} Cultivation Credits.",
       "directiveObjectiveComplete": "DIRECTIVE OBJECTIVE COMPLETE: rewards ×1.15 and +1 Cultivation Credit.",
-      "yield": "Yield: Causal {causal}, Cognition {cognition}, Paradox {paradox}, Existence {existence}.",
+      "yield": "Yield: {entries}.",
+      "yieldEntry": "{name} {amount}",
+      "yieldEntryJoiner": ", ",
       "mutationAcquired": "Machine mutation acquired: {name}.",
       "convergenceAchieved": "GREAT CONVERGENCE {convergence} ACHIEVED at Cultivation Depth {depth}.",
       "convergenceFailed": "CONVERGENCE FAILED at Cultivation Depth {depth}. Authorization retained.",
@@ -4784,6 +4818,11 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "directiveObjective": "DIRECTIVE-ZIEL",
       "milestoneRegister": "MILESTONE-REGISTER",
       "milestoneSummary": "{completed} von {total} Milestones erfasst. Jeder gewährt Machine Insight.",
+      "milestoneCurrent": "AKTUELL",
+      "milestoneBest": "BESTE",
+      "milestoneTarget": "ZIEL",
+      "milestoneNoGradeYet": "NOCH KEINE",
+      "simulationSpeedLocked": "Machine Insight {insight}",
       "insightAward": "INSIGHT +{amount}",
       "greatConvergence": "GREAT CONVERGENCE",
       "convergenceDescription": "Terminale Kultivierung beginnt in APOTHEOSIS ohne Ertrag und mit 1,6× Entropy. Gewonnen wird durch einen kontrollierten Harvest bei Cultivation Depth {targetDepth} oder höher. Ein Fehlschlag kostet nur den Run.",
@@ -4964,10 +5003,12 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "harvestGrade": "HARVEST GRADE",
       "harvestSummaryOne": "DEPTH {depth} · ×{multiplier} Ertrag · {credits} Cultivation Credit",
       "harvestSummaryMany": "DEPTH {depth} · ×{multiplier} Ertrag · {credits} Cultivation Credits",
-      "lasted": "DAUER",
+      "simulationTime": "SIMULATIONSZEIT",
       "civilizationYears": "{years} Zivilisationsjahre",
+      "activeRealTime": "AKTIVE ECHTZEIT",
+      "activeRealTimeHint": "reale Laufzeit der Simulation",
       "endedIn": "ENDE IN",
-      "phase": "{phase}-Phase",
+      "phase": "Run-Phase: {phase}",
       "peak": "Maximum {value}",
       "interventions": "INTERVENTIONEN",
       "path": "Pfad: {path}",
@@ -5525,7 +5566,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       },
       "dramaPhases": {
         "emergence": "Entstehung",
-        "expansion": "Expansion",
+        "expansion": "Wachstum",
         "division": "Spaltung",
         "transformation": "Transformation",
         "crisis": "Krise"
@@ -5540,8 +5581,7 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
         "entropyCascade": "Entropy erreichte 100 und die Cascade übernahm den Rest. Containment Upgrades reduzieren die Rate dauerhaft; Entropy Vent (4) entfernt jeweils nur 18.",
         "unusedControlOneAction": "Der Run endete mit {control} ungenutztem Control nach {actions} Tactical Action. Control wird nicht übertragen — ungenutzte Ladung geht verloren.",
         "unusedControlManyActions": "Der Run endete mit {control} ungenutztem Control nach {actions} Tactical Actions. Control wird nicht übertragen — ungenutzte Ladung geht verloren.",
-        "directiveOneCredit": "Das Directive-Ziel „{objectiveTitle}“ wurde nicht erfüllt. Es ist ×1,15 auf den gesamten Harvest plus einen Cultivation Credit wert; bei dieser Depth entsprach das ungefähr {credits} Credit.",
-        "directiveManyCredits": "Das Directive-Ziel „{objectiveTitle}“ wurde nicht erfüllt. Es ist ×1,15 auf den gesamten Harvest plus einen Cultivation Credit wert; bei dieser Depth entsprach das ungefähr {credits} Credits.",
+        "directiveNotMet": "Das Directive-Ziel \"{objectiveTitle}\" wurde nicht erreicht. Es zu erfüllen hätte +15 % Harvest-Ressourcen und genau +1 Cultivation Credit gebracht.",
         "nextBand": "{grade} beginnt bei Depth {minDepth}; die Distanz betrug {distance} -- und zahlt im selben Moment Cultivation Credit {credits}, denn jede Grade-Grenze ist eine Credit-Stufe. Der Harvest-Hinweis im Pressure Rail zeigt, wann diese Distanz nicht mehr erreichbar ist.",
         "creditCap": "Cultivation Credits sind bei {cap} gedeckelt und dieser Run erreichte das Limit. Danach wächst nur noch der rohe Ressourcenertrag; längeres Spielen finanziert Upgrades statt Prestige.",
         "cleanOneCredit": "Keine kritische Abweichung: Grade {grade} bei Depth {depth} für {credits} Cultivation Credit. Harvest in Containment für einen längeren nächsten Run oder in Harvest-Module für mehr Ertrag desselben Runs investieren.",
@@ -5568,6 +5608,38 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "universesRequirement": "{amount} Universes verbraucht",
       "discoverResource": "{resource} identifizieren",
       "requirementJoiner": " und ",
+      "newCapabilityUnlocked": "NEUE PERMANENTE FÄHIGKEIT: {name} // {note}",
+      "capabilities": {
+        "simulationSpeed": "{speed}× SIMULATIONSGESCHWINDIGKEIT"
+      },
+      "capabilityNotes": {
+        "simulationSpeed": "Die Simulationsgeschwindigkeit bleibt über Prestige hinweg erhalten."
+      },
+      "requirementSentence": "{requirements}.",
+      "requirementAllJoiner": " und ",
+      "requirementAnyJoiner": " oder ",
+      "requirementClauses": {
+        "insight": {
+          "one": "Machine Insight {amount} erreichen",
+          "many": "Machine Insight {amount} erreichen"
+        },
+        "universes": {
+          "one": "{amount} Universe verbrauchen",
+          "many": "{amount} Universes verbrauchen"
+        },
+        "multiverses": {
+          "one": "{amount} Multiverse kollabieren",
+          "many": "{amount} Multiverses kollabieren"
+        },
+        "controlledHarvests": {
+          "one": "{amount} kontrollierten Harvest abschließen",
+          "many": "{amount} kontrollierte Harvests abschließen"
+        },
+        "civilizations": {
+          "one": "{amount} Zivilisation kultivieren",
+          "many": "{amount} Zivilisationen kultivieren"
+        }
+      },
       "availableAfterRefresh": "Nach der aktuellen Fortschrittsaktualisierung verfügbar.",
       "unlockSystemNames": {
         "directives": "DIRECTIVES",
@@ -5579,28 +5651,22 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       },
       "systems": {
         "directives": {
-          "name": "Directive System",
-          "condition": "2 kontrollierte Harvests abschließen und Machine Insight 3 erreichen."
+          "name": "Directive System"
         },
         "universe_prestige": {
-          "name": "Universe Consumption",
-          "condition": "18 Cultivation Credits aus qualifizierten Harvests verdienen."
+          "name": "Universe Consumption"
         },
         "universe_upgrades": {
-          "name": "Universe Upgrades",
-          "condition": "Das erste Universe verbrauchen."
+          "name": "Universe Upgrades"
         },
         "breeding_matrices": {
-          "name": "Breeding Matrices",
-          "condition": "Das erste Universe verbrauchen und Machine Insight 7 erreichen."
+          "name": "Breeding Matrices"
         },
         "multiverse_prestige": {
-          "name": "Multiverse Consumption",
-          "condition": "2 Universes verbrauchen."
+          "name": "Multiverse Consumption"
         },
         "axioms": {
-          "name": "Axiom Layer",
-          "condition": "Ein Multiverse kollabieren und Machine Insight 18 erreichen."
+          "name": "Axiom Layer"
         }
       }
     },
@@ -5636,7 +5702,9 @@ const GERMAN: LocalizedShape<typeof ENGLISH> = {
       "realityRewound": "Reality wurde zum Preis von {cost} Paradox zurückgespult.",
       "harvestComplete": "{mode} {grade} HARVEST abgeschlossen. +{credits} Cultivation Credits.",
       "directiveObjectiveComplete": "DIRECTIVE-ZIEL ABGESCHLOSSEN: Ertrag ×1,15 und +1 Cultivation Credit.",
-      "yield": "Ertrag: Causal {causal}, Cognition {cognition}, Paradox {paradox}, Existence {existence}.",
+      "yield": "Ertrag: {entries}.",
+      "yieldEntry": "{name} {amount}",
+      "yieldEntryJoiner": ", ",
       "mutationAcquired": "Machine Mutation erhalten: {name}.",
       "convergenceAchieved": "GREAT CONVERGENCE {convergence} ERREICHT bei Cultivation Depth {depth}.",
       "convergenceFailed": "CONVERGENCE FEHLGESCHLAGEN bei Cultivation Depth {depth}. Autorisierung bleibt erhalten.",

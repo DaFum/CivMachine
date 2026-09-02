@@ -270,10 +270,20 @@ test('every run exit publishes a report that names why it ended and what it paid
   // The report cannot disagree with the payout: both come from the same harvest details.
   assert.equal(report.grade, controlled.state.machine.lastHarvest.grade);
   assert.equal(report.credits, controlled.state.machine.lastHarvest.credits);
+  // The report lists exactly the resources the Machine has identified, in key order, and exactly what
+  // each of them banked. An undiscovered resource is not a zero row -- it is not a row, and it is not
+  // a payout either, which is what keeps Existence out of every report before Transcendence names it.
+  const discovered = controlled.visibleResources();
+  assert.deepEqual(report.resources.map(entry => entry.key), discovered);
   assert.deepEqual(
     report.resources.map(entry => entry.amount),
-    ['causal_mass', 'cognition', 'paradox', 'existence'].map(key => controlled.state.machine.lastHarvest.rewards[key]),
+    discovered.map(key => controlled.state.machine.lastHarvest.rewards[key]),
   );
+  for (const key of ['causal_mass', 'cognition', 'paradox', 'existence']) {
+    if (discovered.includes(key)) continue;
+    assert.equal(controlled.state.machine.lastHarvest.rewards[key], 0, `${key} was banked before it was identified`);
+    assert.equal(controlled.state.machine.currencies[key], 0, `${key} reached the bank before it was identified`);
+  }
 
   const forced = freshEngine();
   forced.startCivilization(55);
@@ -366,6 +376,7 @@ test('the report is built from the same numbers the payout used', () => {
   const report = buildRunReport(civ, {
     reason: 'controlled_harvest', chaotic: false, eraNames: ERA_NAMES, dramaLabels: DRAMA_LABELS,
     resourceLabels: { causal_mass: 'Causal Mass', cognition: 'Cognition', paradox: 'Paradox', existence: 'Existence' },
+    discoveredResources: ['causal_mass', 'cognition', 'paradox', 'existence'],
     traitNames: ['Telepathic Species'], pathName: 'Machine Faith', objectiveTitle: 'Reach Transcendence',
     details: {
       grade: 'established', depth: 3.25, credits: 1, rewardMultiplier: 0.965, objectiveCompleted: true,

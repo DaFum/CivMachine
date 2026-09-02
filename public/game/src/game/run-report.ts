@@ -162,6 +162,13 @@ export interface RunReportContext {
   eraNames: ReadonlyArray<string>;
   dramaLabels: ReadonlyArray<string>;
   resourceLabels: Readonly<Record<string, string>>;
+  /**
+   * The harvest resources the Machine has identified. The report is a player-facing surface and
+   * progression already tracks discovery separately, so building the breakdown from `RESOURCE_KEYS`
+   * named Existence in every report from the first run -- several hours before anything in the game
+   * had told the player it exists. What is not discovered is not listed.
+   */
+  discoveredResources: ReadonlyArray<string>;
   traitNames: string[];
   pathName: string;
   objectiveTitle: string;
@@ -214,9 +221,11 @@ export function runLessons(civ: Civilization, context: RunReportContext, depth: 
       { control: unusedControl, actions: totalActions }));
   }
   if (context.objectiveTitle && !context.details.objectiveCompleted && grade !== 'premature') {
-    const objectiveCredits = Math.max(1, Math.round(credits * 0.15) + 1);
-    lessons.push(fill(objectiveCredits === 1 ? copy.directiveOneCredit : copy.directiveManyCredits,
-      { objectiveTitle: context.objectiveTitle, credits: objectiveCredits }));
+    // The two rewards, exactly as the harvest pays them. The previous sentence folded them into one
+    // estimated credit figure -- `round(credits * 0.15) + 1`, described as "about N credits" -- which
+    // is not a quantity the game computes anywhere: the multiplier applies to harvest resources and
+    // the credit is a flat +1. An explanation of a reward has to name the reward.
+    lessons.push(fill(copy.directiveNotMet, { objectiveTitle: context.objectiveTitle }));
   }
   if (nextBand && grade !== 'premature' && context.reason === 'controlled_harvest') {
     lessons.push(fill(copy.nextBand, {
@@ -245,8 +254,9 @@ export function buildRunReport(civ: Civilization, context: RunReportContext): Ru
   const depth = context.details.depth;
   const credits = context.details.credits;
   const rewards = context.details.rewards;
-  const resourceTotal = RESOURCE_KEYS.reduce((sum, key) => sum + Math.max(0, rewards[key] ?? 0), 0);
-  const resources: RunReportResource[] = RESOURCE_KEYS.map(key => {
+  const visible = RESOURCE_KEYS.filter(key => context.discoveredResources.includes(key));
+  const resourceTotal = visible.reduce((sum, key) => sum + Math.max(0, rewards[key] ?? 0), 0);
+  const resources: RunReportResource[] = visible.map(key => {
     const amount = Math.max(0, rewards[key] ?? 0);
     return {
       key,
@@ -264,6 +274,9 @@ export function buildRunReport(civ: Civilization, context: RunReportContext): Ru
     chaotic: context.chaotic,
     terminal: Boolean(civ.terminal),
     elapsedSeconds: Math.round(Math.max(0, civ.elapsedSeconds) * 10) / 10,
+    // Wall-clock, and 0 for a run that was already in progress when this field arrived -- the report
+    // omits the line rather than inventing a measurement it never took.
+    realSeconds: Math.round(Math.max(0, Number(civ.realSeconds) || 0) * 10) / 10,
     years: Math.trunc(Math.max(0, civ.years)),
     era: civ.era,
     eraName: context.eraNames[civ.era] ?? fill(text().reports.runReport.arc.eraFallback, { era: civ.era }),

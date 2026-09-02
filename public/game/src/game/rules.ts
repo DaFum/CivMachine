@@ -4,6 +4,10 @@ import type { Civilization, GameState, ResourceKey, RuntimeBonuses } from './typ
 export const RESOURCE_KEYS: ResourceKey[] = ['causal_mass', 'cognition', 'paradox', 'existence'];
 export const SAVE_VERSION = 5;
 export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000] as const;
+// The era identifiers, in era order, beside the thresholds that define them. They are catalog keys
+// and the label of last resort, so they stay a plain constant -- one filled from the catalog at
+// import time would keep the language the page booted in. `engine.eraLabel` reads the copy.
+export const ERA_IDS = ['emergence', 'expansion', 'transcendence', 'apotheosis'] as const;
 
 export function eraForYears(years: number): number {
   const safe = Math.max(0, Number(years) || 0);
@@ -56,7 +60,7 @@ export function createNewState(): GameState {
 // every field a `Civilization` must carry is declared exactly once -- here.
 export function createCivilizationTemplate(seed: number): Civilization {
   return {
-    seed, rngState: seed, elapsedSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
+    seed, rngState: seed, elapsedSeconds: 0, realSeconds: 0, years: 0, era: 0, development: 1, developmentMultiplier: 1,
     eventTimer: 4, pendingEvent: '', lastEvent: '', eventCounts: {}, recentEventIds: [], eventChoices: 0,
     traits: [], institutions: [], flags: [], scheduledEvents: [], history: [],
     stats: { stability: 100, stabilityMax: 100, awareness: 0, sanity: 100, attention: 0 },

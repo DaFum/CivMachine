@@ -275,6 +275,12 @@ export const MACHINE_POLICIES = {
   balanced: weighted({ containment: 1, yield: 1, development: 1, utility: 1 }),
 };
 
+// The seeds the v1.20 manual five-run playthrough was played on. They are reused here so a campaign
+// regression walks the same generated Civilizations a person actually saw. This is *not* a replay of
+// that playthrough: the choice sequence was never recorded, so the policy below decides every
+// intervention itself and only the worlds are shared.
+export const MANUAL_PLAYTHROUGH_SEEDS = [885182717, 2290270953, 57073300, 1945906868, 1002269155];
+
 export const UNIVERSE_PREFERENCE = {
   lattice_rush: ['wide_lattice', 'stable_constants', 'twin_harvest', 'bureaucracy_of_gods', 'inherited_time', 'archive_of_screams', 'paradox_rights', 'residue_refinery'],
   survival_first: ['stable_constants', 'wide_lattice', 'twin_harvest', 'bureaucracy_of_gods', 'inherited_time', 'archive_of_screams', 'paradox_rights', 'residue_refinery'],
@@ -371,6 +377,15 @@ export const STRATEGIES = {
   defensive_spread: { machine: 'defensive_spread', ...STRATEGY_DEFAULTS },
   // Aggressive Accelerate: spend Control on Temporal Injection at every opportunity.
   aggressive_accelerate: { machine: 'development_first', trigger: 'urgent', accelerate: true },
+  // What the v1.20 manual playthrough actually did, which none of the rows above modelled together:
+  // Accelerate at every opportunity *and* steer each intervention toward the Directive objective *and*
+  // buy the Development tilt, while still venting and stabilizing rather than riding into a cascade.
+  // `aggressive_accelerate` has the first and third of those and `directive_chaser` the second, so the
+  // combination -- the one a person plays -- was the gap. It is added beside them, not in place of
+  // either. What is deliberately *not* modelled is the deliberate resource banking that playthrough
+  // also showed: every policy here spends what it can each run, and inventing a savings rule would
+  // measure the rule rather than the game.
+  aggressive_human: { machine: 'development_first', trigger: 'urgent', accelerate: true, chase: true },
   // Conservative safe play: bank the credit early rather than reach for the next one.
   conservative: { machine: 'survival_first', trigger: 'cautious', accelerate: false },
   // Deliberately deep: ignore the harvest call and run to the Cultivation Credit cap.

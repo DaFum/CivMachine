@@ -225,13 +225,36 @@ build would need a mechanic that survival cannot also buy, which is a design cha
 number, and it is not in this release.
 
 **Prediction Core cannot be valued by this harness at all.** The modelled player takes the safest
-branch of every intervention, so there is little for foresight to soften; a run with Prediction Core 5
-is byte-identical to the same run with none, which the test asserts before excluding `utility_first`
-from the strict pairwise check. Modelling the player probing anyway was tried and measured *worse* --
+branch of every intervention, so there is little for foresight to soften; over twelve seeds, a run with
+Prediction Core 5 matches the same run with none on every field the harness records -- duration,
+wall-clock, credits, Depth, Grade, objective, Era, Development, intervention count and all four harvest
+rewards -- which the test asserts before excluding `utility_first` from the strict pairwise check. That
+is the run's whole outcome, not a byte-for-byte comparison of the engine state, which is not what the
+check makes. Modelling the player probing anyway was tried and measured *worse* --
 a Probe that costs Control competes with the vent keeping the run alive -- and that is a finding about
 the module rather than the build, which is why Prediction Core now makes a Probe free from level 2.
 The utility row is a floor on that build; it is held to "not a trap" (within 1.5x on Civilizations and
 1.3x on wall-clock), not to non-dominance it has no way to demonstrate.
+
+## v1.20.1 addendum -- staging, and one measurement correction
+
+v1.20.1 changed no balance constant. Its progression work is recorded in the READMEs; two things
+belong here because they are about how this document's numbers are *measured*.
+
+**The Civilizations axis of the pairwise check is a mean, not a median.** `firstMultiverseRun` is an
+integer between 14 and 19, so a median over it moves in whole Civilizations -- about 6% -- and
+neighbouring tilts land on the same value constantly. A tie there counted as "no worse" and handed the
+four-axis verdict to the remaining three. Measured across eight seeds, `survival_first` and
+`defensive_spread` sat at means of 15.75 and 15.25 before the v1.20.1 Existence change and 15.75 and
+15.38 after it -- an unchanged relationship -- while `survival_first`'s *median* stepped 16 to 15
+because one seed crossed the boundary, and that alone reported a domination. Per seed,
+`defensive_spread` still reaches the Multiverse in fewer Civilizations more often than not. The
+dominance predicate and the other three axes are unchanged; the axis now has the resolution to judge
+them.
+
+**Removing the pre-discovery Existence bank did not move the curve.** First Universe stays at five to
+six Civilizations across the purchase tilts and first Multiverse at 15.75 for `survival_first`. What it
+moved is the Transcendence step: Machine levels affordable in it fell from nine to five.
 
 ## What must not regress
 

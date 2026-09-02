@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.20.0
+# Reality Consumption Engine — App Edition v1.20.1
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,105 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.20.1 one-phase progression staging
+
+v1.20.0 fixed the campaign curve and a manual five-run playthrough confirmed it: the first Universe
+arrives after five to seven meaningful Civilizations, a bare Machine is clearly weaker than a built
+one, and no single run pays for a prestige. v1.20.1 changes none of that. It fixes what that
+playthrough exposed *beside* the curve -- moments where the game handed over a whole catalog at once,
+or named something it had not revealed, or reported a number that was not the number.
+
+**A prestige reveals a decision, not a catalog.** Breeding Matrices unlock as a system at the second
+Universe, but the six matrices behind it were gated on Machine Insight alone -- and Insight passes 17
+before the first Universe is consumed. Every gate was therefore already clear when the system opened,
+so the prestige meant to introduce one new choice emptied all six at once. They are staggered over
+Universes now, two at the second, third and fourth, with the Insight numbers kept as a floor. The
+same reasoning already applies to the Universe upgrade layer.
+
+**Existence is no longer banked before it exists.** Every harvest credited all four currencies from
+the first run, so Existence accumulated invisibly through the whole Expansion game -- measured, 1714
+units were already in the bank when Transcendence finally named it, and the reveal arrived with
+several runs of purchasing power attached. A resource the Machine has not identified now pays nothing,
+is not listed in the run report, and is not named in the Machine Record. The run that carries a
+civilization into Transcendence is paid its Existence in full; the runs before it are not paid
+retroactively. Measured on the same seeds, the Machine levels affordable in that single step fell from
+**9 to 5**, and the Existence upgrade levels bought in it from **7 to 3**. No global yield was reduced
+to get there, and the Existence Furnace kept its gate: three levels across two families is what an
+ordinary run of that era already funds, and moving the Furnace behind the first Universe was measured
+and rejected because it made the first-Universe step busier rather than the Transcendence step
+quieter.
+
+**A harvest's own discoveries are settled before it is paid.** Paradox is identified *by* the first
+controlled harvest, so gating the payout on identification without ordering the two would have made
+the run that reveals Paradox the one run not paid for it.
+
+**Next Discoveries reads the rules it describes.** The runtime requirements were an `if` chain and the
+sentences on screen were hand-written strings beside it, so the preview promised Breeding Matrices
+after "your first Universe" while the rule asked for two, and Multiverse prestige had moved to three
+Universes while its preview still said two. Both now come from one table of structured requirements:
+the runtime checks it and the interface composes its sentence from it, in either language.
+
+**An Entropy threshold is logged as the threshold.** A tick advances Entropy past the line before the
+crossing is noticed, and the record printed the Entropy on the clock -- 27 and 29 for the 25 crisis,
+51 and 54 for the 50. The pressure system returns the threshold it actually crossed, and every
+crossing in a tick is reported rather than only the last.
+
+**Two clocks, both named.** `LASTED` was simulation time presented as though it were wall-clock, which
+at 4x understated nothing and overstated everything. The report shows `SIMULATION TIME` (accelerated
+in-game seconds) and, when it was measured, `ACTIVE REAL TIME` -- the wall-clock the simulation
+actually ran for. Neither advances while an intervention waits on the player.
+
+**Simulation speed is announced as the progression it is.** 2x at Machine Insight 3 and 4x at 10 are
+unchanged and still survive prestige. Both steps are now visible in the rail from the first run with
+the Insight they cost, and each is announced once when it unlocks. A v4 save that bought its speed
+from Temporal Injector keeps it and is not told about it as news.
+
+**A reward explanation names the reward.** An unmet Directive objective was described as worth "about
+N credits", computed as `round(credits * 0.15) + 1` -- a quantity the game computes nowhere. It now
+states the two rewards it pays: +15% harvest resources and exactly +1 Cultivation Credit.
+
+**An ordinal is not a tally.** `Transcendence Reached 1 / 2` and `Ascendant Harvest 2 / 3` read as
+partly-finished checklists; the numbers were era and grade indices. Those milestones name their state
+now -- `CURRENT: TRANSCENDENCE / TARGET: APOTHEOSIS`, `BEST: TRANSCENDENT / TARGET: ASCENDANT` -- while
+real counts like `3 / 10 controlled harvests` stay counts. No milestone reward changed.
+
+**The run phase no longer borrows an Era's name.** Drama phases 0 and 1 were called Emergence and
+Expansion against Eras EMERGENCE and EXPANSION, so a single report could discuss two unrelated systems
+in the same words. They are Founding and Growth; the ids and trace values are untouched.
+
+**The Civilization Record no longer prints the same line twice.** 103 of the catalog's 310
+`path_history` entries are authored as `"<title> -> <label>"`, which is word for word what the record's
+automatic choice line already writes -- so a third of the interventions carrying path copy logged their
+sentence twice in a row. The duplicate is dropped where the two sentences meet rather than rewritten in
+103 content entries and their translations: the duplication is a property of the pair, it holds in both
+locales because both sides are composed from the same localized title and label, and it cannot return
+with new content. Path copy that says something new is still recorded.
+
+`aggressive_human` joins the campaign strategy table: Accelerate at every opportunity, the Development
+purchase tilt, and every intervention steered toward the Directive objective -- the combination the
+manual playthrough used and no existing row modelled. It is added beside `aggressive_accelerate` and
+`directive_chaser`, not in place of either.
+
+### Measured, before and after
+
+`npm run balance` prints the full table; the campaign regressions assert the bands.
+
+| Measure | v1.20.0 | v1.20.1 | Target |
+| --- | ---: | ---: | ---: |
+| Civilizations to the first Universe (purchase tilts) | 5-6 | 5-6 | 5-7 |
+| Systems unlocked in the first-Universe step | 1 | 1 | 1-2 |
+| Breeding Matrices unlocked at the second Universe | 6 | 2 | <=2 |
+| Breeding Matrices at U2 / U3 / U4 | 6 / 6 / 6 | 2 / 4 / 6 | staggered |
+| Existence in the bank when it is first revealed | 1714 | 608 | earned this run |
+| Machine levels affordable at the first Transcendence | 9 | 5 | <=7 |
+| Existence upgrade levels bought in that step | 7 | 3 | <=4 |
+| Machine Insight gained at the first Transcendence | 3 | 3 | unchanged |
+| Cultivation Credits from one run, worst | 10 | 10 | < 18 |
+| Reality Lattice levels bought in one step, worst | 2 | 2 | <=2 |
+| Civilizations to the first Multiverse (survival_first) | 15.75 | 15.75 | unchanged |
+| `path_history` entries duplicating the choice line | 103 of 310 | 0 shown | none |
+| Tests | 435 | 458 | -- |
 
 ## v1.20.0 the campaign curve
 

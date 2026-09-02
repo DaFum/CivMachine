@@ -265,6 +265,10 @@ export function buildViewModel(engine) {
         resources: buildResourcesViewModel(engine),
         simulationSpeed: state.simulationSpeed,
         maxSimulationSpeed: engine.maxSimulationSpeed(),
+        simulationSpeedOptions: engine.simulationSpeedOptions(),
+        // Which harvest resources the Machine has identified. Every surface that names a resource -- the
+        // bar, the live harvest breakdown, the run report -- reads this rather than the full key list.
+        visibleResourceKeys: engine.visibleResources(),
         civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
         cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
         universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
@@ -362,6 +366,9 @@ export function civilizationRenderKey(vm) {
         cosmicCondition,
         vm.simulationSpeed,
         vm.maxSimulationSpeed,
+        // A discrete state, not a ticking one: identifying a resource happens a handful of times in a
+        // save, and the harvest breakdown has to gain its column when it does.
+        vm.visibleResourceKeys.join(','),
         civilization.traits.map((trait) => trait.id).join(','),
         civilization.institutions.join(','),
         vm.feedback?.sequence ?? 0,
