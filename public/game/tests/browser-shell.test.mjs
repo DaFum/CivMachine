@@ -226,10 +226,10 @@ test('the civilization view is ordered by what it asks of the player', async () 
 });
 
 test('mobile UI hierarchy features collapsible event details, high harvest actions, and closed disclosures by default', async () => {
-  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../dist/ui/app.js', import.meta.url), 'utf8');
   // Event details use native disclosure and choices sit outside it
   assert.match(app, /data-disclosure="situation-details"/);
-  const eventSlice = app.slice(app.indexOf('const eventCard='), app.indexOf('const tendencies='));
+  const eventSlice = app.slice(app.indexOf('const eventCard'), app.indexOf('const tendencies'));
   assert.ok(eventSlice.indexOf('</details>') < eventSlice.indexOf('choice-list'), 'event choice buttons must be outside the situation details disclosure');
 
   // Secondary information disclosures default to closed (using disclosureAttr)
@@ -508,11 +508,11 @@ test('reduced motion silences every decorative animation the shell adds', async 
 });
 
 test('mobile UX consolidates decision surface and groups secondary records', async () => {
-  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../dist/ui/app.js', import.meta.url), 'utf8');
   assert.match(app, /class="records-intel-panel"/, 'secondary records must be grouped under a single disclosure container');
   assert.match(app, /harvest-actions-secondary/, 'pressure harvest must structure chaotic and abandon actions under primary harvest');
   assert.match(app, /situation-card/, 'intervention and situation must be consolidated');
   // Ensure harvest actions are not duplicated in pressure rail
-  const pressureRail = app.slice(app.indexOf('const pressureRail='), app.indexOf('function renderCivilization'));
+  const pressureRail = app.slice(app.indexOf('const pressureRail'), app.indexOf('function renderCivilization'));
   assert.doesNotMatch(pressureRail, /data-action="harvest"/, 'pressureRail must not duplicate harvest buttons');
 });
