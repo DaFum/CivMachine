@@ -1210,3 +1210,138 @@ test('a strip redraw paints a settlement glow that reaches in from outside its o
   assert.deepEqual(exposed(viaStrip), exposed(viaFull),
     'the strip redraw dropped geometry reaching in from a settlement whose footprint sits outside the strip');
 });
+
+
+// Records the static layer only. The renderer creates its three canvases in painting order, so the
+// first context it asks for is the sky-and-terrain one.
+async function staticLayerCalls(civ, tag, scroll = 0) {
+  const calls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => { const target = created++ === 0 ? calls : [];
+      return { className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(target), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?static-${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    if (scroll > 0) { controller.nudge(1); calls.length = 0; frame(200); }
+    controller.destroy();
+  });
+  return calls;
+}
+
+test('a parallax layer only anchors world geometry inside the slice it can reach', async () => {
+  const { layerReach, SKY_PARALLAX, TERRAIN_PARALLAX } = await import('../dist/render/world.js');
+  const { worldSnapshot } = await import('../dist/render/world-model.js');
+  const WIDTH = 900;
+  const snapshot = worldSnapshot(developedCivilization(404), WIDTH);
+  // The bug this pins: the sky is drawn under a tenth of the scroll, so it never exposes more than a
+  // third of a stage-4 world -- and anything placed across the whole world width, as the celestial
+  // body and the observer's light field once were, simply is not there to be seen.
+  const skyReach = layerReach(snapshot.worldWidth, WIDTH, SKY_PARALLAX);
+  assert.ok(skyReach < snapshot.worldWidth * .5, 'the sky must reach far less of the world than the settlements do');
+  assert.ok(skyReach >= WIDTH, 'a layer always reaches at least one viewport');
+  assert.ok(layerReach(snapshot.worldWidth, WIDTH, TERRAIN_PARALLAX) > skyReach, 'a nearer layer must reach further');
+  assert.equal(layerReach(WIDTH, WIDTH, SKY_PARALLAX), WIDTH, 'a world one viewport wide has one viewport of reach');
+});
+
+test('the observer light field is actually drawn when Attention is high', async () => {
+  // High Attention is a state the player has to be able to read off the sky. Anchored across the
+  // whole world it was never once visible; the invariant is that raising it adds work to the sky.
+  const watched = developedCivilization(404);
+  watched.stats.attention = 92;
+  const unwatched = developedCivilization(404);
+  unwatched.stats.attention = 8;
+  const withObserver = await staticLayerCalls(watched, 'observer-on');
+  const withoutObserver = await staticLayerCalls(unwatched, 'observer-off');
+  const arcs = calls => calls.filter(([name]) => name === 'arc').length;
+  assert.ok(arcs(withObserver) > arcs(withoutObserver),
+    `an observed world drew ${arcs(withObserver)} sky arcs, an unobserved one ${arcs(withoutObserver)}`);
+  assertFiniteGeometry(withObserver, 'static/observer');
+});
+
+test('entropy is written into the terrain, not only into the palette', async () => {
+  const failing = developedCivilization(404);
+  failing.tactical.entropy = 95;
+  const stable = developedCivilization(404);
+  stable.tactical.entropy = 4;
+  const emberOf = async (civ, tag) => {
+    const { worldPresentation } = await import('../dist/render/world-presentation.js');
+    const ember = worldPresentation(civ).colors.ember;
+    const prefix = `rgba(${ember >> 16 & 0xff},${ember >> 8 & 0xff},${ember & 0xff},`;
+    const calls = await staticLayerCalls(civ, tag);
+    return calls.filter(([name, value]) => name === 'strokeStyle' && typeof value === 'string' && value.startsWith(prefix)).length;
+  };
+  assert.ok(await emberOf(failing, 'entropy-high') > 0, 'a failing world must split its own land open');
+  assert.equal(await emberOf(stable, 'entropy-low'), 0, 'a stable world must not be cracked');
+});
+
+test('the cached sky and terrain are a pure function of the world', async () => {
+  const first = await staticLayerCalls(developedCivilization(717), 'sky-det-a');
+  const second = await staticLayerCalls(developedCivilization(717), 'sky-det-b');
+  assert.ok(first.length > 40, `the static layer drew only ${first.length} primitives`);
+  assert.deepEqual(first, second, 'the same world must paint the same sky and terrain');
+  assert.notDeepEqual(first, await staticLayerCalls(developedCivilization(718), 'sky-det-c'), 'a different seed must paint a different world');
+});
+
+test('fillEllipseGlow flattens the light without moving it sideways', async () => {
+  const { CachedCanvasSurface } = await import('../dist/render/draw-surface.js');
+  const record = [];
+  const gradient = { addColorStop: (offset, color) => record.push(['stop', offset, color]) };
+  const context = {
+    set fillStyle(value) { record.push(['fillStyle', value === gradient ? 'gradient' : value]); },
+    createRadialGradient: (...args) => { record.push(['createRadialGradient', ...args]); return gradient; },
+    transform: (...args) => record.push(['transform', ...args]),
+    save: () => record.push(['save']),
+    restore: () => record.push(['restore']),
+    beginPath: () => {}, arc: (...args) => record.push(['arc', ...args]), fill: () => record.push(['fill']),
+  };
+  const surface = new CachedCanvasSurface(context, (value, alpha = 1) => `rgba(${value},${alpha})`);
+  surface.fillEllipseGlow(200, 100, 80, 20, [{ offset: 0, color: 0xffffff, alpha: .5 }, { offset: 1, color: 0xffffff, alpha: 0 }]);
+
+  const arc = record.find(([name]) => name === 'arc');
+  assert.ok(arc, 'the glow must paint');
+  // The squash is vertical only, so the horizontal extent is exactly the radius the caller culled by.
+  assert.deepEqual([arc[1], arc[3]], [200, 80], 'the glow must keep its centre and its horizontal radius');
+  const squash = record.find(([name]) => name === 'transform');
+  assert.deepEqual(squash, ['transform', 1, 0, 0, .25, 0, 75], 'the squash must scale y about the centre and leave x alone');
+  assert.ok(record.indexOf(squash) > record.findIndex(([name]) => name === 'save'), 'the squash must be inside a save');
+  assert.equal(record[record.length - 1][0], 'restore', 'the squash must not outlive the call');
+  for (const [, ...args] of record) for (const value of args) if (typeof value === 'number') assert.ok(Number.isFinite(value));
+});
+
+test('a context that cannot squash still gets the light, as a circle', async () => {
+  const { CachedCanvasSurface } = await import('../dist/render/draw-surface.js');
+  const record = [];
+  const surface = new CachedCanvasSurface({
+    set fillStyle(value) {}, beginPath: () => {}, arc: (...args) => record.push(args), fill: () => {},
+  }, () => 'rgba(0,0,0,1)');
+  surface.fillEllipseGlow(200, 100, 80, 20, [{ offset: 0, color: 0xffffff, alpha: .5 }]);
+  assert.equal(record.length, 1, 'the fallback must still paint exactly one light');
+  assert.deepEqual(record[0].slice(0, 3), [200, 100, 80], 'the fallback keeps the horizontal radius');
+});
+
+test('the cached sky and terrain stay cheap enough to repaint on every scrolled pixel', async () => {
+  // The whole reason sky and terrain are simply repainted rather than blitted is that they are
+  // small. Clouds, a distant skyline, ground shelves and entropy fissures all live here now, and
+  // each of them is bounded by a count -- so the layer as a whole has to stay bounded too.
+  const busiest = developedCivilization(404);
+  busiest.era = 4;
+  busiest.development = 1600;
+  busiest.stats.attention = 95;
+  busiest.stats.awareness = 95;
+  busiest.tactical.entropy = 95;
+  for (const scroll of [0, 1]) {
+    const calls = await staticLayerCalls(busiest, `static-budget-${scroll}`, scroll);
+    assert.ok(calls.length > 60, `the static layer drew only ${calls.length} primitives`);
+    assert.ok(calls.length < 900, `the static layer drew ${calls.length} primitives, over its budget`);
+    assertFiniteGeometry(calls, `static/budget-${scroll}`);
+  }
+});

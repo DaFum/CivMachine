@@ -24,9 +24,10 @@ export const GROUND_RATIO = .78;
 // Where the distant terrain meets the sky. Shared, because the sky's horizon light field and the
 // ridgelines it sits behind have to agree on it or the two layers show a seam.
 const HORIZON_RATIO = .69;
-// Parallax factors of the three cached layers, in the order they are painted.
-const SKY_PARALLAX = .1;
-const TERRAIN_PARALLAX = .52;
+// Parallax factors of the three cached layers, in the order they are painted. Exported so a test can
+// state the reach of a layer in terms of the design rather than repeating the numbers.
+export const SKY_PARALLAX = .1;
+export const TERRAIN_PARALLAX = .52;
 // How far past the band edge that culled it a single primitive may still reach. Exported so the cull
 // test can state its ceiling in terms of the design instead of a magic number. Every wide light
 // field -- the celestial glow, the observer's, a settlement's light spill -- is culled by its own
@@ -38,8 +39,6 @@ export const WIDEST_STATIC_PRIMITIVE = 230;
 export const CULL_MARGIN = 320;
 // Half the width of a banner's cloth plus its pole, so one anchored at the band edge still paints.
 const BANNER_SLACK = 40;
-// Widest path motif: the bureaucratic filing cabinet at 28 px plus its rings.
-const MOTIF_SLACK = 60;
 // Slack added around the strip a scroll exposes. `drawSettlementContent` already culls every
 // settlement by its radius and every structure by its own width, so a narrow band is as correct as a
 // wide one; this margin only absorbs the few marks drawn slightly beyond a declared extent. The
@@ -56,6 +55,18 @@ export const SPILL_MIN_RADIUS = 50;
 export const SPILL_CROWN_FACTOR = .8;
 // The lattice the near field's furrows and props sit on.
 const FIELD_CELL = 84;
+/**
+ * How far into the world a parallax layer can ever be scrolled. A layer at factor `f` shows world
+ * coordinates `scroll * f` to `scroll * f + width`, and the scroll itself stops at
+ * `worldWidth - width` -- so the sky, at a tenth of the scroll, only ever exposes about a third of a
+ * stage-4 world. Anything the sky places *on the world lattice* has to be placed inside this reach
+ * or it is simply never seen: the celestial body was visible for roughly a fifth of the seeds at
+ * stage 4 and the observer's own light field, anchored at 72% of the world, was visible at no stage
+ * at all.
+ */
+export function layerReach(worldWidth, width, parallax) {
+    return Math.max(width, Math.max(0, worldWidth - width) * parallax + width);
+}
 /**
  * A layer at parallax `f` is drawn under `translate(-scroll * f)`, so the world coordinates on screen
  * run from `scroll * f` to `scroll * f + width`. Everything outside that, plus a margin, is invisible.
@@ -96,7 +107,78 @@ function buildScene(civ, width, height) {
 function factionColor(scene, settlement) {
     return settlement.factionIndex >= 0 ? (scene.roster[settlement.factionIndex]?.color ?? UNALIGNED_COLOR) : UNALIGNED_COLOR;
 }
-function drawSkyContent(surface, scene, height, view) {
+// Cloud banks are bounded by a count, not by the world: whatever the viewport and however wide the
+// world, one sky repaint emits at most this many silhouettes and this many lit undersides.
+const MAX_CLOUD_BANKS = 12;
+/** Widest bank, so the sky's culling can be stated in terms of the design. */
+const CLOUD_MAX_WIDTH = 300;
+/**
+ * Cloud strata: three decks of soft, wide silhouette between the zenith and the ridgeline. This is
+ * the layer the sky was missing -- a four-stop gradient with stars in it is a beautiful *surface*,
+ * and what makes it read as air instead is something hanging in it at a known distance.
+ *
+ * Each bank is one tapered polygon under one vertical gradient plus one flattened light field along
+ * its base, so a deck costs two primitives rather than a blur. It lives on the cached sky layer,
+ * where that gradient is paid once per scroll instead of once per frame, and the decks are placed on
+ * the world lattice so a scroll reveals new sky rather than sliding the same clouds along.
+ */
+function drawCloudStrata(surface, scene, height, view, skyReach) {
+    const { civ, presentation } = scene;
+    const colors = presentation.colors;
+    const horizon = height * HORIZON_RATIO;
+    // [centre as a fraction of the horizon, deck height, cell width, alpha]. The lower the deck the
+    // thinner, the tighter and the more strongly lit from beneath it is -- which is the whole of the
+    // aerial perspective the sky had none of.
+    const decks = [
+        [.24, .052, 300, .10],
+        [.44, .040, 232, .13],
+        [.62, .026, 176, .17],
+    ];
+    let drawn = 0;
+    for (let deck = 0; deck < decks.length && drawn < MAX_CLOUD_BANKS; deck++) {
+        const [yFraction, heightFraction, cell, alpha] = decks[deck];
+        const bankHeight = Math.max(6, horizon * heightFraction);
+        const base = horizon * yFraction + bankHeight;
+        // Lit from the horizon and from the city under it, dark against the sky it hangs in.
+        const lit = mixColor(mixColor(colors.skyHorizon, colors.haze, .3), colors.lightSpill, .08 + deck * .1 * presentation.signals.activity);
+        const dark = mixColor(colors.skyTop, colors.skyBottom, .3 + deck * .22);
+        const first = Math.max(0, Math.floor(view.from / cell) - 1);
+        const last = Math.ceil(view.to / cell) + 1;
+        for (let index = first; index <= last && drawn < MAX_CLOUD_BANKS; index++) {
+            // Most cells stay open sky. Awareness thickens the deck; entropy tears it open, so a failing
+            // world loses its cloud cover instead of merely turning red.
+            if (hash01(civ.seed * 3 + deck * 137 + index * 61) > .36 + deck * .06 + presentation.awareness * .16 - presentation.entropy * .24)
+                continue;
+            const anchor = (index + hash01(deck * 29 + index * 17)) * cell;
+            if (anchor > skyReach)
+                continue;
+            const halfWidth = Math.min(CLOUD_MAX_WIDTH, cell * (.62 + hash01(index * 13 + deck * 7) * .5)) * .5;
+            if (anchor + halfWidth < view.from || anchor - halfWidth > view.to)
+                continue;
+            const steps = 8;
+            const outline = [[anchor - halfWidth, base]];
+            for (let step = 0; step <= steps; step++) {
+                const t = step / steps;
+                // Tapered at both ends, so a bank thins into the sky instead of ending on a vertical edge.
+                const lift = bankHeight * (.22 + ridgeNoise(t * 3.4 + index * .7, civ.seed + deck * 91, .5) * .95) * Math.sin(Math.PI * t);
+                outline.push([anchor - halfWidth + halfWidth * 2 * t, base - lift]);
+            }
+            outline.push([anchor + halfWidth, base]);
+            surface.fillLinearGradientPoly(outline, [
+                { offset: 0, color: dark, alpha: alpha * .55 },
+                { offset: .58, color: mixColor(dark, lit, .5), alpha },
+                { offset: 1, color: lit, alpha: alpha * 1.3 },
+            ], anchor, base - bankHeight, anchor, base + 2);
+            surface.fillEllipseGlow(anchor, base, halfWidth * .92, bankHeight * .85, [
+                { offset: 0, color: lit, alpha: alpha * (.45 + presentation.signals.activity * .5) },
+                { offset: .55, color: lit, alpha: alpha * .2 },
+                { offset: 1, color: lit, alpha: 0 },
+            ]);
+            drawn++;
+        }
+    }
+}
+function drawSkyContent(surface, scene, width, height, view) {
     const { civ, snapshot, presentation } = scene;
     const worldWidth = snapshot.worldWidth;
     const span = view.to - view.from;
@@ -104,6 +186,9 @@ function drawSkyContent(surface, scene, height, view) {
         return;
     const horizon = height * HORIZON_RATIO;
     const colors = presentation.colors;
+    // Everything the sky anchors to the world lattice is placed inside the slice the sky's own
+    // parallax can actually reach, never across the whole world.
+    const skyReach = layerReach(worldWidth, width, SKY_PARALLAX);
     // 1. The sky itself: four stops, so the zenith, the upper air, the band the ridges sit against and
     // the horizon each get their own colour instead of one linear ramp between two.
     const upper = mixColor(colors.skyTop, colors.skyBottom, .34);
@@ -138,7 +223,9 @@ function drawSkyContent(surface, scene, height, view) {
         surface.fillStyle(index % 7 === 0 ? presentation.accent : 0xdce9ff, bright).fillCircle(x, y, .5 + hash01(index * 71) * .8);
     }
     // 4. One celestial body, low and hazed, giving the whole scene a light direction.
-    const bodyX = worldWidth * (.18 + hash01(civ.seed * 3 + 7) * .5);
+    // Kept to the near half of the reachable sky, with the observer's own field confined to the far
+    // half below: two light sources of that size landing on top of each other read as one artefact.
+    const bodyX = skyReach * (.1 + hash01(civ.seed * 3 + 7) * .38);
     const bodyY = height * (.16 + hash01(civ.seed * 11) * .18);
     const bodyRadius = 16 + hash01(civ.seed * 17) * 12;
     const bodyGlow = bodyRadius * 4.5;
@@ -154,6 +241,8 @@ function drawSkyContent(surface, scene, height, view) {
         surface.fillStyle(bodyColor, .5).fillCircle(bodyX, bodyY, bodyRadius);
         surface.fillStyle(tint(bodyColor, .35), .3).fillCircle(bodyX - bodyRadius * .22, bodyY - bodyRadius * .22, bodyRadius * .68);
     }
+    // 4b. The decks hanging between the body and the ridgeline.
+    drawCloudStrata(surface, scene, height, view, skyReach);
     // 5. Horizon illumination: the light field that separates sky, distant terrain and skyline. Its
     // strength follows how developed and how observed the civilization is.
     const glowColor = mixColor(colors.skyHorizon, presentation.accent, .28 + presentation.awareness * .22);
@@ -166,7 +255,7 @@ function drawSkyContent(surface, scene, height, view) {
     // 6. Observer presence. A light field with rings inside it rather than rings on their own, so high
     // Attention reads as something looking at the world instead of as decoration in the sky.
     if (civ.stats.attention >= 50) {
-        const observerX = worldWidth * (.72 + hash01(civ.seed) * .12);
+        const observerX = skyReach * (.62 + hash01(civ.seed) * .28);
         const radius = 95 + presentation.attention * 45;
         if (observerX + radius >= view.from && observerX - radius <= view.to) {
             const observerY = height * .18;
@@ -205,9 +294,12 @@ function ridgePoints(view, worldWidth, baseY, step, amplitude, wavelength, seed,
     points.push([Math.min(worldWidth, Math.max(0, last * step)), baseY]);
     return points;
 }
-function drawTerrainContent(surface, scene, height, view) {
+function drawTerrainContent(surface, scene, width, height, view) {
     const { civ, snapshot, presentation } = scene;
     const worldWidth = snapshot.worldWidth;
+    // Same rule as the sky: anything this layer anchors to a single world position rather than to a
+    // lattice across the visible band has to be placed inside the slice its parallax can reach.
+    const terrainReach = layerReach(worldWidth, width, TERRAIN_PARALLAX);
     const horizon = height * HORIZON_RATIO;
     const span = view.to - view.from;
     if (span <= 0)
@@ -235,14 +327,58 @@ function drawTerrainContent(surface, scene, height, view) {
         { offset: 1, color: colors.haze, alpha: .1 + presentation.sanityDistortion * .06 },
     ], view.from, horizon - midAmplitude * 1.2, view.from, horizon);
     // Mid range: stronger contrast, tighter forms, and a rim light where the horizon catches its edge.
-    const mid = ridgePoints(view, worldWidth, horizon + 6, 40, midAmplitude, 330, civ.seed * 7 + 29, .5);
+    const midBase = horizon + 6;
+    const midSeed = civ.seed * 7 + 29;
+    const mid = ridgePoints(view, worldWidth, midBase, 40, midAmplitude, 330, midSeed, .5);
     if (mid.length > 2) {
         surface.fillLinearGradientPoly(mid, [
             { offset: 0, color: mixColor(colors.midTerrain, colors.skyHorizon, .1), alpha: .96 },
             { offset: 1, color: colors.midTerrain, alpha: .96 },
-        ], view.from, horizon - midAmplitude, view.from, horizon + 6);
+        ], view.from, horizon - midAmplitude, view.from, midBase);
         surface.lineStyle(1, mixColor(colors.skyHorizon, 0xffffff, .2), .16 + presentation.signals.activity * .1).strokePoly(mid.slice(1, -1));
     }
+    // Reality shear. Above the third entropy band the ridgeline itself stops being continuous: a slice
+    // of it stands displaced from the land on either side, with the split lit from inside. Entropy had
+    // no silhouette of its own before this -- it was a red sky, and a red sky is a palette, not a
+    // world coming apart. Bounded to three slices, each one polygon and two seams.
+    if (presentation.entropy > .55) {
+        const shears = Math.min(3, 1 + Math.round((presentation.entropy - .55) * 5));
+        for (let i = 0; i < shears; i++) {
+            const centre = terrainReach * ((i + .5) / shears + (hash01(civ.seed * 43 + i * 29) - .5) * .6 / shears);
+            const halfWidth = 80 + hash01(civ.seed + i * 61) * 70;
+            const from = Math.max(0, centre - halfWidth);
+            const to = Math.min(worldWidth, centre + halfWidth);
+            if (to < view.from || from > view.to)
+                continue;
+            const lift = 12 + hash01(i * 37) * 26;
+            // The same ridge, sampled over the slice and displaced: the crest lifts, the base does not, so
+            // the slice overpaints its own piece of the range instead of leaving a hole under it.
+            const slice = ridgePoints({ from, to }, worldWidth, midBase, 40, midAmplitude, 330, midSeed, .5);
+            if (slice.length <= 2)
+                continue;
+            const displaced = [[from, midBase]];
+            for (let point = 1; point < slice.length - 1; point++)
+                displaced.push([slice[point][0], slice[point][1] - lift]);
+            displaced.push([to, midBase]);
+            surface.fillLinearGradientPoly(displaced, [
+                { offset: 0, color: mixColor(colors.midTerrain, colors.skyHorizon, .16), alpha: .97 },
+                { offset: 1, color: shade(colors.midTerrain, .2), alpha: .97 },
+            ], from, horizon - midAmplitude - lift, from, midBase);
+            const seam = .3 + presentation.entropy * .4;
+            for (const edge of [from, to]) {
+                surface.lineStyle(1.6, colors.ember, seam).line(edge, midBase, edge, midBase - midAmplitude * .55 - lift);
+            }
+            surface.fillEllipseGlow(centre, midBase - lift * .5, halfWidth * 1.1, lift * 2.2, [
+                { offset: 0, color: colors.ember, alpha: seam * .2 },
+                { offset: 1, color: colors.ember, alpha: 0 },
+            ]);
+        }
+    }
+    // The civilization continuing past the horizon: a distant skyline standing on the mid ridge, in
+    // near-total aerial fade with a few lights in it. It is the one thing that makes the band between
+    // the ridges and the settlement plane read as distance rather than as empty ground, and it grows
+    // with the civilization instead of being scenery.
+    drawDistantSkyline(surface, scene, height, view);
     // Foothills: the strongest silhouette, sitting below the horizon line and closing the distance to
     // the settlement plane.
     const near = ridgePoints(view, worldWidth, horizon + 18, 30, nearAmplitude, 190, civ.seed * 13 + 47, .62);
@@ -259,6 +395,110 @@ function drawTerrainContent(surface, scene, height, view) {
         { offset: .45, color: colors.nearTerrain },
         { offset: 1, color: colors.groundNear },
     ], view.from, horizon + 14, view.from, height);
+    // Three shelves of land receding toward the ridges, each with the air of its own distance pooled
+    // along its foot. A graded fill still reads as one surface; low crests with mist between them are
+    // what turn the same band into ground with distance in it, and they cost a polygon each.
+    const groundSpan = height - horizon - 14;
+    for (let shelf = 0; shelf < 3; shelf++) {
+        const shelfBase = horizon + 16 + groundSpan * (.2 + shelf * .27);
+        const shelfHeight = 10 + shelf * 9;
+        const shelfPoints = ridgePoints(view, worldWidth, shelfBase, 68, shelfHeight, 520 - shelf * 150, civ.seed * 23 + shelf * 71, .38);
+        if (shelfPoints.length <= 2)
+            continue;
+        // The mist the shelf stands in, laid down first so the crest rises out of it.
+        surface.fillLinearGradientRect(view.from, shelfBase - shelfHeight - 10, span, shelfHeight + 12, [
+            { offset: 0, color: colors.haze, alpha: 0 },
+            { offset: 1, color: colors.haze, alpha: (.09 - shelf * .022) + presentation.sanityDistortion * .04 },
+        ], view.from, shelfBase - shelfHeight - 10, view.from, shelfBase + 2);
+        surface.fillLinearGradientPoly(shelfPoints, [
+            { offset: 0, color: mixColor(colors.nearTerrain, colors.skyHorizon, .2 - shelf * .06), alpha: .95 },
+            { offset: 1, color: shade(mixColor(colors.nearTerrain, colors.groundNear, .45 + shelf * .25), shelf * .12), alpha: .95 },
+        ], view.from, shelfBase - shelfHeight, view.from, shelfBase + 6);
+        // The crest catching the horizon, so each shelf ends on an edge instead of dissolving into the
+        // one behind it. This is the whole of what turns a graded band into receding ground.
+        surface.lineStyle(1, mixColor(colors.skyHorizon, colors.groundNear, .35 + shelf * .2), .2 - shelf * .045)
+            .strokePoly(shelfPoints.slice(1, -1));
+    }
+    // Entropy crossing the land itself. Reality failing is a state the sky already carries as colour;
+    // this is the same state written into the ground, so a collapsing world is legible from its
+    // terrain and not only from its palette. Bounded to five, and only above the second entropy band.
+    if (presentation.entropy > .45) {
+        const cracks = Math.min(5, 2 + Math.round(presentation.entropy * 4));
+        for (let i = 0; i < cracks; i++) {
+            const x = terrainReach * ((i + .5) / cracks + (hash01(civ.seed * 31 + i * 17) - .5) * .5 / cracks);
+            if (x + FISSURE_REACH < view.from || x - FISSURE_REACH > view.to)
+                continue;
+            // Up through the ridges and down to the edge of the settlement plane. Below that the scenery
+            // layer's own ground is painted over this one, so a crack drawn to the bottom of the frame
+            // spent most of its length under an opaque fill and read as a scratch above the horizon.
+            const topY = horizon - 34 - hash01(i * 13) * 78;
+            const bottomY = horizon + 54 + hash01(i * 41) * 14;
+            const lean = (hash01(civ.seed + i * 53) - .5) * 90;
+            const mid = topY + (bottomY - topY) * .55;
+            const glow = .2 + presentation.entropy * .38;
+            // The land split open and lit from inside it: a wide dim seam under a narrow bright one, plus
+            // a branch off the elbow. Three strokes per crack, five cracks -- the cost of a state cue, not
+            // of a weather system.
+            surface.lineStyle(4 + presentation.entropy * 4, colors.ember, glow * .22)
+                .strokePoly([[x, topY], [x + lean * .35, mid], [x + lean, bottomY]]);
+            surface.lineStyle(1.2 + presentation.entropy * 1.4, colors.ember, glow)
+                .strokePoly([[x, topY], [x + lean * .35, mid], [x + lean, bottomY]]);
+            surface.lineStyle(1, colors.ember, glow * .5)
+                .strokePoly([[x + lean * .35, mid], [x + lean * .35 - 34, bottomY]]);
+            // The light the split puts on the land around it, flattened along the seam.
+            surface.fillEllipseGlow(x + lean * .35, mid, 46, 26, [
+                { offset: 0, color: colors.ember, alpha: glow * .16 },
+                { offset: 1, color: colors.ember, alpha: 0 },
+            ]);
+        }
+    }
+}
+// Half the widest distant tower plus the lean of an entropy fissure, so the terrain layer can state
+// its own culling slack rather than borrowing the settlement layer's.
+const FISSURE_REACH = 60;
+const DISTANT_TOWER_CELL = 34;
+/**
+ * The far side of the same civilization: a low skyline standing on the mid ridge, faded almost into
+ * the horizon light and carrying a handful of window lights. It appears once a world has towns to be
+ * seen from a distance, thickens with development, and is drawn between the mid ridge and the
+ * foothills so the near silhouette closes over its feet.
+ */
+function drawDistantSkyline(surface, scene, height, view) {
+    const { civ, snapshot, presentation } = scene;
+    if (snapshot.stage < 2)
+        return;
+    const colors = presentation.colors;
+    const horizon = height * HORIZON_RATIO;
+    // Deep aerial perspective: the distant city is mostly the air in front of it.
+    const body = mixColor(mixColor(colors.midTerrain, colors.settlement, .34), colors.skyHorizon, .34);
+    const density = .24 + Math.min(.3, snapshot.buildingCount / 220) + (snapshot.stage - 2) * .07;
+    const first = Math.max(0, Math.floor(view.from / DISTANT_TOWER_CELL) - 1);
+    const last = Math.ceil(view.to / DISTANT_TOWER_CELL) + 1;
+    // On the mid ridge, not on the ground: the foothills are painted after this and close over the
+    // feet of it, which is what puts the distant city genuinely behind them rather than in front.
+    const baseY = horizon + 7;
+    for (let index = first; index <= last; index++) {
+        const roll = hash01(civ.seed * 17 + index * 37);
+        if (roll > density)
+            continue;
+        const x = index * DISTANT_TOWER_CELL + hash01(index * 71) * DISTANT_TOWER_CELL * .6;
+        if (x < view.from - DISTANT_TOWER_CELL || x > view.to + DISTANT_TOWER_CELL)
+            continue;
+        const towerWidth = 4 + hash01(index * 29) * 9;
+        const towerHeight = (10 + hash01(index * 53) * 32) * (.7 + (snapshot.stage - 2) * .2);
+        surface.fillStyle(body, .88).fillRect(x, baseY - towerHeight, towerWidth, towerHeight);
+        // One lit window per lit tower, at the world's own light level: enough to say the distance is
+        // inhabited, never enough to compete with the settlements in front of it.
+        if (hash01(index * 97) < .38) {
+            surface.fillStyle(colors.lightSpill, .14 + presentation.lightLevel * .3)
+                .fillRect(x + towerWidth * .3, baseY - towerHeight * (.35 + hash01(index * 11) * .4), Math.max(1, towerWidth * .34), 1.8);
+        }
+    }
+    // The haze the distant skyline stands in, closing it back into the horizon light.
+    surface.fillLinearGradientRect(view.from, baseY - 42, view.to - view.from, 48, [
+        { offset: 0, color: colors.haze, alpha: 0 },
+        { offset: 1, color: colors.haze, alpha: .13 + presentation.signals.activity * .06 },
+    ], view.from, baseY - 42, view.from, baseY + 6);
 }
 /** The props that fill the land between settlements. Small, cheap and culled one by one. */
 function drawOutskirt(surface, prop, ground, presentation) {
@@ -384,9 +624,11 @@ export function drawSettlementContent(surface, scene, height, view) {
             continue;
         if (stage > 0 && settlement.centerX + spillRadius >= view.from && settlement.centerX - spillRadius <= view.to) {
             const spillStrength = lightLevel * (settlement.settlementClass === 'camp' ? .3 : settlement.settlementClass === 'village' ? .5 : 1);
-            surface.fillRadialGlow(settlement.centerX, ground - crown * .42, 0, spillRadius, [
-                { offset: 0, color: colors.lightSpill, alpha: .085 * spillStrength },
-                { offset: .5, color: colors.lightSpill, alpha: .04 * spillStrength },
+            // Flattened, because a city's glow is: it spreads along the skyline and thins quickly upward.
+            // A circle of the same horizontal reach climbed a quarter of the sky and read as weather.
+            surface.fillEllipseGlow(settlement.centerX, ground - crown * .42, spillRadius, spillRadius * .74, [
+                { offset: 0, color: colors.lightSpill, alpha: .1 * spillStrength },
+                { offset: .5, color: colors.lightSpill, alpha: .045 * spillStrength },
                 { offset: 1, color: colors.lightSpill, alpha: 0 },
             ]);
         }
@@ -452,26 +694,68 @@ export function drawSettlementContent(surface, scene, height, view) {
             }
         }
     }
-    // Foreground bank: two silhouettes and a rim light rather than one black slab, so the strip below
-    // the road frames the world instead of cutting a hole in it.
+    // Foreground bank: the plane closest to the eye, and the one that used to be a black slab across
+    // the bottom eighth of every frame. It is now a graded bank with a lit crest, a continuous crest
+    // line rather than a row of separate triangles, and a handful of near-silhouette props standing on
+    // it -- so the strip below the road frames the world instead of cutting a hole in it.
     const bankTop = height - Math.max(14, (height - ground) * .34);
     const bankColor = mixColor(colors.groundDeep, 0x000000, .18);
+    // Ridge noise rather than a per-cell hash: the bank is a landform, and a crest height drawn
+    // independently per cell is exactly what made the old row read as a sawtooth border.
+    const bankCrest = (index) => 4 + ridgeNoise(index * .5, civ.seed * 5 + 13, .55) * 26;
+    const bankPeak = (index) => index * 96 + 24 + hash01(civ.seed * 3 + index * 29) * 48;
     surface.fillLinearGradientRect(view.from, bankTop - 4, span, height - bankTop + 4, [
-        { offset: 0, color: mixColor(bankColor, colors.groundNear, .35) },
+        { offset: 0, color: mixColor(bankColor, colors.groundNear, .5) },
+        { offset: .3, color: mixColor(bankColor, colors.groundNear, .18) },
         { offset: 1, color: bankColor },
     ], view.from, bankTop - 4, view.from, height);
-    // Bank triangle i spans [i * 96, i * 96 + 96], so it shows once its right edge clears view.from.
-    const firstBank = Math.max(0, Math.ceil((view.from - 96) / 96));
+    // One continuous crest instead of a row of triangles: a bank is a landform, and the sawtooth was
+    // the most obviously repeated shape left in the frame.
+    const firstBank = Math.max(0, Math.ceil((view.from - 96) / 96) - 1);
+    const crestLine = [];
+    const backCrest = [];
     for (let i = firstBank; i * 96 < worldWidth; i++) {
         const x = i * 96;
-        if (x > view.to)
+        if (x > view.to + 96)
             break;
-        const crest = 5 + hash01(civ.seed + i * 7) * 12;
-        surface.fillStyle(bankColor, 1).fillTriangle(x, bankTop + 2, x + 48, bankTop - crest, x + 96, bankTop + 2);
-        // A second, lower crest offset half a cell breaks the regular sawtooth the single row read as.
-        surface.fillStyle(shade(bankColor, .45), 1).fillTriangle(x + 48, bankTop + 6, x + 96, bankTop + 2 - crest * .45, x + 144, bankTop + 6);
+        if (!crestLine.length) {
+            crestLine.push([x, height]);
+            backCrest.push([x, height]);
+        }
+        crestLine.push([x, bankTop + 2 + hash01(i * 11) * 5], [bankPeak(i), bankTop - bankCrest(i)]);
+        backCrest.push([x + 40, bankTop + 7], [bankPeak(i) + 46, bankTop + 3 - bankCrest(i) * .5]);
     }
-    surface.lineStyle(1, mixColor(presentation.accent, colors.lightSpill, .5), .1 + lightLevel * .12).line(view.from, bankTop - 3, view.to, bankTop - 3);
+    if (crestLine.length > 2) {
+        const last = crestLine[crestLine.length - 1][0];
+        backCrest.push([last, height]);
+        // The second, lower row of crests behind the first, offset half a cell, so the bank has a back.
+        surface.fillStyle(shade(bankColor, .45), 1).fillPoly(backCrest);
+        crestLine.push([last, height]);
+        surface.fillStyle(bankColor, 1).fillPoly(crestLine);
+        // The rim light where the crest catches the city behind it. Weak and following the crest: a
+        // strong one turned the bank into an outlined shape rather than a landform in shadow.
+        surface.lineStyle(1, mixColor(presentation.accent, colors.lightSpill, .5), .05 + lightLevel * .07)
+            .strokePoly(crestLine.slice(1, -1));
+    }
+    // Foreground growth on the bank itself: large, near-black and sparse, so the nearest plane in the
+    // world has a scale of its own instead of being an empty gradient.
+    const firstTuft = Math.max(0, Math.floor(view.from / 148));
+    for (let tuft = firstTuft; tuft * 148 <= view.to + 148; tuft++) {
+        const roll = hash01(civ.seed * 19 + tuft * 83);
+        if (roll > .5)
+            continue;
+        const x = tuft * 148 + hash01(tuft * 41) * 110;
+        if (x < view.from - 40 || x > view.to + 40)
+            continue;
+        const size = 12 + roll * 26;
+        const rootY = bankTop + 4 + hash01(tuft * 13) * 8;
+        for (let blade = 0; blade < 3; blade++) {
+            const bladeX = x + (blade - 1) * size * .42;
+            const bladeHeight = size * (blade === 1 ? 1 : .6 + hash01(tuft * 7 + blade) * .3);
+            surface.fillStyle(shade(bankColor, .6), 1).fillTriangle(bladeX - size * .16, rootY, bladeX + (hash01(tuft + blade) - .5) * size * .4, rootY - bladeHeight, bladeX + size * .16, rootY);
+        }
+        surface.lineStyle(1, mixColor(colors.lightSpill, bankColor, .55), .1 + lightLevel * .1).line(x - size * .3, rootY - size * .55, x + size * .3, rootY - size * .75);
+    }
     // The capital silhouette and the institution landmarks are permanent structures, so they belong here
     // beside the buildings rather than being repainted 30x/s.
     drawIdentityLandmarks(surface, civ, settlements, ground, presentation.accent, view);
@@ -509,7 +793,8 @@ function drawMoodWash(surface, scene, live, view, height) {
         { offset: 1, color: live.colors.groundNear, alpha: drift * .22 },
     ], view.from, horizonY, view.from, height);
 }
-function drawParticles(surface, civ, snapshot, presentation, height, view, time, reducedMotion) {
+function drawParticles(surface, scene, snapshot, presentation, height, view, time, reducedMotion) {
+    const civ = scene.civ;
     const worldWidth = snapshot.worldWidth;
     const loopTime = reducedMotion ? 0 : time;
     const particleCount = snapshot.particleCount;
@@ -531,16 +816,24 @@ function drawParticles(surface, civ, snapshot, presentation, height, view, time,
         const radius = (.45 + hash01(i * 7) * 1.3) * depth;
         surface.fillStyle(i % 9 === 0 ? presentation.accent : 0xc9e1ff, alpha).fillCircle(posX, driftY, radius);
     }
-    // Entropy's own airborne signal: embers rising over a failing world. Bounded to twelve, so the
-    // state is legible without the particle budget being spent twice.
+    // Entropy's own airborne signal: embers rising off the civilization itself. Bounded to twelve, and
+    // anchored to the settlements rather than scattered across the world -- spread over four viewports
+    // a twelve-ember budget put two or three anywhere the player was looking, and reality failing read
+    // as nothing but a red sky.
     const embers = Math.min(12, Math.round(presentation.entropy * 14));
+    const anchors = scene.settlements;
     for (let i = 0; i < embers; i++) {
-        const x = worldWidth * hash01(civ.seed * 3 + i * 53);
+        const anchor = anchors.length ? anchors[i % anchors.length] : null;
+        const spread = anchor ? anchor.radius * 1.5 : worldWidth * .5;
+        const x = (anchor ? anchor.centerX : worldWidth * .5) + (hash01(civ.seed * 3 + i * 53) - .5) * spread * 2;
         if (x < view.from || x > view.to)
             continue;
         const rise = reducedMotion ? hash01(i * 19) : ((loopTime * .00004 + hash01(i * 19)) % 1);
         const y = height * (GROUND_RATIO - rise * .5);
-        surface.fillStyle(presentation.colors.ember, (.5 - rise * .42) * presentation.entropy).fillCircle(x + Math.sin(rise * 6 + i) * 6, y, 1.1 + (1 - rise));
+        const drift = Math.sin(rise * 6 + i) * 6;
+        surface.fillStyle(presentation.colors.ember, (.62 - rise * .5) * presentation.entropy).fillCircle(x + drift, y, 1.3 + (1 - rise) * 1.4);
+        // A short trail behind the ember, so a rising point of light reads as heat leaving the ground.
+        surface.lineStyle(1, presentation.colors.ember, (.22 - rise * .18) * presentation.entropy).line(x + drift, y, x + drift * .6, y + 9 + rise * 12);
     }
 }
 export function drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, reducedMotion) {
@@ -787,20 +1080,32 @@ function drawBannersAndConstruction(surface, scene, snapshot, presentation, grou
 function drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view, reducedMotion, glowDetail) {
     const { civ } = scene;
     const worldWidth = snapshot.worldWidth;
+    // Fractures on a lattice across the world rather than at a hash of it: scattered freely over four
+    // viewports the same budget clustered, and Stability could be read or not depending only on where
+    // the player had scrolled to.
+    const fractureSpacing = worldWidth / Math.max(1, snapshot.fractureCount);
     for (let i = 0; i < snapshot.fractureCount; i++) {
-        const x = worldWidth * hash01(civ.seed + i * 61);
+        const x = (i + .5) * fractureSpacing + (hash01(civ.seed + i * 61) - .5) * fractureSpacing * .7;
         if (x < view.from - 60 || x > view.to + 60)
             continue;
         // A fracture belongs to the world, not to the ground line: it opens in the earth and continues
         // up through the air the settlement stands in, so low Stability is legible in the skyline too.
         const drop = 24 + hash01(i * 17) * 34;
         const lean = (hash01(i * 11) - .5) * 46;
-        surface.lineStyle(1.4, 0xee6973, .24 + presentation.danger * .42).line(x, ground + 2, x + lean, ground + drop);
+        const strength = .24 + presentation.danger * .42;
+        // The mouth: a thin wedge of opened ground rather than a line drawn on top of it, plus the light
+        // coming out of it. Three points and one circle, so twelve fractures stay twelve cheap cues.
+        surface.fillStyle(0xee6973, strength * .3).fillTriangle(x - 3 - drop * .06, ground + 2, x + lean, ground + drop, x + 3 + drop * .06, ground + 2);
+        surface.fillStyle(0xee6973, strength * .16).fillCircle(x, ground + 3, 4 + drop * .09);
+        surface.lineStyle(1.4, 0xee6973, strength).line(x, ground + 2, x + lean, ground + drop);
         surface.lineStyle(1, 0xee6973, (.1 + presentation.danger * .26) * (reducedMotion ? 1 : .75 + Math.sin(animationTime * .0016 + i) * .25))
             .line(x, ground + 2, x - lean * .6, ground - 30 - hash01(i * 23) * 70);
     }
+    // Beacons, likewise on a lattice: Awareness has to be readable wherever the world is being looked
+    // at, not only where the hash happened to put its ten marks.
+    const beaconSpacing = worldWidth / Math.max(1, snapshot.beaconCount);
     for (let i = 0; i < snapshot.beaconCount; i++) {
-        const x = worldWidth * (.08 + hash01(civ.seed + i * 97) * .84);
+        const x = (i + .5) * beaconSpacing + (hash01(civ.seed + i * 97) - .5) * beaconSpacing * .6;
         if (x < view.from - 30 || x > view.to + 30)
             continue;
         const pulse = reducedMotion ? 1 : .7 + Math.sin(animationTime * .003 + i) * .3;
@@ -812,10 +1117,19 @@ function drawAnomalies(surface, scene, snapshot, presentation, ground, height, a
         surface.fillStyle(presentation.accent, .35 + presentation.awareness * .3 * pulse).fillCircle(x, y, 1.8);
         surface.lineStyle(1, presentation.accent, .16 + presentation.awareness * .25 * pulse).strokeCircle(x, y, 10 + pulse * 8);
     }
+    // Sanity's distortion in the air. On a world lattice rather than at three fixed fractions of the
+    // world: three rings spread over four viewports meant a player could scroll to where the state was
+    // not drawn at all, and a state cue that depends on where you are looking is not a state cue.
     if (presentation.sanityDistortion > .18) {
-        for (let i = 0; i < 3; i++) {
+        const spacing = 460;
+        const firstRing = Math.max(0, Math.floor(view.from / spacing) - 1);
+        for (let i = firstRing; i * spacing <= view.to + spacing; i++) {
             const wobble = reducedMotion ? 0 : Math.sin(animationTime * .0014 + i) * 9 * presentation.sanityDistortion;
-            surface.lineStyle(1, 0xb68cff, .08 + presentation.sanityDistortion * .13).strokeCircle(worldWidth * (.22 + i * .29) + wobble, height * (.28 + i * .04), 35 + i * 17);
+            const x = i * spacing + hash01(civ.seed * 7 + i * 43) * spacing * .6;
+            if (x + 90 < view.from || x - 90 > view.to)
+                continue;
+            const radius = 35 + hash01(i * 17) * 34;
+            surface.lineStyle(1, 0xb68cff, .08 + presentation.sanityDistortion * .13).strokeCircle(x + wobble, height * (.26 + hash01(i * 29) * .1), radius);
         }
     }
 }
@@ -849,7 +1163,7 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // 3. Haze, drifting between the city and the eye.
     drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
     // 4. Environmental particles and embers, in front of the haze.
-    drawParticles(surface, scene.civ, snapshot, presentation, height, view, animationTime, currentReducedMotion);
+    drawParticles(surface, scene, snapshot, presentation, height, view, animationTime, currentReducedMotion);
     // 5. Inhabitants and traffic.
     drawInhabitants(surface, scene, snapshot, presentation, ground, animationTime, view, agentFraction, currentReducedMotion);
     drawTraffic(surface, scene, snapshot, presentation, ground, height, animationTime, view, agentFraction, currentReducedMotion);
@@ -1008,9 +1322,9 @@ class WorldRenderer {
         context.clearRect(0, 0, this.width, this.height);
         // Each layer paints only the slice its own parallax puts on screen.
         context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * SKY_PARALLAX * this.dpr, 0);
-        drawSkyContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, SKY_PARALLAX));
+        drawSkyContent(surface, scene, this.width, this.height, visibleBand(worldWidth, this.width, scroll, SKY_PARALLAX));
         context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * TERRAIN_PARALLAX * this.dpr, 0);
-        drawTerrainContent(surface, scene, this.height, visibleBand(worldWidth, this.width, scroll, TERRAIN_PARALLAX));
+        drawTerrainContent(surface, scene, this.width, this.height, visibleBand(worldWidth, this.width, scroll, TERRAIN_PARALLAX));
         context.setTransform(1, 0, 0, 1, 0, 0);
         this.staticRedraws++;
     }
