@@ -2373,18 +2373,22 @@ test('the crest stipple does not crawl when the world is scrolled', () => {
   const seen = bands.map(band => ({ band, cells: cellsOf(shelfCalls(civ, 900, band, NOMINAL).calls) }));
   for (const { band, cells } of seen) assert.ok(cells.length > 0, `the band at ${band.from} drew no cells`);
 
-  // Every pair of bands must agree on every cell inside the ground they both show.
-  for (let i = 1; i < seen.length; i++) {
-    const a = seen[0], b = seen[i];
-    const overlapFrom = Math.max(a.band.from, b.band.from) + DITHER_CELL;
-    const overlapTo = Math.min(a.band.to, b.band.to) - DITHER_CELL;
-    const within = entry => entry.cells.filter(cell => {
-      const x = Number(cell.split(':')[0]);
-      return x >= overlapFrom && x <= overlapTo;
-    });
-    assert.ok(within(a).length > 0, 'the overlap must contain cells to compare');
-    assert.deepEqual(within(b), within(a),
-      `scrolling to ${b.band.from} moved the stipple inside ground both bands show`);
+  // Every *pair* of bands, not every band against the first one. Two bands can overlap in ground the
+  // first one never showed -- the 64 and 197 offsets share 64 px of crest past the end of band 0 --
+  // so a single reference band leaves real ground uncompared.
+  for (let i = 0; i < seen.length; i++) {
+    for (let j = i + 1; j < seen.length; j++) {
+      const a = seen[i], b = seen[j];
+      const overlapFrom = Math.max(a.band.from, b.band.from) + DITHER_CELL;
+      const overlapTo = Math.min(a.band.to, b.band.to) - DITHER_CELL;
+      const within = entry => entry.cells.filter(cell => {
+        const x = Number(cell.split(':')[0]);
+        return x >= overlapFrom && x <= overlapTo;
+      });
+      assert.ok(within(a).length > 0, `the overlap of ${a.band.from} and ${b.band.from} must contain cells to compare`);
+      assert.deepEqual(within(b), within(a),
+        `bands at ${a.band.from} and ${b.band.from} disagree about the stipple in ground they both show`);
+    }
   }
 
   // And the budget still holds for every one of those bands.

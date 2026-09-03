@@ -27,7 +27,7 @@ ending run runs out of unseen ones.
 
 ## v1.27.0 ground that stands in light, and a lens over the world
 
-- Two thirds of the ground was invisible. The shelves that recede from the city toward the ridges
+- Two-thirds of the ground was invisible. The shelves that recede from the city toward the ridges
   were placed across the whole lower frame, and the settlement plane is painted over that from 78%
   of the height down -- so two of the three stood entirely underneath an opaque fill, emitting their
   polygons, their mist and their crest lights on every scrolled pixel for nobody. They now compose

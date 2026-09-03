@@ -10,7 +10,7 @@
 
 Three things about the ground and the frame as a whole.
 
-1. **Two thirds of the ground substrate was invisible.** The shelves that recede from the settlement
+1. **Two-thirds of the ground substrate was invisible.** The shelves that recede from the settlement
    plane toward the ridges were placed across `height - horizon`, and the scenery layer fills the
    settlement plane opaquely from `GROUND_RATIO` (78% of the frame) down. Shelves 1 and 2 stood
    entirely underneath that fill — their polygons, their mist bands and their crest lights were
