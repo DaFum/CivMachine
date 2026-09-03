@@ -247,6 +247,15 @@ test('mobile UI hierarchy features collapsible event details, high harvest actio
   assert.match(app, /data-disclosure="strategic-overview"/);
   assert.match(app, /data-disclosure="records-intel"/);
   assert.match(app, /data-disclosure="machine-record"/);
+  // The Machine view's reference panels are closed too. The milestone register was half of that
+  // view on a fresh save -- 28 cards, none of them actionable, at 0 completed -- sitting open
+  // directly above a field manual that was already collapsed.
+  assert.match(app, /collapsedCard\('milestones'/);
+  assert.match(app, /collapsedCard\('next-discoveries'/);
+  // And its progress has to survive the collapse, or closing it hides where the player stands.
+  const register = app.slice(app.indexOf("collapsedCard('milestones'"), app.indexOf('milestone-register'));
+  assert.match(register, /milestones\.completed/, 'the summary must carry the completed count');
+  assert.match(register, /milestones\.total/, 'the summary must carry the total');
 
   // Every disclosure in the shell must render its restore attribute right beside its id. The set of
   // open ids lives in `ui/disclosure.js`, but owning the state is not the invariant that matters --

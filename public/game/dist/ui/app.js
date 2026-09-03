@@ -23,6 +23,11 @@ const reserveCostText = (entry) => fill(text().ui.app.reserveCost, { cost: fmt(e
 const harvestSummaryText = (details) => { const t = text().ui.app; return fill(details.credits === 1 ? t.harvestSummaryOne : t.harvestSummaryMany, { multiplier: details.rewardMultiplier.toFixed(2), credits: details.credits, objectiveBonus: details.objectiveCompleted ? t.objectiveBonusActive : '' }); };
 function statBar(name, value, max = 100, kind = '') { return `<div class="stat-row" data-stat="${esc(kind)}"><div><span>${esc(name)}</span><b>${value.toFixed(1)}${max !== 100 ? ` / ${max.toFixed(0)}` : ''}</b></div><div class="meter ${kind}"><i style="width:${pct(value, max)}"></i></div></div>`; }
 function card(title, body, cls = '') { return `<section class="panel ${cls}"><h3>${title}</h3>${body}</section>`; }
+// The same panel, closed by default: for the surfaces a player consults rather than acts on. The
+// register's own progress line and the discovery count move into the summary, so closing the body
+// hides the twenty-eight cards without hiding where the player stands. `title` and `status` arrive
+// escaped, as `card`'s do.
+function collapsedCard(id, title, status, body, cls = '') { return `<details class="panel ${cls}" data-disclosure="${esc(id)}"${disclosureAttr(id)}><summary><span>${title}</span>${status ? `<small>${status}</small>` : ''}</summary>${body}</details>`; }
 function sanitizeHTML(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
@@ -225,7 +230,7 @@ export function createGameUI(engine, world) {
             const done = entries.filter((entry) => entry.completed).map((entry) => `<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>${insight(entry.insight)}</small></article>`).join('');
             return `<div class="milestone-group"><span class="panel-kicker">${esc(milestoneGroupLabel(group) ?? group)}</span>${open}${done}</div>`;
         }).join('');
-        return card(esc(t.milestoneRegister), `<div class="milestone-register">${explainNote('milestones', vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary, { completed: vm.milestones.completed, total: vm.milestones.total }))}</p>${sections}</div>`, 'milestone-card');
+        return collapsedCard('milestones', esc(t.milestoneRegister), `${fmt(vm.milestones.completed)} / ${fmt(vm.milestones.total)}`, `<div class="milestone-register">${explainNote('milestones', vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary, { completed: vm.milestones.completed, total: vm.milestones.total }))}</p>${sections}</div>`, 'milestone-card');
     };
     const convergenceCard = (vm) => { if (!vm.convergence.visible)
         return ''; const t = text().ui.app; const rows = vm.convergence.requirements.map((entry) => `<li class="${entry.met ? 'met' : 'open'}"><span>${entry.met ? '\u2713' : '\u25CB'} ${esc(entry.label)}</span><b>${fmt(entry.current)} / ${fmt(entry.target)}</b></li>`).join(''); return card(esc(t.greatConvergence), `<div class="convergence-card"><p>${esc(fill(t.convergenceDescription, { targetDepth: vm.convergence.targetDepth.toFixed(1) }))}</p><ul class="convergence-requirements">${rows}</ul><button class="primary big" data-action="convergence" ${vm.convergence.unlocked ? '' : 'disabled'}>${esc(t.initiateGreatConvergence)}</button>${vm.convergence.unlocked ? '' : `<p class="start-reason" role="status">${esc(vm.convergence.reason)}</p>`}${vm.convergence.convergences ? `<small>${esc(fill(t.convergencesAchieved, { count: vm.convergence.convergences }))}</small>` : ''}</div>`, 'convergence-panel'); };
@@ -248,7 +253,7 @@ export function createGameUI(engine, world) {
       ${convergenceCard(vm)}
       ${milestoneRegister(vm)}
       ${fieldManual(vm.explain, focusClass(vm, '.field-manual'))}
-      ${previews ? card(esc(t.nextDiscoveries), `<div class="preview-grid">${previews}</div>`) : ''}
+      ${previews ? collapsedCard('next-discoveries', esc(t.nextDiscoveries), String(vm.previews.length), `<div class="preview-grid">${previews}</div>`) : ''}
       <section class="prestige-row">${vm.systems.universePrestige ? `<button data-action="universe" ${vm.canConsumeUniverse ? '' : 'disabled'}>${esc(t.consumeUniverse)} <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} ${esc(t.metaCultivationCredits)}</span></button>` : ''}${vm.systems.multiversePrestige ? `<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse ? '' : 'disabled'}>${esc(t.collapseMultiverse)} <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>` : ''}</section>`);
     }
     const rewardText = (key, details) => `${resourceShort()[key]} ${key === 'causal_mass' || engine.resourceDiscovered(key) ? fmt(details.rewards[key]) : '???'}`;
