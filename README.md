@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.23.0
+# Reality Consumption Engine — App Edition v1.24.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,30 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.24.0 a skyline with hierarchy, and a path you can see
+
+- The skyline budget became a knee instead of a wall. A hard clamp put a quarter of a portrait world's
+  structures at exactly the same height, so the tallest part of every city sat on one horizontal line;
+  heights above the knee now approach the ceiling without reaching it, and the tallest plot is still
+  the tallest building.
+- A structure's footprint follows its height. The plots that reached the ceiling were also the
+  narrowest, and a 37 px wide, 558 px tall slab reads as a mast; only a tether and a launch mast stay
+  slender now.
+- The dominant path builds its own skyline. Every tall civic and residential solid is finished the way
+  its civilization ends things — a lit core, linked roof nodes, an offset ring, a filed block, an
+  absence — so two paths differ in geometry rather than only in hue.
+- The foreground bank is a landform. It alternated a trough and a spike on a fixed lattice, which is a
+  sawtooth on the plane closest to the eye; it is now a two-octave ridge sampled as one profile.
+- The sky carries weather. A slow atmospheric front on the world lattice means panning four viewports
+  no longer shows the same air four times.
+- The window budget and the strain lines are shared across the settlements on screen instead of spent
+  from the left, so a degraded tier thins the city's lights everywhere rather than leaving the right
+  half of the viewport dark.
+- A phase change lights the settlements actually on screen, rather than three bars at fixed fractions
+  of the frame.
+- The monument is an obelisk on a plinth, the orbital anchor a tapering buttressed tether, and an
+  orbital craft a hull with a track — the three shapes that read as repeated spikes and stray pixels.
 
 ## v1.23.0 air, distance and the shape of a failing world
 

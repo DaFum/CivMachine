@@ -55,6 +55,9 @@ export const SPILL_MIN_RADIUS = 50;
 export const SPILL_CROWN_FACTOR = .8;
 // The lattice the near field's furrows and props sit on.
 const FIELD_CELL = 84;
+// The lattice the foreground bank's profile is sampled on. Fine enough that the crest reads as a
+// landform rather than as a repeated shape, coarse enough that a scenery strip redraw stays cheap.
+const BANK_STEP = 32;
 /**
  * How far into the world a parallax layer can ever be scrolled. A layer at factor `f` shows world
  * coordinates `scroll * f` to `scroll * f + width`, and the scroll itself stops at
@@ -112,6 +115,10 @@ function factionColor(scene, settlement) {
 const MAX_CLOUD_BANKS = 12;
 /** Widest bank, so the sky's culling can be stated in terms of the design. */
 const CLOUD_MAX_WIDTH = 300;
+// The lattice the sky's atmospheric front is sampled on. Coarse enough that the whole front is one
+// polygon of a couple of dozen points however wide the viewport, fine enough that its edge reads as
+// a curve rather than as a run of straight segments.
+const AIR_FRONT_STEP = 110;
 /**
  * Cloud strata: three decks of soft, wide silhouette between the zenith and the ridgeline. This is
  * the layer the sky was missing -- a four-stop gradient with stars in it is a beautiful *surface*,
@@ -214,6 +221,30 @@ function drawSkyContent(surface, scene, width, height, view) {
         { offset: 0, color: shade(colors.skyTop, .55), alpha: .5 },
         { offset: 1, color: shade(colors.skyTop, .55), alpha: 0 },
     ], view.from, 0, view.from, height * .3);
+    // 2b. Weather across the world, rather than one sky repeated along it. The gradient above is
+    // identical at every world position, so panning four viewports showed exactly the same air. This is
+    // a slow atmospheric front laid over it, and the variation is deliberately in the front's *shape*:
+    // a per-column alpha would have to step somewhere, and the open sky is the one surface in the frame
+    // with nothing to break a vertical seam up. One polygon under one vertical gradient, its upper edge
+    // a low-frequency ridge on the world lattice, so a scroll moves through the weather rather than
+    // carrying it along.
+    const frontBase = horizon - height * .02;
+    const frontFloor = height * .1;
+    const frontColor = mixColor(colors.haze, colors.skyHorizon, .5 + presentation.signals.activity * .2);
+    const firstFront = Math.floor(view.from / AIR_FRONT_STEP) - 1;
+    const lastFront = Math.ceil(view.to / AIR_FRONT_STEP) + 1;
+    const frontEdge = [[firstFront * AIR_FRONT_STEP, frontBase]];
+    for (let i = firstFront; i <= lastFront; i++) {
+        const x = i * AIR_FRONT_STEP;
+        const lift = ridgeNoise(x / 780, civ.seed * 19 + 3, .32);
+        frontEdge.push([x, frontBase - (frontBase - frontFloor) * (.2 + lift * .74)]);
+    }
+    frontEdge.push([lastFront * AIR_FRONT_STEP, frontBase]);
+    surface.fillLinearGradientPoly(frontEdge, [
+        { offset: 0, color: frontColor, alpha: 0 },
+        { offset: .5, color: frontColor, alpha: .022 + presentation.sanityDistortion * .012 },
+        { offset: 1, color: frontColor, alpha: .05 + presentation.entropy * .02 },
+    ], view.from, frontFloor, view.from, frontBase);
     // 3. A deterministic star field. Placed on the world lattice rather than on screen, so it drifts
     // with the sky's parallax and a scroll reveals new sky instead of the same stars.
     const starCells = Math.max(0, Math.floor((view.to - view.from) / 46) + 1);
@@ -583,6 +614,10 @@ export function drawSettlementContent(surface, scene, height, view) {
         return;
     const colors = presentation.colors;
     const lightLevel = presentation.lightLevel;
+    // What the dominant path builds with. Read once for the whole layer, and only from a path the
+    // civilization has actually settled into: a leading affinity is not yet an architecture.
+    const identity = pathIdentity(civ);
+    const skylineCrown = identity.tier >= 2 && identity.crown !== 'none' ? identity.crown : undefined;
     // The settlement plane, graded rather than flat, with the verge right under the buildings catching
     // the light the city puts out.
     surface.fillLinearGradientRect(view.from, ground - 6, span, height - ground + 6, [
@@ -674,6 +709,7 @@ export function drawSettlementContent(surface, scene, height, view) {
                 // The same light the spill, the lamps and the road reflections use, so a chimney and a
                 // launch pad belong to this settlement's night rather than to a palette of their own.
                 lightColor: colors.lightSpill,
+                crown: skylineCrown,
             });
         }
         // A faction-colored plinth marks who holds the settlement even in the cached layer.
@@ -730,30 +766,38 @@ export function drawSettlementContent(surface, scene, height, view) {
     // it -- so the strip below the road frames the world instead of cutting a hole in it.
     const bankTop = height - Math.max(14, (height - ground) * .34);
     const bankColor = mixColor(colors.groundDeep, 0x000000, .18);
-    // Ridge noise rather than a per-cell hash: the bank is a landform, and a crest height drawn
-    // independently per cell is exactly what made the old row read as a sawtooth border.
-    const bankCrest = (index) => 4 + ridgeNoise(index * .5, civ.seed * 5 + 13, .55) * 26;
-    const bankPeak = (index) => index * 96 + 24 + hash01(civ.seed * 3 + index * 29) * 48;
     surface.fillLinearGradientRect(view.from, bankTop - 4, span, height - bankTop + 4, [
         { offset: 0, color: mixColor(bankColor, colors.groundNear, .5) },
         { offset: .3, color: mixColor(bankColor, colors.groundNear, .18) },
         { offset: 1, color: bankColor },
     ], view.from, bankTop - 4, view.from, height);
-    // One continuous crest instead of a row of triangles: a bank is a landform, and the sawtooth was
-    // the most obviously repeated shape left in the frame.
-    const firstBank = Math.max(0, Math.ceil((view.from - 96) / 96) - 1);
+    // A sampled profile rather than one trough and one spike per cell. The previous crest alternated
+    // those two on a fixed 96 px lattice, which is a sawtooth however the spike height is hashed -- and
+    // it was the most obviously repeated shape left in the frame, on the plane closest to the eye.
+    // Sampling a two-octave ridge on a finer lattice makes the same two polygons a landform instead:
+    // long swells carrying short detail, with no forced return to the baseline between them. The
+    // lattice is fixed in world space, so a strip redraw emits exactly the points a full redraw does.
+    const bankProfile = (index) => {
+        const worldX = index * BANK_STEP;
+        const swell = ridgeNoise(worldX / 430, civ.seed * 5 + 13, .22);
+        const detail = ridgeNoise(worldX / 116 + 7.3, civ.seed * 9 + 41, .55);
+        return 3 + swell * 22 + detail * 11;
+    };
+    const firstBank = Math.max(0, Math.floor((view.from - BANK_STEP) / BANK_STEP) - 1);
     const crestLine = [];
     const backCrest = [];
-    for (let i = firstBank; i * 96 < worldWidth; i++) {
-        const x = i * 96;
-        if (x > view.to + 96)
+    for (let i = firstBank; i * BANK_STEP < worldWidth + BANK_STEP; i++) {
+        const x = i * BANK_STEP;
+        if (x > view.to + BANK_STEP * 2)
             break;
         if (!crestLine.length) {
             crestLine.push([x, height]);
             backCrest.push([x, height]);
         }
-        crestLine.push([x, bankTop + 2 + hash01(i * 11) * 5], [bankPeak(i), bankTop - bankCrest(i)]);
-        backCrest.push([x + 40, bankTop + 7], [bankPeak(i) + 46, bankTop + 3 - bankCrest(i) * .5]);
+        crestLine.push([x, bankTop - bankProfile(i)]);
+        // The back row is the same landform seen from further away: half the relief, a step behind, and
+        // sampled half a cell across so its crests never line up with the ones in front of them.
+        backCrest.push([x, bankTop + 6 - bankProfile(i + 1) * .45]);
     }
     if (crestLine.length > 2) {
         const last = crestLine[crestLine.length - 1][0];
@@ -936,23 +980,32 @@ export function drawHazeBands(surface, snapshot, presentation, width, height, an
  * road. `windowFraction` is the adaptive-quality lever -- a slow device animates fewer windows and
  * keeps every one of them lit, because a dark city is a different world, not a cheaper one.
  */
-function drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail, reducedMotion) {
+export function drawCityLights(surface, scene, snapshot, presentation, ground, animationTime, view, windowFraction, glowDetail, reducedMotion) {
     if (snapshot.stage === 0)
         return;
     const { civ, settlements } = scene;
     const lightLevel = presentation.lightLevel;
     const windowColor = presentation.colors.window;
     const spill = presentation.colors.lightSpill;
-    let lit = 0;
     const budget = Math.max(6, Math.round(46 * Math.max(.2, windowFraction)));
-    for (const settlement of settlements) {
-        if (settlement.centerX - settlement.radius > view.to || settlement.centerX + settlement.radius < view.from)
+    // The budget is shared out over the settlements actually on screen, and strided inside each one,
+    // rather than spent by a single counter walking the world from left to right. That counter made
+    // the lighting a function of where a settlement sat in the world: the leftmost one on screen took
+    // the whole budget and everything to the right of it stayed dark, which at a degraded tier -- where
+    // the budget is fourteen windows -- left most of the visible city unlit. The stride is what keeps
+    // the share spread across a settlement instead of crowding into its first few plots.
+    const onScreen = settlements.filter(settlement => settlement.centerX - settlement.radius <= view.to && settlement.centerX + settlement.radius >= view.from);
+    const share = Math.max(2, Math.floor(budget / Math.max(1, onScreen.length)));
+    for (const settlement of onScreen) {
+        const inView = settlement.structures.filter(structure => structure.x + structure.width >= view.from && structure.x - structure.width <= view.to);
+        if (!inView.length)
             continue;
-        for (const structure of settlement.structures) {
-            if (lit >= budget)
+        const stride = Math.max(1, Math.ceil(inView.length / share));
+        let lit = 0;
+        for (let index = 0; index < inView.length; index += stride) {
+            const structure = inView[index];
+            if (lit >= share)
                 break;
-            if (structure.x + structure.width < view.from || structure.x - structure.width > view.to)
-                continue;
             const effGround = structureEffectiveGround(ground, structure.depthLane);
             const phase = (structure.lightPhase ?? hash01(civ.seed + structure.x)) + settlement.lightPhase;
             // A slow sine on a per-structure phase, interpolated rather than switched: no two buildings
@@ -977,8 +1030,6 @@ function drawCityLights(surface, scene, snapshot, presentation, ground, animatio
             }
             lit++;
         }
-        if (lit >= budget)
-            break;
     }
     // Street lamps on the road lattice: the light that ties the settlements to the ground plane.
     if (snapshot.stage >= 1) {
@@ -1064,9 +1115,14 @@ function drawTraffic(surface, scene, snapshot, presentation, ground, height, ani
     for (let i = 0; i < maxOrbital && i < plan.orbital.length; i++) {
         const orbital = plan.orbital[i];
         const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
-        if (x < view.from || x > view.to)
+        if (x < view.from - 24 || x > view.to)
             continue;
-        surface.lineStyle(1, presentation.accent, .44).strokeRect(x - 3, height * orbital.altitude - 2, 6, 4);
+        // A hull with a lit face and the track behind it. An empty 6x4 outline read as a stray pixel in
+        // the sky rather than as something in orbit -- the one mark in the frame that looked like damage.
+        const y = height * orbital.altitude;
+        surface.fillStyle(shade(presentation.accent, .4), .66).fillRect(x - 4, y - 1.5, 8, 3);
+        surface.fillStyle(tint(presentation.accent, .45), .85).fillRect(x + 2, y - 1.5, 2, 3);
+        surface.lineStyle(1, presentation.accent, .16).line(x - 22, y, x - 5, y);
     }
     // Launches rise from an actual pad.
     for (const launch of plan.launches) {
@@ -1196,17 +1252,17 @@ function drawDynamicContent(surface, scene, snapshot, presentation, width, heigh
     // Stability's own channel: visible strain on the buildings themselves. Bounded to twelve visible
     // structures so a low-Stability world costs a fixed handful of lines rather than one per building.
     if (presentation.signals.structuralStrain > .18) {
-        let drawn = 0;
-        for (const structure of scene.structures) {
-            if (drawn >= 12)
-                break;
-            if (structure.x < view.from - 20 || structure.x > view.to + 20)
-                continue;
+        // Strided across what is on screen, not the first twelve of it. Walking the world in order put
+        // every strain line on the leftmost buildings and left the right half of the viewport looking
+        // sound, so low Stability was legible or not depending on where the player had scrolled to.
+        const strained = scene.structures.filter(structure => structure.x >= view.from - 20 && structure.x <= view.to + 20);
+        const stride = Math.max(1, Math.ceil(strained.length / 12));
+        for (let index = 0, drawn = 0; index < strained.length && drawn < 12; index += stride, drawn++) {
+            const structure = strained[index];
             const effGround = structureEffectiveGround(ground, structure.depthLane);
             const top = effGround - structure.height;
             surface.lineStyle(1, 0xee6973, .08 + presentation.signals.structuralStrain * .18)
                 .line(structure.x - structure.width * .18, top + structure.height * .25, structure.x + structure.width * .12, top + structure.height * .42);
-            drawn++;
         }
     }
     // 3. Haze, drifting between the city and the eye.
@@ -1441,7 +1497,20 @@ class WorldRenderer {
         context.setTransform(this.dpr, 0, 0, this.dpr, -scroll * this.dpr, 0);
         drawDynamicContent(surface, scene, dynamicSnapshot, dynamicPresentation, this.width, this.height, time, tracker, visibleBand(scene.snapshot.worldWidth, this.width, scroll, 1), tier);
         context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion);
+        // The cue is drawn in screen space, so the settlements it acknowledges are handed over already
+        // resolved there: a phase change lights the city that is actually on screen rather than three
+        // bars at fixed fractions of the frame.
+        const ground = this.height * GROUND_RATIO;
+        const anchors = [];
+        for (const settlement of scene.settlements) {
+            const x = settlement.centerX - scroll;
+            if (x < -80 || x > this.width + 80)
+                continue;
+            anchors.push({ x, crown: settlementCrown(settlement, ground) });
+            if (anchors.length >= 3)
+                break;
+        }
+        drawPhaseTransitionImpact(surface, phase.from, phase.to, phase.start, time, this.width, this.height, dynamicPresentation.accent, currentReducedMotion, anchors);
         const feedback = engine.worldImpulse;
         if (feedback && feedback.sequence !== this.feedbackSequence) {
             this.feedbackSequence = feedback.sequence;
