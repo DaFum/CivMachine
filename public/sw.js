@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.26.0';
+const CACHE_NAME = 'rce-app-v1.27.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -27,6 +27,7 @@ const APP_ASSETS = [
   '/game/dist/render/identity.js',
   '/game/dist/render/settlements.js',
   '/game/dist/render/structures.js',
+  '/game/dist/render/substrate.js',
   '/game/dist/render/agents.js',
   '/game/dist/render/construction.js',
   '/game/dist/render/consequence-presentation.js',

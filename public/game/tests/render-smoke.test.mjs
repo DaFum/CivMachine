@@ -1433,6 +1433,55 @@ test('a context that cannot squash still gets the light, as a circle', async () 
   assert.deepEqual(record[0].slice(0, 3), [200, 100, 80], 'the fallback keeps the horizontal radius');
 });
 
+test('the vignette is written on a band change and never on a tick', async () => {
+  // The lens over the world is a CSS overlay rather than a canvas pass, because it has to darken all
+  // three layers and a composite pass inside one of them cannot reach the others. That makes its
+  // strength a DOM write, and a DOM write per frame is the invariant this renderer exists under: it
+  // is set inside the structural-rebuild branch, so a ticking Attention value never touches it and
+  // the strength moves in the same bands the cached layers are rebuilt on.
+  const writes = [];
+  let frame = null;
+  const civ = developedCivilization(5151);
+  civ.stats.attention = 40;
+  await withStubbedDom(() => {
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.document = { createElement: () => ({ className: '', style: {}, width: 0, height: 0, getContext: () => trackingContext([]), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }) };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = {
+      appendChild: () => {}, replaceChildren: () => {},
+      getBoundingClientRect: () => ({ width: 900, height: 520 }),
+      style: { setProperty: (name, value) => writes.push([name, value]) },
+    };
+    const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?vignette=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+
+    frame(100);
+    assert.equal(writes.length, 1, 'the first scene must set the vignette once');
+    assert.equal(writes[0][0], '--world-vignette');
+    const first = Number(writes[0][1]);
+    assert.ok(first > 0 && first <= 1, `the vignette strength left 0..1 at ${writes[0][1]}`);
+
+    // A tick inside the band: many frames, no writes.
+    for (const [step, attention] of [[200, 41], [300, 44], [400, 49]]) {
+      civ.stats.attention = attention;
+      frame(step);
+    }
+    assert.equal(writes.length, 1, `a ticking Attention wrote the vignette ${writes.length - 1} extra times`);
+
+    // Crossing a band: exactly one more write, and a deeper vignette.
+    civ.stats.attention = 88;
+    frame(500);
+    assert.equal(writes.length, 2, 'crossing a band must set the vignette once');
+    assert.ok(Number(writes[1][1]) > first, `the vignette did not deepen: ${writes[1][1]} against ${writes[0][1]}`);
+
+    controller.destroy();
+  });
+});
+
 test('the cached sky and terrain stay cheap enough to repaint on every scrolled pixel', async () => {
   // The whole reason sky and terrain are simply repainted rather than blitted is that they are
   // small. Clouds, a distant skyline, ground shelves and entropy fissures all live here now, and

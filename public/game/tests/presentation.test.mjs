@@ -8,7 +8,8 @@ import { structuralWorldKey, worldPresentation } from '../dist/render/world-pres
 import { consequenceImpact, drawConsequenceImpact, drawPhaseTransitionImpact } from '../dist/render/consequence-presentation.js';
 import { CivilizationPaths, PATH_IDS } from '../dist/game/paths.js';
 import { LOCALIZATION } from '../dist/data/localization.js';
-import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS, valueNoise, ridgeNoise, shade, tint } from '../dist/render/primitives.js';
+import { bayerThreshold, hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_SIGILS, valueNoise, ridgeNoise, shade, tint } from '../dist/render/primitives.js';
+import { CONTOUR_STEP, DITHER_CELL, drawGroundShelves, LIGHT_FROM_X, LIGHT_FROM_Y, MAX_DITHER_CELLS, ridgePoints, SHELF_COUNT, SHELF_STEP } from '../dist/render/substrate.js';
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
@@ -745,7 +746,7 @@ test('world module no longer carries its own layout or hash helpers', async () =
 
 test('every render module is precached by the service worker', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality', 'routes'];
+  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality', 'routes', 'substrate'];
   for (const name of modules) {
     assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
   }
@@ -2234,4 +2235,162 @@ test('a degraded tier keeps the flow\'s direction, and reduced motion keeps it t
     assert.equal(mark.coreX, mark.headX);
     assert.equal(mark.coreY, mark.headY);
   }
+});
+
+test('the ordered dither threshold fills a cell block evenly rather than in clumps', () => {
+  // The ordered form of the deterministic sampling vocabulary, beside `hash01` and `valueNoise`.
+  // What makes it a *dither* rather than a hash is that a rising coverage adds cells in a spread
+  // sequence: every threshold is distinct, so no two cells switch on together and the raster never
+  // clumps the way a hashed mask does.
+  const block = [];
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) block.push(bayerThreshold(x, y));
+  assert.equal(new Set(block).size, 16, 'the sixteen thresholds must all differ');
+  for (const value of block) assert.ok(value > 0 && value < 1, `threshold ${value} left 0..1`);
+
+  // Monotone and evenly spread: raising the coverage by a sixteenth lights exactly one more cell.
+  let previous = 0;
+  for (let step = 1; step <= 16; step++) {
+    const lit = block.filter(threshold => threshold <= step / 16).length;
+    assert.equal(lit, step, `coverage ${step}/16 lit ${lit} cells`);
+    assert.ok(lit > previous);
+    previous = lit;
+  }
+  // And the lit cells are spread over the block rather than gathered in one corner: at half
+  // coverage each row and each column carries some of them.
+  for (let row = 0; row < 4; row++) {
+    const inRow = [0, 1, 2, 3].filter(x => bayerThreshold(x, row) <= .5).length;
+    const inColumn = [0, 1, 2, 3].filter(y => bayerThreshold(row, y) <= .5).length;
+    assert.ok(inRow >= 1 && inRow <= 3, `row ${row} took ${inRow} of four cells at half coverage`);
+    assert.ok(inColumn >= 1 && inColumn <= 3, `column ${row} took ${inColumn} of four cells`);
+  }
+  // Periodic in both axes and safe for the negative side of the world.
+  assert.equal(bayerThreshold(5, 6), bayerThreshold(1, 2));
+  assert.equal(bayerThreshold(-3, -2), bayerThreshold(1, 2));
+  assert.equal(bayerThreshold(2.7, 1.4), bayerThreshold(2, 1));
+});
+
+// Every vertical extent the substrate emits, so a pass can be checked against the plane it stands on.
+function verticalExtents(calls) {
+  const extents = [];
+  for (const [name, ...args] of calls) {
+    if (name === 'fillRect' || name === 'strokeRect' || name === 'fillLinearGradientRect') extents.push([args[1], args[1] + args[3]]);
+    else if (name === 'fillPoly' || name === 'strokePoly' || name === 'fillLinearGradientPoly') {
+      const ys = args[0].map(([, y]) => y);
+      extents.push([Math.min(...ys), Math.max(...ys)]);
+    } else if (name === 'line') extents.push([Math.min(args[1], args[3]), Math.max(args[1], args[3])]);
+    else if (name === 'fillCircle' || name === 'strokeCircle') extents.push([args[1] - args[2], args[1] + args[2]]);
+    else if (name === 'fillRadialGlow') extents.push([args[1] - args[3], args[1] + args[3]]);
+    else if (name === 'fillEllipseGlow') extents.push([args[1] - args[3], args[1] + args[3]]);
+  }
+  return extents;
+}
+
+function shelfCalls(civ, height, view, nominalSpan = 900 + 640) {
+  const HORIZON = height * .69;
+  const plane = height * .78 - 6;
+  const snapshot = worldSnapshot(civ, 900);
+  const calls = [];
+  drawGroundShelves(recordingSurface(calls), worldPresentation(civ), civ.seed, snapshot.worldWidth, HORIZON, plane, view, nominalSpan);
+  return { calls, plane, horizon: HORIZON, worldWidth: snapshot.worldWidth };
+}
+
+test('the ground substrate stays in the band between the ridges and the settlement plane', () => {
+  // The bug this pins: the shelves were placed across `height - horizon`, and the scenery layer
+  // paints the settlement plane over this one opaquely from 78% of the frame down -- so two of the
+  // three shelves, their mist and their crests were emitted on every scrolled pixel underneath an
+  // opaque fill. A cue nobody can see is not a cue, and on the layer that repaints per scrolled
+  // pixel it is not a cheap mistake either.
+  const civ = lateCiv(9101);
+  civ.development = 1200; civ.era = 3;
+  for (const height of [520, 900, 760]) {
+    const { calls, plane, horizon } = shelfCalls(civ, height, { from: 0, to: 900 });
+    const extents = verticalExtents(calls);
+    assert.ok(extents.length >= SHELF_COUNT * 3, `only ${extents.length} substrate primitives at height ${height}`);
+    for (const [, bottom] of extents) {
+      assert.ok(bottom <= plane + .001, `the substrate reached ${bottom.toFixed(1)} under a plane at ${plane.toFixed(1)}`);
+    }
+    // Upward it may reach into the foothills -- the mist a shelf stands in pools at their feet, which
+    // is where atmospheric perspective belongs -- but no further than the foothills themselves go,
+    // or the ground substrate is painting in the sky. That ceiling is the near ridge's own amplitude.
+    const ceiling = horizon - Math.min(height * .07, 46);
+    for (const [top] of extents) assert.ok(top >= ceiling, `the substrate climbed to ${top.toFixed(1)}, past a foothill ceiling of ${ceiling.toFixed(1)}`);
+  }
+});
+
+test('the substrate is deterministic, lit from one direction and bounded in its stipple', () => {
+  const civ = lateCiv(9201);
+  civ.development = 1200; civ.era = 3;
+  const view = { from: 0, to: 1440 };
+  const first = shelfCalls(civ, 900, view);
+  const second = shelfCalls(civ, 900, view);
+  assert.deepEqual(second.calls, first.calls, 'the same world must draw the same ground');
+  assert.notDeepEqual(shelfCalls(lateCiv(9202), 900, view).calls, first.calls, 'a different seed must lay out different ground');
+
+  // The stipple: the crest dissolve is bounded by a count, and it is spent on one shelf.
+  const cells = first.calls.filter(([name, , , w, h]) => name === 'fillRect' && w === DITHER_CELL && h === DITHER_CELL);
+  assert.ok(cells.length > 0, 'the crest dissolve drew nothing');
+  assert.ok(cells.length <= MAX_DITHER_CELLS, `${cells.length} dither cells against a budget of ${MAX_DITHER_CELLS}`);
+  for (const [, x] of cells) assert.equal(x % DITHER_CELL, 0, `a dither cell landed off the lattice at ${x}`);
+
+  // The light has a direction: the crest rim is displaced toward it and the shadow away from it.
+  assert.ok(LIGHT_FROM_X < 0 && LIGHT_FROM_Y < 0, 'the light comes from the upper left');
+  const strokes = first.calls.filter(([name, points]) => name === 'strokePoly' && Array.isArray(points) && points.length > 3);
+  assert.ok(strokes.length >= SHELF_COUNT * 2, `expected a crest and a contour per shelf, got ${strokes.length} polylines`);
+  // Contours sit inside the form: below every crest, above every base.
+  const bases = first.calls
+    .filter(([name, points]) => name === 'fillLinearGradientPoly' && Array.isArray(points))
+    .map(([, points]) => Math.max(...points.map(([, y]) => y)));
+  assert.equal(bases.length, SHELF_COUNT, `${bases.length} shelf fills for ${SHELF_COUNT} shelves`);
+  for (const [, points] of strokes) {
+    const lowest = Math.max(...points.map(([, y]) => y));
+    assert.ok(bases.some(base => lowest <= base + .001), 'a polyline dropped below every shelf base');
+  }
+  // The lattices are what they say they are, so a strip redraw and a full redraw agree.
+  assert.equal(CONTOUR_STEP % SHELF_STEP, 0, 'the contour lattice must be a multiple of the silhouette lattice');
+  const profile = ridgePoints(view, first.worldWidth, 500, SHELF_STEP, 20, 400, civ.seed, .38);
+  assert.deepEqual(ridgePoints({ from: 200, to: 400 }, first.worldWidth, 500, SHELF_STEP, 20, 400, civ.seed, .38)
+    .filter(([x]) => x >= 300 && x <= 350),
+    profile.filter(([x]) => x >= 300 && x <= 350), 'the ridge sampler moved with the band');
+});
+
+test('the crest stipple does not crawl when the world is scrolled', () => {
+  // The bug this pins: the stride walked from `view.from`, so a scroll of one cell moved *every*
+  // chosen column by one cell. Quantizing each cell's x to the lattice is not the same as choosing
+  // the cells by lattice index -- and the static layer repaints on every scrolled pixel, so the
+  // stipple crawled along a ridge that is itself world-anchored. The comb now runs on absolute
+  // indices with a period sized from the nominal band, so which cells exist is a fact about the
+  // world rather than about where the player has scrolled to.
+  const civ = lateCiv(9301);
+  civ.development = 1200; civ.era = 3;
+  const NOMINAL = 900 + 640;
+  const cellsOf = calls => calls
+    .filter(([name, , , w, h]) => name === 'fillRect' && w === DITHER_CELL && h === DITHER_CELL)
+    .map(([, x, y]) => `${x}:${y.toFixed(3)}`);
+
+  // Scroll offsets deliberately including one that is not a multiple of the cell: the offset the
+  // old code needed to shift every column, and one that leaves the lattice phase alone.
+  const bands = [0, 5, 8, 13, 64, 197].map(offset => ({ from: offset, to: offset + NOMINAL }));
+  const seen = bands.map(band => ({ band, cells: cellsOf(shelfCalls(civ, 900, band, NOMINAL).calls) }));
+  for (const { band, cells } of seen) assert.ok(cells.length > 0, `the band at ${band.from} drew no cells`);
+
+  // Every *pair* of bands, not every band against the first one. Two bands can overlap in ground the
+  // first one never showed -- the 64 and 197 offsets share 64 px of crest past the end of band 0 --
+  // so a single reference band leaves real ground uncompared.
+  for (let i = 0; i < seen.length; i++) {
+    for (let j = i + 1; j < seen.length; j++) {
+      const a = seen[i], b = seen[j];
+      const overlapFrom = Math.max(a.band.from, b.band.from) + DITHER_CELL;
+      const overlapTo = Math.min(a.band.to, b.band.to) - DITHER_CELL;
+      const within = entry => entry.cells.filter(cell => {
+        const x = Number(cell.split(':')[0]);
+        return x >= overlapFrom && x <= overlapTo;
+      });
+      assert.ok(within(a).length > 0, `the overlap of ${a.band.from} and ${b.band.from} must contain cells to compare`);
+      assert.deepEqual(within(b), within(a),
+        `bands at ${a.band.from} and ${b.band.from} disagree about the stipple in ground they both show`);
+    }
+  }
+
+  // And the budget still holds for every one of those bands.
+  for (const { cells } of seen) assert.ok(cells.length <= MAX_DITHER_CELLS, `${cells.length} cells over the budget`);
 });

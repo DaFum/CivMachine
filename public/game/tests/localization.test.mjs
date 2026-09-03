@@ -352,6 +352,7 @@ const AUDITED_SOURCE_FILES = [
   'game/upgrade-balance.ts', 'game/world-memory.ts', 'main.ts', 'render/agents.ts', 'render/consequence-presentation.ts',
   'render/construction.ts', 'render/draw-surface.ts', 'render/factions.ts', 'render/identity.ts', 'render/primitives.ts',
   'render/quality.ts', 'render/routes.ts', 'render/settlements.ts', 'render/species.ts', 'render/structures.ts',
+  'render/substrate.ts',
   'render/world-memory.ts',
   'render/world-model.ts', 'render/world-presentation.ts', 'render/world.ts', 'ui/app.ts',
   'ui/disclosure.ts', 'ui/format.ts', 'ui/guide-view.ts', 'ui/report-view.ts', 'ui/tutorial-view.ts',

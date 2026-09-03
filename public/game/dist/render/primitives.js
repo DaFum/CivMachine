@@ -73,6 +73,24 @@ export function spreadPosition(span, index, offset) {
     const shifted = (position + offset) % 1;
     return span * (shifted < 0 ? shifted + 1 : shifted);
 }
+/**
+ * The 4x4 ordered (Bayer) dither threshold for a lattice cell, in 0..1. Where `hash01` is the point
+ * sample, `valueNoise` its smooth form and `spreadPosition` its spread form, this is its *ordered*
+ * form: the sixteen thresholds are arranged so that a rising coverage value fills a cell block in a
+ * fixed, evenly distributed sequence rather than in clumps. That is what dissolves a hard boundary
+ * between two fills into a graded raster -- and it does it without a per-pixel loop, an `ImageData`
+ * round trip or a `CanvasPattern`, none of which the `DrawSurface` vocabulary has and none of which
+ * a recording test could see.
+ *
+ * Deterministic in the cell, not in a seed: two cells of the same world lattice always answer the
+ * same way, so a scenery strip redraw and a full redraw of the same slice agree.
+ */
+const BAYER_4X4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+export function bayerThreshold(cellX, cellY) {
+    const x = ((Math.trunc(cellX) % 4) + 4) % 4;
+    const y = ((Math.trunc(cellY) % 4) + 4) % 4;
+    return (BAYER_4X4[y * 4 + x] + .5) / 16;
+}
 /** `color` pushed toward black. The single name for the darker plane of a 2.5D solid. */
 export function shade(color, amount) { return mixColor(color, 0x000000, amount); }
 /** `color` pushed toward white. The single name for a rim light or a lit roof edge. */

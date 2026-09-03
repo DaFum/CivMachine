@@ -15,7 +15,8 @@ tests can record primitives. Visuals must derive from `world-model.ts` and `worl
 Hard budgets the tests enforce: 150 particles, 9 haze bands, 12 fractures, 10 beacons, 120 planned
 agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outskirt props, 12 cloud
 banks, 3 reality shears, 5 entropy fissures, 8 trade routes, 18 route flow marks, 48 settlement
-micro-lights, 3 animated identity frames, and device pixel ratio capped at 2. The sky-and-
+micro-lights, 3 animated identity frames, 3 ground shelves, 64 dither cells, and device pixel ratio
+capped at 2. The sky-and-
 terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
 pixel, and the animated layer under 1100 — measured at 830–861 across the pinned reference worlds,
 about ninety more than before the route flow, the micro-lights and the identity frames. The ceiling
@@ -26,9 +27,12 @@ scars, the current impact or a flow mark's leading end — and must never touch 
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
 the point sample, `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
-profile is built from those, never from a noise library — and `spreadPosition` beside them is its
+profile is built from those, never from a noise library — `spreadPosition` beside them is its
 spread form, for a run of marks that has to cover the world without moving when there are more of
-them.
+them, and `bayerThreshold` is its **ordered** form, for dissolving a boundary into a raster that
+fills evenly instead of clumping. The ordered form is the only one of the four that takes no seed:
+it answers by lattice cell, so a strip redraw and a full redraw of the same slice pick the same
+cells.
 
 A cue on a **cached** layer is gated on a *band*, never on a raw stat. `structuralWorldKey` rebuilds
 those layers on the bands, so a threshold sitting inside one — entropy at 55, say, inside the 50–74
@@ -55,6 +59,24 @@ answer either: those counts follow live stats, so the frame Stability opens a th
 lattice moves the other two from the quarters of the world to its sixths and every mark on screen
 jumps. `spreadPosition` in `primitives.ts` is the placement that is both — every prefix of it is
 spread evenly, and mark `i` sits where it sat however many marks there turn out to be.
+
+## A layer is bounded above it as well as beside it
+
+Culling answers *where in the world* a layer paints. It says nothing about what is painted **over**
+it, and that is the other half of the same question: the scenery layer fills the settlement plane
+opaquely from `GROUND_RATIO` down, so everything the static layer puts below that line is emitted on
+every scrolled pixel for nobody. Two of the three ground shelves were placed across
+`height - horizon` and stood entirely underneath it — fills, mist, crest lights and all. The
+substrate now composes inside `horizon … plane`, which is about a ninth of the viewport, and
+`presentation.test.mjs` checks every primitive it emits against both edges of that band. Before
+adding to a cached layer, ask what is painted on top of it at that y.
+
+The other half of "world-anchored" is which cells a bounded run *chooses*, not only where each one
+lands. The crest stipple quantized every cell's x to the lattice and still crawled, because it
+walked its stride from `view.from`: a scroll of one cell moved every chosen column by one cell, on
+the layer that repaints per scrolled pixel. Selection now runs on absolute lattice indices with a
+period sized from the *nominal* band — the viewport plus both cull margins, before the world's ends
+clip it — so the period is a function of the viewport and never of the scroll.
 
 ## Everything culls by its own extent
 
@@ -193,6 +215,29 @@ two used to be stated separately: the bed is 12 px plus 3 per stage, the lanes s
 pitch, and lane 2 therefore rode 5 px *below* a stage-1 bed. A lane is a fraction of the bed's own
 depth minus what rides in it, so an early road crowds its lanes together instead of spilling them
 onto the verge, and `presentation.test.mjs` checks every lane at every stage against the bed.
+
+## Light has one direction, and full-frame effects are not canvas work
+
+`LIGHT_FROM_X`/`LIGHT_FROM_Y` in `substrate.ts` state where the light comes from — the upper left,
+the direction the 2.5D solids already imply by lighting their tops and left faces. The terrain used
+to light by convention instead: a rim on top, mist below, pooled evenly under everything. A crest's
+rim light is displaced *toward* the light and its cast band *away* from it, scaled by the formation's
+own elevation, so a step reads as standing rather than as shaded.
+
+The lens over the whole frame is not canvas work at all. The three canvases are separate elements, so
+a `multiply` or `screen` pass inside one of them cannot reach the others — a vignette or a grade
+painted on the dynamic layer darkens only the dynamic layer's own content. The vignette is therefore
+one CSS overlay above all three canvases and below the HUD — and "below the HUD" is `isolation:
+isolate` on `.world-surface`, not DOM order. A positive `z-index` on a pseudo-element joins the
+nearest *stacking context*, and `.world-surface` is not one by default, so the lens went into
+`.world-shell`'s context and painted over `.world-hud`, whose chips have `z-index: auto` and sit in
+the corners where the vignette is deepest. Isolating the surface keeps the canvases and the lens as
+one stack the HUD paints above. Its strength is a custom property
+written **inside the structural-rebuild branch**: a full-frame gradient repainted 60×/s buys nothing
+a static overlay does not already give, and a style write per frame is the invariant this renderer
+exists under. The same reasoning rules out a full-screen colour grade: `worldPresentation.colors`
+*is* the grade, resolved per state and per band, and a wash over everything is the one thing that
+palette must not become.
 
 ## Light is one system
 
