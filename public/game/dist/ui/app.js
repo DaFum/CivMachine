@@ -238,23 +238,29 @@ export function createGameUI(engine, world) {
         const t = text().ui.app;
         const previews = vm.previews.map((p) => `<article class="unlock-preview"><b>🔒 ${esc(p.name)}</b><span>${esc(p.condition)}</span></article>`).join('');
         const previewTraits = vm.previewTraits.map((trait) => `<span>${esc(trait.name)}</span>`).join('');
-        const directiveDraft = vm.systems.directives ? (vm.directives.length ? `<div class="option-grid directive-draft">${optionCards(vm.directives, 'directive', vm.runBuild.selectedDirective, vm.runBuild.directiveLocked)}</div>` : `<p>${esc(t.noDirectiveOffers)}</p>`) : '';
+        // `state.machine.runBuild` holds the Directive and the Breeding Matrix, and `startCivilization`
+        // consumes both together -- they are one decision. The matrix used to be its own top-level card
+        // four panels below this one, which put it 916px under the button that commits it: a run could be
+        // started without the panel ever having been on screen. Both are blocks in this card now, each
+        // labelled, because two unlabelled grids of Select cards stacked would read as one list.
+        const draftBlock = (kicker, body) => `<div><span class="panel-kicker">${esc(kicker)}</span>${body}</div>`;
+        const directiveDraft = vm.systems.directives ? draftBlock(t.runDirectiveDraft, vm.directives.length ? `<div class="option-grid directive-draft">${optionCards(vm.directives, 'directive', vm.runBuild.selectedDirective, vm.runBuild.directiveLocked)}</div>` : `<p>${esc(t.noDirectiveOffers)}</p>`) : '';
+        const matrixDraft = vm.systems.breedingMatrices ? draftBlock(t.breedingMatrix, vm.matrices.length ? `<div class="option-grid matrix-draft">${optionCards(vm.matrices, 'matrix', vm.runBuild.selectedBreedingMatrix, vm.runBuild.matrixLocked)}</div>` : `<p>${esc(t.noBreedingMatrices)}</p>`) : '';
         const lastCredits = fmt(Number(vm.lastHarvest.credits ?? 0));
         const lastHarvest = vm.lastHarvest.grade ? `<div class="last-harvest"><span>${esc(t.lastHarvest)}</span><b>${esc(gradeText(vm.lastHarvest.grade))}</b><small>${esc(fill(Number(vm.lastHarvest.credits ?? 0) === 1 ? t.lastHarvestDetailOne : t.lastHarvestDetailMany, { credits: lastCredits, multiplier: Number(vm.lastHarvest.reward_multiplier ?? 1).toFixed(2) }))}</small></div>` : '';
         replaceIfChanged(machine, `
       ${runReportPanel(vm.runReport, vm.explain, focusClass(vm, '.run-report'))}
       <section class="machine-hero${focusClass(vm, '.machine-hero')}"><div><p class="eyebrow">${esc(t.browserNode)}</p><h2>${esc(t.machineControl)}</h2><p>${esc(t.machineDescription)}</p>${explainNote('machine_hero', vm.explain)}</div>${lastHarvest}</section>
       ${situationBanner(vm)}
-      ${card(esc(t.nextCivilization), `<div class="run-preview">${explainNote('run_preparation', vm.explain)}<div><span class="panel-kicker">${esc(t.startingTraitsPreview)}</span><div class="tag-row preview-traits">${previewTraits || `<span>${esc(t.traitArchiveUnavailable)}</span>`}</div></div>${directiveDraft}<button class="primary big start-run" data-action="start" ${vm.canStartCivilization ? '' : 'disabled'}>${esc(t.startCivilization)}</button>${vm.startReason ? `<p class="start-reason" role="status">${esc(vm.startReason)}</p>` : ''}${tutorialReplay(vm.tutorial)}</div>`, `run-preparation${focusClass(vm, '.run-preparation')}`)}
+      ${card(esc(t.nextCivilization), `<div class="run-preview">${explainNote('run_preparation', vm.explain)}<div><span class="panel-kicker">${esc(t.startingTraitsPreview)}</span><div class="tag-row preview-traits">${previewTraits || `<span>${esc(t.traitArchiveUnavailable)}</span>`}</div></div>${directiveDraft}${matrixDraft}<div class="run-commit"><button class="primary big start-run" data-action="start" ${vm.canStartCivilization ? '' : 'disabled'}>${esc(t.startCivilization)}</button>${vm.startReason ? `<p class="start-reason" role="status">${esc(vm.startReason)}</p>` : ''}</div>${tutorialReplay(vm.tutorial)}</div>`, `run-preparation${focusClass(vm, '.run-preparation')}`)}
       ${card(esc(t.machineUpgrades), `${explainNote('machine_upgrades', vm.explain)}<div class="upgrade-list">${upgrades(vm.machineUpgrades, 'machine')}</div>`)}
-      ${vm.systems.breedingMatrices ? card(esc(t.breedingMatrix), vm.matrices.length ? `<div class="option-grid">${optionCards(vm.matrices, 'matrix', vm.runBuild.selectedBreedingMatrix, vm.runBuild.matrixLocked)}</div>` : `<p>${esc(t.noBreedingMatrices)}</p>`) : ''}
       ${vm.systems.universeUpgrades ? card(esc(t.universeUpgrades), `<div class="upgrade-list">${upgrades(vm.universeUpgrades, 'universe')}</div>`) : ''}
       ${vm.systems.axioms ? card(esc(t.axiomUpgrades), `<div class="upgrade-list">${upgrades(vm.axiomUpgrades, 'axiom')}</div>`) : ''}
       ${convergenceCard(vm)}
+      <section class="prestige-row">${vm.systems.universePrestige ? `<button data-action="universe" ${vm.canConsumeUniverse ? '' : 'disabled'}>${esc(t.consumeUniverse)} <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} ${esc(t.metaCultivationCredits)}</span></button>` : ''}${vm.systems.multiversePrestige ? `<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse ? '' : 'disabled'}>${esc(t.collapseMultiverse)} <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>` : ''}</section>
       ${milestoneRegister(vm)}
-      ${fieldManual(vm.explain, focusClass(vm, '.field-manual'))}
       ${previews ? collapsedCard('next-discoveries', esc(t.nextDiscoveries), String(vm.previews.length), `<div class="preview-grid">${previews}</div>`) : ''}
-      <section class="prestige-row">${vm.systems.universePrestige ? `<button data-action="universe" ${vm.canConsumeUniverse ? '' : 'disabled'}>${esc(t.consumeUniverse)} <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} ${esc(t.metaCultivationCredits)}</span></button>` : ''}${vm.systems.multiversePrestige ? `<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse ? '' : 'disabled'}>${esc(t.collapseMultiverse)} <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>` : ''}</section>`);
+      ${fieldManual(vm.explain, focusClass(vm, '.field-manual'))}`);
     }
     const rewardText = (key, details) => `${resourceShort()[key]} ${key === 'causal_mass' || engine.resourceDiscovered(key) ? fmt(details.rewards[key]) : '???'}`;
     const rewardSpan = (kind, key, details) => `<span data-live="harvest-${kind}-${key}">${esc(rewardText(key, details))}</span>`;

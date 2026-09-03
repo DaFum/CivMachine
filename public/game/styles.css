@@ -141,6 +141,8 @@ main{padding:var(--space-xl)}
 .upgrade small{color:var(--amber)}
 .upgrade.locked{opacity:.7;background:#0a0e12}
 .option-grid,.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--space-md)}
+.run-commit{position:sticky;bottom:0;z-index:1;display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-md);padding:var(--space-md) 0;background:linear-gradient(180deg,transparent,var(--panel-lo) 40%)}
+.run-commit .start-reason{margin:0}
 .build-option,.unlock-preview{border:1px solid #203541;background:var(--surface-1);padding:var(--space-lg)}
 .build-option.selected{border-color:var(--mint);box-shadow:0 0 25px #73e6bd12}
 .run-preparation{border-color:#315363;background:linear-gradient(135deg,#0d1c24,#0a1017)}

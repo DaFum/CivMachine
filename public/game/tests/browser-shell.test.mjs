@@ -291,6 +291,41 @@ test('mobile UI hierarchy features collapsible event details, high harvest actio
   }
 });
 
+test('the Machine view decides, then spends, then ascends, then explains', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const machine = app.slice(app.indexOf('function renderMachine'), app.indexOf('const rewardText='));
+
+  // Both halves of `runBuild` render inside the card that commits them. The Breeding Matrix used to
+  // be its own top-level card below Machine Upgrades, which put it 916px under START -- and since
+  // `canStartCivilization` only requires the Directive, a run could be started without the matrix
+  // panel ever having been on screen.
+  const preparation = machine.slice(machine.indexOf('t.nextCivilization'), machine.indexOf('t.machineUpgrades'));
+  for (const draft of ['${directiveDraft}', '${matrixDraft}']) {
+    assert.ok(preparation.includes(draft), `the run build must render ${draft} inside the run-preparation card`);
+  }
+  assert.ok(preparation.indexOf('${matrixDraft}') < preparation.indexOf('data-action="start"'),
+    'the run build must be chosen above the button that commits it');
+  assert.ok(!machine.includes("card(esc(t.breedingMatrix)"), 'the matrix must not also be its own card');
+
+  // START sticks to the card's bottom edge, because the card holding the whole run build is the
+  // tallest on the screen and the button would otherwise sit a screen and a half below the fold.
+  const styles = declarationsOf(await readFile(new URL('../styles.css', import.meta.url), 'utf8'));
+  assert.match(styles, /\.run-commit\{[^}]*position:sticky/, 'the commit row must stay reachable inside the card');
+
+  // The three "end this tier" actions sit together: Convergence used to be at position 8 with the
+  // Universe and Multiverse buttons at the very bottom, 1668px apart with the register and the
+  // manual between them.
+  assert.ok(machine.indexOf('convergenceCard(vm)') < machine.indexOf('class="prestige-row"'));
+  assert.ok(machine.indexOf('class="prestige-row"') < machine.indexOf('milestoneRegister(vm)'),
+    'the prestige actions must sit with Convergence, not below the reference panels');
+
+  // And reference material closes the view rather than interrupting the actions.
+  for (const reference of ['milestoneRegister(vm)', "collapsedCard('next-discoveries'", 'fieldManual(']) {
+    assert.ok(machine.indexOf('class="prestige-row"') < machine.indexOf(reference),
+      `${reference} is reference material and must come after the actions`);
+  }
+});
+
 test('the rail names its keyboard shortcuts once for every bound action', async () => {
   const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
   const main = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
