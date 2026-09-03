@@ -67,65 +67,70 @@ const CROWN_MIN_HEIGHT = 70;
  * once per tall structure on the cached layer, and the identity has to read at skyline scale rather
  * than reward zooming in.
  */
-function drawCrown(surface: DrawSurface, crown: SkylineCrown, x: number, top: number, width: number, height: number, accent: number, body: number, lightLevel: number): void {
+function drawCrown(surface: DrawSurface, crown: SkylineCrown, x: number, top: number, width: number, height: number, accent: number, body: number, lightLevel: number, detail: number): void {
   // Sized by the *smaller* of the solid's two dimensions, not by its width. A short wide building --
   // which is what a landscape phone is full of, since a narrow viewport widens its structures and
   // budgets away its skyline -- was getting a crown half its own footprint across, and the frame
   // filled with lit discs floating over the roofline.
   const half = Math.max(4, Math.min(width, height * .55) * .5);
+  // The lane's own contrast, applied to the crown rather than used to gate it. A back-lane solid is
+  // further away, not a different civilization: gating on `detail` dropped the crown from a quarter
+  // of the eligible skyline, including towers within 3% of the tallest in the world, and left those
+  // roofs speaking for no path at all. Fading it keeps the aerial perspective and the identity both.
+  const a = (alpha: number): number => alpha * detail;
   switch (crown) {
     case 'luminous_core':
       // Machine Faith: a mast carrying a lit bead -- the machine kept burning above the roof. Held
       // deliberately dim: one of these is a signature, and a skyline carries eight of them at once.
-      surface.lineStyle(1.4, accent, .42).line(x, top, x, top - half * .7);
-      surface.fillStyle(accent, .34 + lightLevel * .18).fillCircle(x, top - half * .7, Math.max(1.4, half * .13));
-      surface.lineStyle(1, accent, .16).strokeCircle(x, top - half * .7, half * .3);
+      surface.lineStyle(1.4, accent, a(.42)).line(x, top, x, top - half * .7);
+      surface.fillStyle(accent, a(.34 + lightLevel * .18)).fillCircle(x, top - half * .7, Math.max(1.4, half * .13));
+      surface.lineStyle(1, accent, a(.16)).strokeCircle(x, top - half * .7, half * .3);
       break;
     case 'synchronized_cluster':
       // Collective Mind: three roof nodes wired to each other, never one alone.
-      surface.lineStyle(1, accent, .38).line(x - half * .6, top - half * .3, x + half * .6, top - half * .3);
-      for (let node = -1; node <= 1; node++) surface.fillStyle(accent, .5).fillCircle(x + node * half * .6, top - half * .3, Math.max(1.3, half * .14));
+      surface.lineStyle(1, accent, a(.38)).line(x - half * .6, top - half * .3, x + half * .6, top - half * .3);
+      for (let node = -1; node <= 1; node++) surface.fillStyle(accent, a(.5)).fillCircle(x + node * half * .6, top - half * .3, Math.max(1.3, half * .14));
       break;
     case 'offset_ring':
       // Temporal Dominion: the roof and its echo, one beat out of place.
-      surface.lineStyle(1.3, accent, .45).strokeCircle(x, top - half * .34, half * .46);
-      surface.lineStyle(1, accent, .24).strokeCircle(x + half * .22, top - half * .48, half * .46);
+      surface.lineStyle(1.3, accent, a(.45)).strokeCircle(x, top - half * .34, half * .46);
+      surface.lineStyle(1, accent, a(.24)).strokeCircle(x + half * .22, top - half * .48, half * .46);
       break;
     case 'geometric_frame':
       // Reality Engineering: a constraint standing on the roof, braced.
-      surface.lineStyle(1.2, accent, .42).strokeRect(x - half * .5, top - half * .62, half, half * .62);
-      surface.lineStyle(1, accent, .26).line(x - half * .5, top, x + half * .5, top - half * .62);
+      surface.lineStyle(1.2, accent, a(.42)).strokeRect(x - half * .5, top - half * .62, half, half * .62);
+      surface.lineStyle(1, accent, a(.26)).line(x - half * .5, top, x + half * .5, top - half * .62);
       break;
     case 'living_crown':
       // Biological Transcendence: growth, not termination -- three lobes off a short stem.
-      surface.lineStyle(1.2, mixColor(accent, 0x8ee66b, .4), .4).line(x, top, x, top - half * .4);
-      for (let lobe = -1; lobe <= 1; lobe++) surface.fillStyle(mixColor(accent, 0x8ee66b, .4), .34).fillCircle(x + lobe * half * .34, top - half * (.5 + Math.abs(lobe) * -.14), Math.max(1.8, half * .2));
+      surface.lineStyle(1.2, mixColor(accent, 0x8ee66b, .4), a(.4)).line(x, top, x, top - half * .4);
+      for (let lobe = -1; lobe <= 1; lobe++) surface.fillStyle(mixColor(accent, 0x8ee66b, .4), a(.34)).fillCircle(x + lobe * half * .34, top - half * (.5 + Math.abs(lobe) * -.14), Math.max(1.8, half * .2));
       break;
     case 'blackout_shield':
       // Cosmic Resistance: a chevron cap over the roof, and the warning light under it.
-      surface.lineStyle(1.6, accent, .45).line(x - half * .6, top - half * .06, x, top - half * .5).line(x, top - half * .5, x + half * .6, top - half * .06);
-      surface.fillStyle(accent, .3 + lightLevel * .2).fillRect(x - half * .18, top - half * .1, half * .36, 2);
+      surface.lineStyle(1.6, accent, a(.45)).line(x - half * .6, top - half * .06, x, top - half * .5).line(x, top - half * .5, x + half * .6, top - half * .06);
+      surface.fillStyle(accent, a(.3 + lightLevel * .2)).fillRect(x - half * .18, top - half * .1, half * .36, 2);
       break;
     case 'ordered_block':
       // Bureaucratic Singularity: a flat filed block, ruled twice. Nothing rises, nothing glows.
-      surface.fillStyle(shade(body, .25), .9).fillRect(x - half * .58, top - half * .3, half * 1.16, half * .3);
-      surface.lineStyle(1, accent, .3).line(x - half * .58, top - half * .2, x + half * .58, top - half * .2);
-      surface.lineStyle(1, accent, .18).line(x - half * .58, top - half * .1, x + half * .58, top - half * .1);
+      surface.fillStyle(shade(body, .25), a(.9)).fillRect(x - half * .58, top - half * .3, half * 1.16, half * .3);
+      surface.lineStyle(1, accent, a(.3)).line(x - half * .58, top - half * .2, x + half * .58, top - half * .2);
+      surface.lineStyle(1, accent, a(.18)).line(x - half * .58, top - half * .1, x + half * .58, top - half * .1);
       break;
     case 'continuity_beacon':
       // Post-Mortal: a halo that never goes out, held clear of the roof it belongs to.
-      surface.lineStyle(1.3, accent, .42).strokeCircle(x, top - half * .55, half * .38);
-      surface.fillStyle(accent, .18 + lightLevel * .12).fillCircle(x, top - half * .55, half * .18);
+      surface.lineStyle(1.3, accent, a(.42)).strokeCircle(x, top - half * .55, half * .38);
+      surface.fillStyle(accent, a(.18 + lightLevel * .12)).fillCircle(x, top - half * .55, half * .18);
       break;
     case 'absence_well':
       // Void Communion: the roofline taken away rather than added to, with the rim the loss leaves.
-      surface.fillStyle(0x02040a, .82).fillRect(x - half * .42, top - half * .22, half * .84, half * .34);
-      surface.lineStyle(1, accent, .28).line(x - half * .46, top - half * .22, x + half * .46, top - half * .22);
+      surface.fillStyle(0x02040a, a(.82)).fillRect(x - half * .42, top - half * .22, half * .84, half * .34);
+      surface.lineStyle(1, accent, a(.28)).line(x - half * .46, top - half * .22, x + half * .46, top - half * .22);
       break;
     case 'nested_crown':
       // Recursive Simulation: the same roof again, inside itself, twice.
-      surface.lineStyle(1.1, accent, .38).strokeRect(x - half * .62, top - half * .34, half * 1.24, half * .34);
-      surface.lineStyle(1, accent, .26).strokeRect(x - half * .38, top - half * .24, half * .76, half * .24);
+      surface.lineStyle(1.1, accent, a(.38)).strokeRect(x - half * .62, top - half * .34, half * 1.24, half * .34);
+      surface.lineStyle(1, accent, a(.26)).strokeRect(x - half * .38, top - half * .24, half * .76, half * .24);
       break;
   }
 }
@@ -378,9 +383,10 @@ export function drawStructure(surface: DrawSurface, structure: Structure, baseGr
 
   // The dominant path's own way of ending a building. Restricted to the tall civic and residential
   // solids -- the ones that make the skyline -- so the signature reads as the city's architecture
-  // rather than as a decoration stamped on every shed in the outskirts.
-  if (style.crown && height >= CROWN_MIN_HEIGHT && detail > .6 && (structure.kind === 'dwelling' || structure.kind === 'academy')) {
-    drawCrown(surface, style.crown, structure.x, top, width, height, accent, baseColor, lightLevel);
+  // rather than as a decoration stamped on every shed in the outskirts. Height and use decide that;
+  // the lane decides only how strongly it is drawn.
+  if (style.crown && height >= CROWN_MIN_HEIGHT && (structure.kind === 'dwelling' || structure.kind === 'academy')) {
+    drawCrown(surface, style.crown, structure.x, top, width, height, accent, baseColor, lightLevel, detail);
   }
 
   // The persistent window grid. Rows and columns rather than a single stripe per row: a facade with

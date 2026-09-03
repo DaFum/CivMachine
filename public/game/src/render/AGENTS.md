@@ -89,6 +89,13 @@ tall civic and residential solid ends the way its civilization ends things. It i
 rather than as a stamp on every shed, and `presentation.test.mjs` compares the ten paths' geometry
 with the colour stripped out, so a shared crown cannot slip back in.
 
+**Height and use decide whether a crown exists; the depth lane decides only how strongly it is
+drawn.** The two are easy to confuse, because `detail` carries the lane's contrast and reads like a
+convenient gate — but gating on it dropped the crown from 24.5% of the eligible skyline, back-lane
+towers included, and the tallest of those stood within 3% of the tallest building in the world. A
+back-lane solid is further away, not a different civilization. This is the general rule for anything
+the aerial perspective touches: fade it with `detail`, never gate it on `detail`.
+
 ## Cost lives in the dynamic layer
 
 The cached layers repaint on a scroll; the dynamic layer repaints every frame, so that is where a

@@ -1621,6 +1621,32 @@ test('a dominant path builds its own skyline, not the same one in another colour
   drawStructure(recordingSurface(plain), shed, 600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, {});
   drawStructure(recordingSurface(crowned), shed, 600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring' });
   assert.deepEqual(crowned, plain, 'a 40 px structure is too small to carry an identity crown');
+
+  // Height and use decide whether a crown exists; the lane decides only how strongly it is drawn. A
+  // back lane is further away, not a different civilization -- gating on the lane's `detail` dropped
+  // the crown from a quarter of the eligible skyline, towers within 3% of the tallest included.
+  const ringsOf = lane => {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 't', x: 100, width: 40, height: 220, kind: 'dwelling', level: 4, depthLane: lane },
+      600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring', lightLevel: .6 });
+    // The offset ring's second circle is unique to the crown: no other part of a dwelling strokes one.
+    return calls.filter(([name]) => name === 'strokeCircle');
+  };
+  const backRings = ringsOf('back');
+  const frontRings = ringsOf('front');
+  assert.equal(backRings.length, frontRings.length, 'a tall back-lane tower must still carry its path crown');
+  assert.ok(backRings.length > 0, 'the fixture must actually draw the crown');
+
+  // Faded, though: the crown sits in the same aerial perspective as the solid under it.
+  const strokeAlpha = lane => {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 't', x: 100, width: 40, height: 220, kind: 'dwelling', level: 4, depthLane: lane },
+      600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring', lightLevel: .6 });
+    // The lineStyle immediately before the crown's first ring carries its alpha.
+    const index = calls.findIndex(([name]) => name === 'strokeCircle');
+    return calls[index - 1][3];
+  };
+  assert.ok(strokeAlpha('back') < strokeAlpha('front'), 'a back-lane crown must be fainter than a front-lane one');
 });
 
 test('a portrait viewport keeps its sky: the skyline is budgeted from the aspect ratio', () => {
