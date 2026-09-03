@@ -4,6 +4,7 @@ import { dynamicFrameIntervalMs, qualityFactors, RenderQualityController } from 
 import { structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { drawConsequenceImpact, drawPhaseTransitionImpact } from './consequence-presentation.js';
 import { hash01, mixColor, ridgeNoise, shade, spreadPosition, tint } from './primitives.js';
+import { drawGroundShelves, ridgePoints } from './substrate.js';
 import { CachedCanvasSurface, canvasSurface } from './draw-surface.js';
 import { settlementLayout, structureEffectiveGround, worldOutskirts } from './settlements.js';
 import { bannerGeometry, drawBanner, drawStructure, settlementCrown } from './structures.js';
@@ -339,23 +340,6 @@ function drawSkyContent(surface, scene, width, height, view) {
         }
     }
 }
-/** One ridge profile, sampled on a fixed world lattice so a scroll never shifts the mountains. */
-function ridgePoints(view, worldWidth, baseY, step, amplitude, wavelength, seed, detail) {
-    const first = Math.max(0, Math.floor(view.from / step) - 1);
-    const last = Math.min(Math.ceil(worldWidth / step) + 1, Math.ceil(view.to / step) + 1);
-    if (last < first)
-        return [];
-    const points = [];
-    const startX = Math.max(0, first * step);
-    points.push([startX, baseY]);
-    for (let i = first; i <= last; i++) {
-        const x = Math.min(worldWidth, Math.max(0, i * step));
-        const h = amplitude * (.35 + ridgeNoise((i * step) / wavelength, seed, detail) * .65);
-        points.push([x, baseY - h]);
-    }
-    points.push([Math.min(worldWidth, Math.max(0, last * step)), baseY]);
-    return points;
-}
 /**
  * The terrain half of the cached static layer, back to front: three ridge profiles with the air
  * between them, the distant skyline standing on the mid ridge, the ground plane, the shelves
@@ -471,30 +455,12 @@ function drawTerrainContent(surface, scene, width, height, view) {
         { offset: .45, color: colors.nearTerrain },
         { offset: 1, color: colors.groundNear },
     ], view.from, horizon + 14, view.from, height);
-    // Three shelves of land receding toward the ridges, each with the air of its own distance pooled
-    // along its foot. A graded fill still reads as one surface; low crests with mist between them are
-    // what turn the same band into ground with distance in it, and they cost a polygon each.
-    const groundSpan = height - horizon - 14;
-    for (let shelf = 0; shelf < 3; shelf++) {
-        const shelfBase = horizon + 16 + groundSpan * (.2 + shelf * .27);
-        const shelfHeight = 10 + shelf * 9;
-        const shelfPoints = ridgePoints(view, worldWidth, shelfBase, 68, shelfHeight, 520 - shelf * 150, civ.seed * 23 + shelf * 71, .38);
-        if (shelfPoints.length <= 2)
-            continue;
-        // The mist the shelf stands in, laid down first so the crest rises out of it.
-        surface.fillLinearGradientRect(view.from, shelfBase - shelfHeight - 10, span, shelfHeight + 12, [
-            { offset: 0, color: colors.haze, alpha: 0 },
-            { offset: 1, color: colors.haze, alpha: (.09 - shelf * .022) + presentation.sanityDistortion * .04 },
-        ], view.from, shelfBase - shelfHeight - 10, view.from, shelfBase + 2);
-        surface.fillLinearGradientPoly(shelfPoints, [
-            { offset: 0, color: mixColor(colors.nearTerrain, colors.skyHorizon, .2 - shelf * .06), alpha: .95 },
-            { offset: 1, color: shade(mixColor(colors.nearTerrain, colors.groundNear, .45 + shelf * .25), shelf * .12), alpha: .95 },
-        ], view.from, shelfBase - shelfHeight, view.from, shelfBase + 6);
-        // The crest catching the horizon, so each shelf ends on an edge instead of dissolving into the
-        // one behind it. This is the whole of what turns a graded band into receding ground.
-        surface.lineStyle(1, mixColor(colors.skyHorizon, colors.groundNear, .35 + shelf * .2), .2 - shelf * .045)
-            .strokePoly(shelfPoints.slice(1, -1));
-    }
+    // The shelves of land receding toward the ridges, with the light direction, the contour lines and
+    // the crest dissolve that go with them. `substrate.ts` owns that pass; this layer only says where
+    // the ground begins and how wide a slice of it is on screen.
+    // The plane, not the bottom of the frame: the scenery layer paints the settlement ground over this
+    // one from there down, so anything the substrate puts below it is work nobody can see.
+    drawGroundShelves(surface, presentation, civ.seed, worldWidth, horizon, height * GROUND_RATIO - 6, view);
     // Entropy crossing the land itself. Reality failing is a state the sky already carries as colour;
     // this is the same state written into the ground, so a collapsing world is legible from its
     // terrain and not only from its palette. Bounded to five, and only above the second entropy band.
@@ -1762,6 +1728,7 @@ class CanvasWorld {
                         this.phaseTransitionStart = time;
                     }
                     this.lastDramaPhaseId = nextPhase;
+                    this.applyVignette(this.scene.presentation);
                     this.tracker.sync(this.scene.structures, time);
                     this.sceneRebuilds++;
                     this.input.lastStaticScroll = Number.NaN;
@@ -1821,6 +1788,23 @@ class CanvasWorld {
         this.loop(0);
     }
     nudge(direction) { this.input.nudge(direction); }
+    /**
+     * The vignette's strength, handed to CSS. It belongs to the overlay rather than to a canvas,
+     * because a vignette has to darken all three layers and a composite pass inside one of them cannot
+     * reach the others -- and to CSS rather than to the frame loop, because a full-screen gradient
+     * repainted 60x/s buys nothing that one static overlay does not already give.
+     *
+     * Attention's own channel. The sky already carries it as colour and the observer's light field as
+     * a shape; this is the third role that state owns: the frame closing in as the world is watched.
+     * Written on a *band* change only -- the write happens inside the structural-key branch, so a
+     * ticking Attention value never touches the DOM, and the strength moves in the same four steps the
+     * cached layers are rebuilt on.
+     */
+    applyVignette(presentation) {
+        const strength = .5 + presentation.bands.attention * .07;
+        // The host is a plain element in the shell; a recording double in the tests has no style object.
+        this.host.style?.setProperty?.('--world-vignette', strength.toFixed(2));
+    }
     stats() {
         return {
             sceneRebuilds: this.sceneRebuilds,

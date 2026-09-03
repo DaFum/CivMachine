@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.26.0
+# Reality Consumption Engine — App Edition v1.27.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,29 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.27.0 ground that stands in light, and a lens over the world
+
+- Two thirds of the ground was invisible. The shelves that recede from the city toward the ridges
+  were placed across the whole lower frame, and the settlement plane is painted over that from 78%
+  of the height down -- so two of the three stood entirely underneath an opaque fill, emitting their
+  polygons, their mist and their crest lights on every scrolled pixel for nobody. They now compose
+  inside the band that actually shows, with their relief scaled to it, so the strip between the
+  foothills and the city reads as receding land on a phone as well as on a desktop.
+- The light comes from somewhere. Every shelf used to have a rim light on top and mist pooled evenly
+  underneath, which is shading by convention; there was no statement anywhere in the renderer of
+  where the light is. It is now one direction -- the upper left, the same one the buildings already
+  imply -- with the rim light displaced toward it and the cast shadow away from it, scaled by how
+  high the step stands.
+- The ground has relief instead of an outline. One contour line follows each shelf's own profile
+  inside its form, the way a topographic map reads a slope, so a shelf is a surface rather than a
+  filled cut-out.
+- The nearest edge breaks up. The crest closest to the eye dissolves upward into an ordered
+  four-by-four dither raster rather than ending on a one-pixel stroke -- the deterministic ordered
+  form of the same sampling the terrain is built from, drawn as geometry so it stays reproducible.
+- The world is seen through a lens. A vignette darkens the periphery and opens the middle, deepening
+  in four steps as Attention rises -- the frame closing in as the world is watched. It is a single
+  CSS overlay above the three canvases, so it costs nothing per frame and darkens all of them.
 
 ## v1.26.0 a world that grew rather than one that was placed
 

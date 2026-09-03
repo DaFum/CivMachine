@@ -167,6 +167,12 @@ main{padding:var(--space-xl)}
 .world-shell.tone-negative{--impact-color:var(--danger)}
 .world-shell.tone-mixed{--impact-color:var(--violet)}
 .world-surface{position:absolute;inset:0}
+/* The lens the world is seen through. A vignette has to darken every layer, and the three canvases
+   are separate elements -- a `multiply` pass inside one of them cannot reach the others -- so it is
+   one overlay above all three and below the HUD, where it costs nothing per frame. Its strength is a
+   custom property the renderer writes on a *band* change, never on a tick. */
+.world-surface::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 78% 82% at 50% 48%,#0000 38%,color-mix(in srgb,#070b12 calc(var(--world-vignette,.55) * 42%),transparent) 74%,color-mix(in srgb,#04070c calc(var(--world-vignette,.55) * 88%),transparent) 100%)}
+@media (prefers-reduced-transparency:reduce){.world-surface::after{display:none}}
 .world-surface canvas{display:block!important}
 .fallback-canvas{position:absolute;inset:0;display:block}
 .fallback-dynamic{pointer-events:none}
