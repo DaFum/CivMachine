@@ -13,6 +13,7 @@ import {
 } from '../dist/game/run-report.js';
 import { civilizationSituation, machineSituation } from '../dist/game/guidance.js';
 import { EXPLAIN_NOTES, HELP_ABBREVIATIONS, HELP_SECTIONS } from '../dist/data/help-topics.js';
+import { LOCALIZATION } from '../dist/data/localization.js';
 import { runReportPanel, runCurve } from '../dist/ui/report-view.js';
 import { tutorialOverlay, tutorialReplay } from '../dist/ui/tutorial-view.js';
 import { fieldManual, explainNote, abbreviationLegend } from '../dist/ui/guide-view.js';
@@ -484,6 +485,41 @@ test('the field manual explains every term with what, where and why', () => {
     }
   }
   assert.ok(topics >= 25, `only ${topics} terms are explained`);
+});
+
+test('the English catalog and the manual source say the same thing', () => {
+  // `help-topics.ts` is the English source *and* the fallback a missed localized lookup lands on, and
+  // `LOCALIZATION.en` carries a copy of every one of its strings. Two copies of the same sentence
+  // means one can be updated and the other not, and nothing here noticed: moving the prestige
+  // buttons up the Machine view left both copies of "at the bottom of the Machine view" in place,
+  // and moving the Breeding Matrix into the run-preparation card left both copies of a note that
+  // described two things and said "Both". A reviewer caught them; this test is so the next one does.
+  const en = LOCALIZATION.en.help;
+  let compared = 0;
+  for (const [id, note] of Object.entries(EXPLAIN_NOTES)) {
+    assert.equal(en.explainNotes?.[id], note, `explain note ${id} differs between the source and the English catalog`);
+    compared += 1;
+  }
+  for (const section of HELP_SECTIONS) {
+    const localized = en.sections?.[section.id];
+    assert.ok(localized, `section ${section.id} is missing from the English catalog`);
+    assert.equal(localized.title, section.title, `${section.id}.title differs`);
+    assert.equal(localized.summary, section.summary, `${section.id}.summary differs`);
+    compared += 2;
+    for (const topic of section.topics) {
+      const localizedTopic = localized.topics?.[topic.id];
+      assert.ok(localizedTopic, `topic ${section.id}.${topic.id} is missing from the English catalog`);
+      for (const field of ['term', 'what', 'where', 'why']) {
+        assert.equal(localizedTopic[field], topic[field], `${section.id}.${topic.id}.${field} differs`);
+        compared += 1;
+      }
+    }
+  }
+  for (const [key, expansion] of Object.entries(HELP_ABBREVIATIONS)) {
+    assert.equal(en.abbreviations?.[key], expansion, `abbreviation ${key} differs`);
+    compared += 1;
+  }
+  assert.ok(compared >= 130, `only ${compared} strings compared`);
 });
 
 test('every abbreviation on the world strip is expanded somewhere the player can read it', async () => {
