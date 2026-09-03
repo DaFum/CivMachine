@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.22.0
+# Reality Consumption Engine — App Edition v1.23.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,45 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.23.0 air, distance and the shape of a failing world
+
+The v1.22.0 diorama had layers; this release gives them air. Three decks of cloud hang between the
+zenith and the ridgeline, a distant skyline of the same civilization stands on the mid ridge in deep
+aerial fade, and three receding shelves of land carry the mist of their own distance -- so the band
+between the mountains and the city reads as ground going away rather than as a graded fill.
+
+**Two sky cues were never on screen.** The sky is drawn under a tenth of the scroll, so it never
+exposes more than about a third of a stage-4 world -- and anything placed across the whole world
+width simply is not there to be seen. The celestial body was visible for roughly a fifth of the
+seeds; the observer's light field, anchored at 72% of the world, for none of them at any stage. Both
+are now placed inside the slice their own parallax can reach, on opposite halves of it. High
+Attention has a sky again.
+
+**Entropy has a silhouette.** In the top band the ridgeline shears: slices of it stand displaced from
+the land either side with the split lit from inside. From the band below, fissures cross the terrain
+and embers rise off the settlements themselves. Reality failing used to be a red sky, and a red sky
+is a palette, not a world coming apart.
+
+**A state cue is where you are looking.** Fractures, beacons and the sanity rings were scattered by a
+hash across four viewports, so whether Stability, Awareness or Sanity could be read at all depended
+on where the player had scrolled to. They are laid out on the van der Corput sequence instead: every
+prefix covers the world evenly, and a mark keeps its place when the stat behind it opens another one.
+
+**Buildings are lit rather than filled.** Every solid's front face is graded from the sky's own light
+at its top into the air and the shadow at its base, with a hairline down the plane edge and another
+down the lit side. The foreground bank became a continuous ridge-noise crest with growth standing on
+it, in place of a sawtooth of separate triangles under a bright outline.
+
+**One new primitive.** `fillEllipseGlow` is the flattened light field a city's glow, a cloud's lit
+underside and a shear seam all wanted, and that a circle of the same reach could only give by
+climbing a quarter of the sky. It squashes the context rather than the gradient, so its horizontal
+extent stays exactly the radius the caller culls by.
+
+Everything added is bounded by a count and lives on the cached layers: 12 cloud banks, 3 shears, 5
+fissures, and the whole sky-and-terrain layer held under 900 primitives, since it repaints on every
+scrolled pixel. Reduced motion, adaptive quality, the accessibility semantics and the save format are
+unchanged.
 
 ## v1.22.0 the civilization diorama
 
