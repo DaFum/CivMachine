@@ -500,7 +500,9 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
   // the ground begins and how wide a slice of it is on screen.
   // The plane, not the bottom of the frame: the scenery layer paints the settlement ground over this
   // one from there down, so anything the substrate puts below it is work nobody can see.
-  drawGroundShelves(surface, presentation, civ.seed, worldWidth, horizon, height * GROUND_RATIO - 6, view);
+  // The nominal band -- the viewport plus both cull margins, before the world's ends clip it -- is
+  // what the stipple's period is sized from, so scrolling into a clamped band cannot change it.
+  drawGroundShelves(surface, presentation, civ.seed, worldWidth, horizon, height * GROUND_RATIO - 6, view, width + CULL_MARGIN * 2);
 
   // Entropy crossing the land itself. Reality failing is a state the sky already carries as colour;
   // this is the same state written into the ground, so a collapsing world is legible from its

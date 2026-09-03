@@ -48,8 +48,9 @@ to edge, so nothing draws the eye to the middle of it.
 | Light direction | One shared `LIGHT_FROM_X`/`LIGHT_FROM_Y` in `substrate.ts`, upper left | It is the direction the 2.5D solids already imply by lighting their tops and left faces. Stated once and scaled per elevation, so a taller formation casts further without each site inventing numbers. |
 | Contour lines | One per shelf, on a lattice twice as coarse as the silhouette | A contour describes the form; the crest carries the edge detail. At the silhouette's own resolution it would nearly double a shelf's cost for a line drawn at a tenth of its alpha — on the layer repainted per scrolled pixel. |
 | Ordered dithering | `bayerThreshold` in `primitives.ts`, drawn as explicit cells | `CanvasPattern`, `ImageData` and per-pixel loops are all outside the `DrawSurface` vocabulary, and a recording test cannot see any of them. The Bayer matrix as geometry is the same effect in the idiom the renderer already has: it joins `hash01` (point), `valueNoise` (smooth) and `spreadPosition` (spread) as the *ordered* form. |
-| How much dithering | 64 cells of 8 px, on one shelf, strided across the band | An ordered dither is O(area): a 4 px raster over a stage-4 world's visible band is thousands of rectangles against a layer with a few hundred primitives of headroom. So it is an ordered *stipple* along the edge closest to the eye — the honest version of the effect at this budget, not the pattern fill a sketch assumes. |
-| The lens | A CSS overlay above all three canvases, strength written on a band change | The three canvases are separate elements, so a `multiply` pass inside one cannot reach the others: a vignette painted on the dynamic layer darkens only that layer's own content. As CSS it costs nothing per frame, composites over everything, and sits below the HUD so the chips stay legible. |
+| How much dithering | 64 cells of 8 px, on one shelf, on a comb through the absolute lattice | An ordered dither is O(area): a 4 px raster over a stage-4 world's visible band is thousands of rectangles against a layer with a few hundred primitives of headroom. So it is an ordered *stipple* along the edge closest to the eye — the honest version of the effect at this budget, not the pattern fill a sketch assumes. |
+| The lens | A CSS overlay above all three canvases, strength written on a band change | The three canvases are separate elements, so a `multiply` pass inside one cannot reach the others: a vignette painted on the dynamic layer darkens only that layer's own content. As CSS it costs nothing per frame and composites over everything. |
+| How it stays under the HUD | `isolation: isolate` on `.world-surface` | DOM order is not enough. A positive `z-index` on a pseudo-element joins the nearest stacking context, and the surface is not one by default — so the lens joined the shell's context and painted over the HUD, whose chips carry `z-index: auto` and sit in the corners where the vignette is deepest. |
 | What drives the lens | The Attention band | Attention's third role, beside the sky's colour and the observer's light field: the frame closing in as the world is watched. Written inside the structural-rebuild branch, so a ticking value never touches the DOM. |
 
 ## Architecture
@@ -69,7 +70,7 @@ Per shelf, in paint order:
 4. **The contour**, following the same profile at .46 of the local relief on the coarse lattice.
 5. **The crest rim light**, displaced *toward* the light.
 6. **The crest dissolve**, on the nearest shelf only: cells above the crest kept or dropped by
-   `bayerThreshold` against a coverage that falls off with height, quantized to the world lattice.
+   `bayerThreshold` against a coverage that falls off with height, selected by absolute lattice index, with a period sized from the nominal band.
 
 ### `primitives.ts`
 
@@ -105,7 +106,7 @@ under `prefers-reduced-transparency`.
 
 ## Budgets
 
-The static layer measures **651 primitives at 1440×900** for the busiest world (586 before), against
+The static layer measures **664 primitives at 1440×900** for the busiest world (586 before), against
 its pinned ceiling of 900 — the substrate's additions are the contour per shelf, one cast band per
 shelf, and at most 64 stipple cells. The animated layer is untouched. The lens costs nothing per
 frame and one style write per structural rebuild.
@@ -120,8 +121,11 @@ frame and one style write per structural rebuild.
 - Every primitive the substrate emits stays inside its band — above the settlement plane and below a
   ceiling set by the foothills' own amplitude — at three viewport heights.
 - The substrate is deterministic in the seed and differs between seeds; the stipple stays inside its
-  budget, sits on the world lattice, and does not move when the band narrows; the contour stays
-  inside the form; the light direction is upper-left and the two offsets take opposite signs.
+  budget and on the world lattice; the contour stays inside the form; the light direction is
+  upper-left and the two offsets take opposite signs.
+- The stipple does not crawl: six scroll offsets, including ones that are not multiples of the cell,
+  agree on every cell inside the ground any two of them both show. Selecting the comb from
+  `view.from` rather than from the absolute lattice index fails it.
 - The ridge sampler emits the same points for a narrow band as for a wide one over their overlap.
 
 `render-smoke.test.mjs`

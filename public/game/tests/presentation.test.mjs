@@ -2285,12 +2285,12 @@ function verticalExtents(calls) {
   return extents;
 }
 
-function shelfCalls(civ, height, view) {
+function shelfCalls(civ, height, view, nominalSpan = 900 + 640) {
   const HORIZON = height * .69;
   const plane = height * .78 - 6;
-  const snapshot = worldSnapshot(civ, view.to - view.from);
+  const snapshot = worldSnapshot(civ, 900);
   const calls = [];
-  drawGroundShelves(recordingSurface(calls), worldPresentation(civ), civ.seed, snapshot.worldWidth, HORIZON, plane, view);
+  drawGroundShelves(recordingSurface(calls), worldPresentation(civ), civ.seed, snapshot.worldWidth, HORIZON, plane, view, nominalSpan);
   return { calls, plane, horizon: HORIZON, worldWidth: snapshot.worldWidth };
 }
 
@@ -2330,17 +2330,7 @@ test('the substrate is deterministic, lit from one direction and bounded in its 
   const cells = first.calls.filter(([name, , , w, h]) => name === 'fillRect' && w === DITHER_CELL && h === DITHER_CELL);
   assert.ok(cells.length > 0, 'the crest dissolve drew nothing');
   assert.ok(cells.length <= MAX_DITHER_CELLS, `${cells.length} dither cells against a budget of ${MAX_DITHER_CELLS}`);
-  // Quantized to the world lattice, never to the band -- the same cells for any band that contains
-  // them, which is what a cached layer's strip redraw needs.
   for (const [, x] of cells) assert.equal(x % DITHER_CELL, 0, `a dither cell landed off the lattice at ${x}`);
-  const narrow = shelfCalls(civ, 900, { from: 320, to: 640 });
-  const inWindow = calls => calls
-    .filter(([name, x, , w, h]) => name === 'fillRect' && w === DITHER_CELL && h === DITHER_CELL && x >= 320 && x <= 640)
-    .map(([, x, y]) => `${x}:${y.toFixed(2)}`);
-  // A narrower band spends the same budget over less ground, so it is denser -- but every cell it
-  // places sits on the same lattice positions the wide band would use.
-  for (const cell of inWindow(narrow.calls)) assert.equal(cell.split(':')[0] % DITHER_CELL, 0);
-  assert.ok(inWindow(narrow.calls).length > 0, 'the narrow band drew no cells in its own window');
 
   // The light has a direction: the crest rim is displaced toward it and the shadow away from it.
   assert.ok(LIGHT_FROM_X < 0 && LIGHT_FROM_Y < 0, 'the light comes from the upper left');
@@ -2361,4 +2351,42 @@ test('the substrate is deterministic, lit from one direction and bounded in its 
   assert.deepEqual(ridgePoints({ from: 200, to: 400 }, first.worldWidth, 500, SHELF_STEP, 20, 400, civ.seed, .38)
     .filter(([x]) => x >= 300 && x <= 350),
     profile.filter(([x]) => x >= 300 && x <= 350), 'the ridge sampler moved with the band');
+});
+
+test('the crest stipple does not crawl when the world is scrolled', () => {
+  // The bug this pins: the stride walked from `view.from`, so a scroll of one cell moved *every*
+  // chosen column by one cell. Quantizing each cell's x to the lattice is not the same as choosing
+  // the cells by lattice index -- and the static layer repaints on every scrolled pixel, so the
+  // stipple crawled along a ridge that is itself world-anchored. The comb now runs on absolute
+  // indices with a period sized from the nominal band, so which cells exist is a fact about the
+  // world rather than about where the player has scrolled to.
+  const civ = lateCiv(9301);
+  civ.development = 1200; civ.era = 3;
+  const NOMINAL = 900 + 640;
+  const cellsOf = calls => calls
+    .filter(([name, , , w, h]) => name === 'fillRect' && w === DITHER_CELL && h === DITHER_CELL)
+    .map(([, x, y]) => `${x}:${y.toFixed(3)}`);
+
+  // Scroll offsets deliberately including one that is not a multiple of the cell: the offset the
+  // old code needed to shift every column, and one that leaves the lattice phase alone.
+  const bands = [0, 5, 8, 13, 64, 197].map(offset => ({ from: offset, to: offset + NOMINAL }));
+  const seen = bands.map(band => ({ band, cells: cellsOf(shelfCalls(civ, 900, band, NOMINAL).calls) }));
+  for (const { band, cells } of seen) assert.ok(cells.length > 0, `the band at ${band.from} drew no cells`);
+
+  // Every pair of bands must agree on every cell inside the ground they both show.
+  for (let i = 1; i < seen.length; i++) {
+    const a = seen[0], b = seen[i];
+    const overlapFrom = Math.max(a.band.from, b.band.from) + DITHER_CELL;
+    const overlapTo = Math.min(a.band.to, b.band.to) - DITHER_CELL;
+    const within = entry => entry.cells.filter(cell => {
+      const x = Number(cell.split(':')[0]);
+      return x >= overlapFrom && x <= overlapTo;
+    });
+    assert.ok(within(a).length > 0, 'the overlap must contain cells to compare');
+    assert.deepEqual(within(b), within(a),
+      `scrolling to ${b.band.from} moved the stipple inside ground both bands show`);
+  }
+
+  // And the budget still holds for every one of those bands.
+  for (const { cells } of seen) assert.ok(cells.length <= MAX_DITHER_CELLS, `${cells.length} cells over the budget`);
 });

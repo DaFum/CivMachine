@@ -88,7 +88,7 @@ function shelfHeightAt(x: number, amplitude: number, wavelength: number, seed: n
  *   elevation so the nearest, tallest step casts furthest.
  * - **A boundary that is not a vector edge.** See `MAX_DITHER_CELLS`.
  */
-export function drawGroundShelves(surface: DrawSurface, presentation: Presentation, seed: number, worldWidth: number, horizon: number, plane: number, view: Band): void {
+export function drawGroundShelves(surface: DrawSurface, presentation: Presentation, seed: number, worldWidth: number, horizon: number, plane: number, view: Band, nominalSpan: number): void {
   const span = view.to - view.from;
   if (span <= 0) return;
   const colors = presentation.colors;
@@ -169,28 +169,37 @@ export function drawGroundShelves(surface: DrawSurface, presentation: Presentati
     if (shelf !== stippleShelf) continue;
     // The crest dissolve: cells above the crest, kept or dropped by the ordered threshold against a
     // coverage that falls off with height, so the edge breaks up into a raster that thins upward
-    // instead of ending on a line. Strided across the band, so the whole visible crest is dissolved
-    // at whatever density the budget affords rather than the first stretch of it being dissolved
-    // properly and the rest not at all.
+    // instead of ending on a line.
+    //
+    // Both halves of the selection are anchored in **world** coordinates, and the difference
+    // matters more than it looks. Quantizing a cell's x to the lattice is not enough: walking the
+    // stride from `view.from` picks the columns *relative to the viewport*, so a scroll of one cell
+    // moves every chosen column by one cell -- and this layer repaints on every scrolled pixel, so
+    // the stipple would crawl along a ridge that is itself world-anchored. The comb below runs on
+    // absolute lattice indices instead, and its period comes from `nominalSpan` -- the band's width
+    // before it is clipped at the world's ends -- so the period is a function of the viewport, which
+    // changes only on a resize, and never of where the player has scrolled to.
     const rows = Math.max(1, Math.min(3, Math.floor(shelfHeight / DITHER_CELL)));
-    const bandHeight = DITHER_CELL * rows;
-    const columns = Math.max(1, Math.floor(span / DITHER_CELL));
-    const stride = Math.max(1, Math.ceil((columns * rows) / MAX_DITHER_CELLS));
+    const nominalColumns = Math.max(1, Math.floor(Math.max(span, nominalSpan) / DITHER_CELL));
+    const stride = Math.max(1, Math.ceil((nominalColumns * rows) / MAX_DITHER_CELLS));
+    const firstCell = Math.max(0, Math.floor(view.from / DITHER_CELL));
+    const lastCell = Math.min(Math.floor(worldWidth / DITHER_CELL), Math.ceil(view.to / DITHER_CELL));
     let drawn = 0;
-    for (let slot = 0; slot < columns * rows && drawn < MAX_DITHER_CELLS; slot += stride) {
-      const column = slot % columns;
-      const row = Math.trunc(slot / columns);
-      // Quantized to the world lattice, never to the band, so a strip redraw picks the same cells.
-      const x = Math.floor((view.from + column * DITHER_CELL) / DITHER_CELL) * DITHER_CELL;
-      if (x < 0 || x > worldWidth) continue;
-      const crestY = shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed);
-      const y = crestY - (row + 1) * DITHER_CELL;
-      // Coverage: solid at the crest, gone at the top of the band.
-      const coverage = 1 - ((row + 1) * DITHER_CELL) / bandHeight;
-      if (coverage <= 0) continue;
-      if (bayerThreshold(x / DITHER_CELL, y / DITHER_CELL) > coverage) continue;
-      surface.fillStyle(crestColor, .5).fillRect(x, y, DITHER_CELL, DITHER_CELL);
-      drawn++;
+    for (let cell = firstCell; cell <= lastCell && drawn < MAX_DITHER_CELLS; cell++) {
+      const x = cell * DITHER_CELL;
+      for (let row = 0; row < rows && drawn < MAX_DITHER_CELLS; row++) {
+        // One diagonal comb through the lattice: a cell belongs to it or it does not, whatever band
+        // it is asked for. The row skew keeps the three rows from all choosing the same columns.
+        if ((cell + row) % stride !== 0) continue;
+        const crestY = shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed);
+        const y = crestY - (row + 1) * DITHER_CELL;
+        // Coverage: near solid against the crest, thinning to a third at the top of the band, so no
+        // row of the comb is spent on cells the threshold can never keep.
+        const coverage = 1 - row / rows;
+        if (bayerThreshold(cell, Math.floor(y / DITHER_CELL)) > coverage) continue;
+        surface.fillStyle(crestColor, .5).fillRect(x, y, DITHER_CELL, DITHER_CELL);
+        drawn++;
+      }
     }
   }
 }

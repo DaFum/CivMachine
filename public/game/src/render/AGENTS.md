@@ -71,6 +71,13 @@ substrate now composes inside `horizon … plane`, which is about a ninth of the
 `presentation.test.mjs` checks every primitive it emits against both edges of that band. Before
 adding to a cached layer, ask what is painted on top of it at that y.
 
+The other half of "world-anchored" is which cells a bounded run *chooses*, not only where each one
+lands. The crest stipple quantized every cell's x to the lattice and still crawled, because it
+walked its stride from `view.from`: a scroll of one cell moved every chosen column by one cell, on
+the layer that repaints per scrolled pixel. Selection now runs on absolute lattice indices with a
+period sized from the *nominal* band — the viewport plus both cull margins, before the world's ends
+clip it — so the period is a function of the viewport and never of the scroll.
+
 ## Everything culls by its own extent
 
 A layer paints only the world slice its parallax puts on screen, so every primitive is checked
@@ -220,7 +227,12 @@ own elevation, so a step reads as standing rather than as shaded.
 The lens over the whole frame is not canvas work at all. The three canvases are separate elements, so
 a `multiply` or `screen` pass inside one of them cannot reach the others — a vignette or a grade
 painted on the dynamic layer darkens only the dynamic layer's own content. The vignette is therefore
-one CSS overlay above all three canvases and below the HUD, and its strength is a custom property
+one CSS overlay above all three canvases and below the HUD — and "below the HUD" is `isolation:
+isolate` on `.world-surface`, not DOM order. A positive `z-index` on a pseudo-element joins the
+nearest *stacking context*, and `.world-surface` is not one by default, so the lens went into
+`.world-shell`'s context and painted over `.world-hud`, whose chips have `z-index: auto` and sit in
+the corners where the vignette is deepest. Isolating the surface keeps the canvases and the lens as
+one stack the HUD paints above. Its strength is a custom property
 written **inside the structural-rebuild branch**: a full-frame gradient repainted 60×/s buys nothing
 a static overlay does not already give, and a style write per frame is the invariant this renderer
 exists under. The same reasoning rules out a full-screen colour grade: `worldPresentation.colors`

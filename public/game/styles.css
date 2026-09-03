@@ -166,7 +166,12 @@ main{padding:var(--space-xl)}
 .world-shell.tone-positive{--impact-color:var(--mint)}
 .world-shell.tone-negative{--impact-color:var(--danger)}
 .world-shell.tone-mixed{--impact-color:var(--violet)}
-.world-surface{position:absolute;inset:0}
+/* `isolation` is load-bearing, not decoration: the vignette below is a pseudo-element with a
+   positive z-index, and without a stacking context here it would join `.world-shell`'s instead --
+   painting over `.world-hud`, whose chips have z-index auto and would be darkened by the lens most
+   strongly at the edges, which is exactly where they sit. Isolating the surface keeps the canvases
+   and the lens as one stack that the HUD, a later sibling, paints above. */
+.world-surface{position:absolute;inset:0;isolation:isolate}
 /* The lens the world is seen through. A vignette has to darken every layer, and the three canvases
    are separate elements -- a `multiply` pass inside one of them cannot reach the others -- so it is
    one overlay above all three and below the HUD, where it costs nothing per frame. Its strength is a
