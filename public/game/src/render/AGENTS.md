@@ -14,9 +14,12 @@ tests can record primitives. Visuals must derive from `world-model.ts` and `worl
 
 Hard budgets the tests enforce: 150 particles, 9 haze bands, 12 fractures, 10 beacons, 120 planned
 agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outskirt props, 12 cloud
-banks, 3 reality shears, 5 entropy fissures, and device pixel ratio capped at 2. The sky-and-
+banks, 3 reality shears, 5 entropy fissures, 8 trade routes, 18 route flow marks, 48 settlement
+micro-lights, 3 animated identity frames, and device pixel ratio capped at 2. The sky-and-
 terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
-pixel. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
+pixel, and the animated layer under 1100 — measured at 836 for the reference developed world, which
+leaves room for another cue of that size and none at all for a loop over a stage-4 world's
+structures. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
 scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
@@ -89,6 +92,15 @@ tall civic and residential solid ends the way its civilization ends things. It i
 rather than as a stamp on every shed, and `presentation.test.mjs` compares the ten paths' geometry
 with the colour stripped out, so a shared crown cannot slip back in.
 
+`frame` on the same descriptor is that identity one scale up: the mass a whole settlement is built
+inside, drawn behind its own skyline on the cached layer. There are three grammars rather than ten —
+a membrane with no straight edge anywhere, an orthogonal stack of volumes with nothing but straight
+edges, and a mass that is not touching the ground — because this reads at settlement scale and ten
+silhouettes at that scale would be ten variations of nothing. It is gated on the identity tier, a
+band `structuralWorldKey` already tracks, and every primitive it paints stays inside
+`settlementFrameReach`, which is the extent the caller culls the whole frame by: the light-spill bug
+in a new place, and `presentation.test.mjs` measures the frames' geometry against that reach.
+
 **Height and use decide whether a crown exists; the depth lane decides only how strongly it is
 drawn.** The two are easy to confuse, because `detail` carries the lane's contrast and reads like a
 convenient gate — but gating on it dropped the crown from 24.5% of the eligible skyline, back-lane
@@ -143,6 +155,17 @@ exactly the points a full redraw does.
 The sky's atmospheric front is the same lesson from the other side: the variation is in the front's
 *shape*, never in a per-column alpha. A stepped alpha has to step somewhere, and open sky is the one
 surface in the frame with nothing to break a vertical seam up.
+
+`routes.ts` is the third shape built this way, and it carries the rule that makes such a shape
+affordable on a cached layer. A trade route is a cubic Bézier bowed off its own chord, and its two
+control points sit at exactly a third and two thirds of the span so the Bernstein sum in x collapses
+to `fromX + span * t` — a world x therefore maps to a curve parameter in closed form, and the curve
+is sampled on a lattice anchored to the *route*, never to the viewport. That is what keeps a strip
+redraw emitting exactly the points a full redraw of the same slice does. The polyline also reaches a
+step past the band on each side, so the primitive that opens the path is never the first point
+*inside* the exposed strip. Whatever rides a route — the roadbed, the lane markings, the flow marks,
+the vehicles — reads its position off `routeOffsetAt`, because traffic interpolated along the chord
+drives visibly beside its own road the moment the road bends.
 
 ## Light is one system
 

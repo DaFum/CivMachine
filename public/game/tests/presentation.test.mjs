@@ -15,11 +15,12 @@ import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH, skylineCompress, MAX_STRUCTURE_ASPECT } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
+import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROUTE_MAX_BOW, ROUTE_STEP, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
 import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
 import { worldMemorySignature } from '../dist/render/world-memory.js';
-import { institutionLandmarks, pathIdentity, identitySignature } from '../dist/render/identity.js';
+import { drawSettlementFrame, drawSettlementFrameAccent, FRAME_MAX_REACH, institutionLandmarks, pathIdentity, identitySignature, settlementFrameReach } from '../dist/render/identity.js';
 import { freshEngine } from './balance-harness.mjs';
 
 const NEWLINE = String.fromCharCode(10);
@@ -744,7 +745,7 @@ test('world module no longer carries its own layout or hash helpers', async () =
 
 test('every render module is precached by the service worker', async () => {
   const source = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
-  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality'];
+  const modules = ['primitives', 'draw-surface', 'species', 'factions', 'settlements', 'structures', 'agents', 'construction', 'world', 'world-model', 'world-presentation', 'identity', 'world-memory', 'consequence-presentation', 'quality', 'routes'];
   for (const name of modules) {
     assert.ok(source.includes(`'/game/dist/render/${name}.js'`), `sw.js must precache render/${name}.js`);
   }
@@ -1447,7 +1448,7 @@ test('the foreground bank is a landform, not a row of triangles', async () => {
   civ.development = 1400; civ.era = 4;
   const snapshot = worldSnapshot(civ, 1440);
   const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
-  const scene = { civ, snapshot, presentation: worldPresentation(civ), settlements, outskirts: [] };
+  const scene = { civ, snapshot, presentation: worldPresentation(civ), settlements, outskirts: [], routes: tradeRoutes(civ, settlements, snapshot) };
   const calls = [];
   drawSettlementContent(recordingSurface(calls), scene, HEIGHT, { from: 0, to: 1440 });
 
@@ -1781,8 +1782,9 @@ test('every light a structure emits comes from the world\'s shared light colour'
     ...presentation1,
     colors: { ...presentation1.colors, lightSpill: 0x123456 },
   };
-  const scene1 = { civ, snapshot, presentation: presentation1, settlements, outskirts: [] };
-  const scene2 = { civ, snapshot, presentation: presentation2, settlements, outskirts: [] };
+  const routes = tradeRoutes(civ, settlements, snapshot);
+  const scene1 = { civ, snapshot, presentation: presentation1, settlements, outskirts: [], routes };
+  const scene2 = { civ, snapshot, presentation: presentation2, settlements, outskirts: [], routes };
   const calls1 = [];
   const calls2 = [];
   drawSettlementContent(recordingSurface(calls1), scene1, 400, { from: 0, to: snapshot.worldWidth });
@@ -1832,4 +1834,211 @@ test('a consequence clamped into view brings the geometry it belongs to with it'
   const spread = Math.max(...scaffolds) - Math.min(...scaffolds);
   assert.ok(spread > 60, `the plots collapsed onto the anchor: spread ${spread}`);
   assert.ok(Math.abs((Math.min(...scaffolds) + Math.max(...scaffolds)) / 2 - anchorX) < 120, 'the scaffolds and the light field parted company');
+});
+
+test('trade routes bow off the straight line and still meet both settlements exactly', () => {
+  const civ = lateCiv(8101);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
+  const routes = tradeRoutes(civ, settlements, snapshot);
+
+  assert.ok(routes.length > 1, `a developed world must have a network, got ${routes.length} routes`);
+  assert.ok(routes.length <= MAX_TRADE_ROUTES, `${routes.length} routes exceeds the budget`);
+  assert.deepEqual(tradeRoutes(civ, settlements, snapshot), routes, 'the network must be deterministic');
+  assert.notDeepEqual(tradeRoutes(lateCiv(8102), settlements, snapshot), routes, 'a different seed must lay out a different network');
+
+  for (const route of routes) {
+    assert.ok(route.toX > route.fromX, `route ${route.id} runs backwards`);
+    // The two ends are where the settlements are, whatever happens in between: a road that misses
+    // its own town by a few pixels is worse than a straight one.
+    assert.equal(routeOffsetAt(route, route.fromX), 0);
+    assert.equal(routeOffsetAt(route, route.toX), 0);
+    assert.ok(Math.abs(route.bow1) <= ROUTE_MAX_BOW && Math.abs(route.bow2) <= ROUTE_MAX_BOW,
+      `route ${route.id} bows past the ceiling: ${route.bow1}/${route.bow2}`);
+    // And the curve itself stays inside the bow, so the roadbed never leaves the ground plane.
+    for (let step = 0; step <= 20; step++) {
+      const offset = routePointAt(route, step / 20).offset;
+      assert.ok(Number.isFinite(offset) && Math.abs(offset) <= ROUTE_MAX_BOW, `route ${route.id} reached ${offset}`);
+    }
+    assert.ok(route.flow > 0 && route.flow <= 1, `route ${route.id} carries ${route.flow}`);
+    assert.ok(route.direction === 1 || route.direction === -1);
+  }
+
+  // Something has to actually bend, or the whole module is a straight line with extra arithmetic.
+  const bent = routes.filter(route => Math.abs(routePointAt(route, .35).offset) > 1.5);
+  assert.ok(bent.length > 0, 'no route in the world bows off its own chord');
+
+  // A world too early for roads has no network at all.
+  const early = GameEngine.createCivilizationForTest(8103);
+  const earlySnapshot = worldSnapshot(early, 900);
+  assert.deepEqual(tradeRoutes(early, settlementLayout(early, earlySnapshot.worldWidth, 400, earlySnapshot), earlySnapshot), [],
+    'stage 0 has no trade network');
+});
+
+test('a route is sampled on a lattice fixed in world space, not on the viewport', () => {
+  // This is what lets the curved roadbed live on the cached scenery layer: the strip a scroll
+  // exposes must emit exactly the points a full redraw of the same slice does, so the sample
+  // positions may depend on the route and never on the band they are asked for.
+  const civ = lateCiv(8201);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
+  const route = tradeRoutes(civ, settlements, snapshot).find(candidate => candidate.span > ROUTE_STEP * 8);
+  assert.ok(route, 'the fixture needs one long route');
+
+  const window = { from: route.fromX + ROUTE_STEP * 3, to: route.fromX + ROUTE_STEP * 4 };
+  const strip = routePolyline(route, window.from, window.to);
+  const full = routePolyline(route, route.fromX - 400, route.toX + 400);
+  const inside = points => points.filter(([x]) => x >= window.from && x <= window.to);
+  assert.ok(inside(full).length > 0, 'the window must contain lattice points');
+  assert.deepEqual(inside(strip), inside(full), 'a narrow band moved the sample positions');
+  // And the run reaches past the band on both sides, so the primitive that opens the path is never
+  // the first point *inside* the exposed strip.
+  assert.ok(strip[0][0] < window.from, 'the polyline must start outside the band it was asked for');
+  assert.ok(strip[strip.length - 1][0] > window.to, 'the polyline must end outside the band it was asked for');
+  // A traveller and the trace agree about where the route is, because both read the same curve.
+  // Within float rounding: the round trip through the curve parameter is not bit-exact, and it does
+  // not have to be -- what matters is that both readings describe the same curve.
+  for (const [x, offset] of full) {
+    assert.ok(Math.abs(routePointAt(route, (x - route.fromX) / route.span).offset - offset) < 1e-9,
+      'a traveller and the trace disagree about where the route is');
+  }
+});
+
+test('the road network is painted as a curved bed rather than a rectangle', async () => {
+  const { drawSettlementContent, GROUND_RATIO } = await import('../dist/render/world.js');
+  const HEIGHT = 900;
+  const civ = lateCiv(8301);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
+  const routes = tradeRoutes(civ, settlements, snapshot);
+  const scene = { civ, snapshot, presentation: worldPresentation(civ), settlements, outskirts: [], routes };
+  const calls = [];
+  drawSettlementContent(recordingSurface(calls), scene, HEIGHT, { from: 0, to: snapshot.worldWidth });
+  const ground = HEIGHT * GROUND_RATIO;
+
+  // The roadbed: a wide closed polygon whose every point sits in the road band under the
+  // settlements. The band has to allow for the bow in both directions -- a bed that curves toward
+  // the eye reaches above the flat ground line, which is the whole point.
+  const roadHeight = 12 + snapshot.stage * 3;
+  const beds = calls.filter(([name, points]) => name === 'fillPoly' && Array.isArray(points) && points.length > 6
+    && Math.max(...points.map(([x]) => x)) - Math.min(...points.map(([x]) => x)) > 100
+    && points.every(([, y]) => y > ground - ROUTE_MAX_BOW - 1 && y < ground + 4 + roadHeight + ROUTE_MAX_BOW + 1));
+  assert.ok(beds.length >= routes.length, `${beds.length} roadbeds painted for ${routes.length} routes`);
+  // A flat bed spans exactly the road's own height; a curved one spans more.
+  const bent = beds.filter(([, points]) => {
+    const ys = points.map(([, y]) => y);
+    return Math.max(...ys) - Math.min(...ys) > roadHeight + 2;
+  });
+  assert.ok(bent.length > 0, 'every roadbed is flat: the network is still a set of rectangles');
+  for (const [, points] of beds) {
+    for (const [, y] of points) assert.ok(Math.abs(y - ground) <= 4 + roadHeight + ROUTE_MAX_BOW + 1, `a roadbed left the ground plane at ${y}`);
+  }
+});
+
+test('every path builds one of the three settlement frames, and no two frames are one shape', () => {
+  const frames = new Set();
+  for (const pathId of PATH_IDS) {
+    const civ = lateCiv(8401);
+    civ.pathState.affinity[pathId] = 9;
+    civ.pathState.dominantPath = pathId;
+    const identity = pathIdentity(civ);
+    assert.ok(['organic', 'industrial', 'transcendent'].includes(identity.frame), `${pathId} builds no frame`);
+    frames.add(identity.frame);
+  }
+  assert.equal(frames.size, 3, 'all three building grammars must be reachable');
+  // An unaligned civilization has not settled into a grammar yet.
+  assert.equal(pathIdentity(GameEngine.createCivilizationForTest(8402)).frame, 'none');
+
+  // Geometry with the colour stripped out, the same comparison the crowns are held to.
+  const shapesFor = frame => {
+    const calls = [];
+    drawSettlementFrame(recordingSurface(calls), frame, { centerX: 400, radius: 120, crown: 220, seed: 1.7 }, 700, 0x6fe7e1, 2, 0xffb457);
+    return calls.filter(([name]) => name !== 'fillStyle' && name !== 'lineStyle')
+      .map(([name, ...args]) => `${name}:${args.filter(a => typeof a === 'number').map(a => a.toFixed(1)).join(',')}`);
+  };
+  const organic = shapesFor('organic'), industrial = shapesFor('industrial'), transcendent = shapesFor('transcendent');
+  for (const shape of [organic, industrial, transcendent]) assert.ok(shape.length > 0, 'a frame drew nothing');
+  assert.notDeepEqual(organic, industrial);
+  assert.notDeepEqual(organic, transcendent);
+  assert.notDeepEqual(industrial, transcendent);
+  // A frame only exists once the civilization has settled into a path, and never for 'none'.
+  assert.equal(shapesFor('none').length, 0);
+  const belowTier = [];
+  drawSettlementFrame(recordingSurface(belowTier), 'organic', { centerX: 400, radius: 120, crown: 220, seed: 1.7 }, 700, 0x6fe7e1, 1, 0xffb457);
+  assert.equal(belowTier.length, 0, 'a merely leading affinity must not build a frame');
+});
+
+test('a settlement frame stays inside the reach the renderer culls it by', () => {
+  // The light-spill bug, in a new place: the scenery layer decides whether to paint a frame from one
+  // extent, so anything the frame draws outside that extent is dropped by a strip redraw and painted
+  // by a full one -- and the cached layer then disagrees with a repaint of the same slice.
+  for (const radius of [24, 60, 140, 900]) {
+    const reach = settlementFrameReach(radius);
+    assert.ok(reach <= FRAME_MAX_REACH, `reach ${reach} exceeds the ceiling`);
+    for (const frame of ['organic', 'industrial', 'transcendent']) {
+      const calls = [];
+      const geometry = { centerX: 500, radius, crown: 240, seed: 2.3 };
+      drawSettlementFrame(recordingSurface(calls), frame, geometry, 700, 0x6fe7e1, 3, 0xffb457);
+      drawSettlementFrameAccent(recordingSurface(calls), frame, geometry, 700, 0x6fe7e1, 0xffb457, 4000, false);
+      const xs = [];
+      for (const [name, ...args] of calls) {
+        if (name === 'fillPoly' || name === 'strokePoly') for (const [x] of args[0]) xs.push(x, x);
+        else if (name === 'fillRect' || name === 'strokeRect' || name === 'fillLinearGradientRect') xs.push(args[0], args[0] + args[2]);
+        else if (name === 'fillCircle' || name === 'strokeCircle') xs.push(args[0] - args[2], args[0] + args[2]);
+        else if (name === 'fillRadialGlow') xs.push(args[0] - args[3], args[0] + args[3]);
+        else if (name === 'fillEllipseGlow') xs.push(args[0] - args[2], args[0] + args[2]);
+        else if (name === 'line') xs.push(args[0], args[2]);
+      }
+      assert.ok(xs.length > 0, `${frame} drew nothing at radius ${radius}`);
+      for (const x of xs) assert.ok(Math.abs(x - 500) <= reach + .001, `${frame} reached ${x} with a cull reach of ${reach}`);
+    }
+  }
+});
+
+test('the settlement micro-lights fill the city and stay inside their budget', async () => {
+  const { drawCityLights, MAX_SETTLEMENT_LIGHTS } = await import('../dist/render/world.js');
+  const civ = lateCiv(8501);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
+  const presentation = worldPresentation(civ);
+  const scene = { civ, snapshot, presentation, settlements };
+  const view = { from: 0, to: snapshot.worldWidth };
+  const ground = 700;
+
+  for (const windowFraction of [1, .3]) {
+    const calls = [];
+    drawCityLights(recordingSurface(calls), scene, snapshot, presentation, ground, 4000, view, windowFraction, 1, false);
+    // The micro-lights are the 1.4 px marks; the windows are wider and the lamps are circles.
+    const micro = calls.filter(([name, , , w]) => name === 'fillRect' && w === 1.4).map(([, x, y]) => ({ x, y }));
+    assert.ok(micro.length > 0, `no micro-lights at windowFraction ${windowFraction}`);
+    assert.ok(micro.length <= Math.round(MAX_SETTLEMENT_LIGHTS * Math.max(.2, windowFraction)) + settlements.length,
+      `${micro.length} micro-lights against a budget of ${MAX_SETTLEMENT_LIGHTS}`);
+    for (const light of micro) {
+      // Inside a settlement, between the street and its own crown: a light in open country or above
+      // the skyline is not this city's.
+      const home = settlements.find(settlement => Math.abs(settlement.centerX - light.x) <= settlement.radius * .93);
+      assert.ok(home, `a micro-light at ${Math.round(light.x)} stands in open country`);
+      const crown = settlementCrown(home, ground);
+      assert.ok(light.y <= ground && light.y >= ground - crown * .83 - 2, `a micro-light left the city at ${light.y}`);
+    }
+    // Denser low than high: a city is lit at street level first, so the bottom third of the built
+    // volume has to carry more of the light than the top third does.
+    const tallest = Math.max(...settlements.map(settlement => settlementCrown(settlement, ground)));
+    const low = micro.filter(light => light.y > ground - tallest * .28).length;
+    const high = micro.filter(light => light.y < ground - tallest * .56).length;
+    assert.ok(low > high, `${low} micro-lights at street level against ${high} near the crowns`);
+  }
+
+  // Deterministic, and frozen but never dropped under reduced motion.
+  const a = [], b = [], still = [];
+  drawCityLights(recordingSurface(a), scene, snapshot, presentation, ground, 4000, view, 1, 1, false);
+  drawCityLights(recordingSurface(b), scene, snapshot, presentation, ground, 4000, view, 1, 1, false);
+  drawCityLights(recordingSurface(still), scene, snapshot, presentation, ground, 90000, view, 1, 1, true);
+  assert.deepEqual(a, b, 'the same world at the same time must light the same way');
+  const microCount = calls => calls.filter(([name, , , w]) => name === 'fillRect' && w === 1.4).length;
+  assert.ok(microCount(still) >= microCount(a), 'reduced motion must keep every micro-light');
 });

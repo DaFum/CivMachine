@@ -2,14 +2,24 @@ import type { Civilization } from '../game/types.js';
 import { CivilizationPaths, PATH_IDS } from '../game/paths.js';
 import type { DrawSurface } from './draw-surface.js';
 import type { Settlement } from './settlements.js';
-import { hash01 } from './primitives.js';
+import { hash01, mixColor, shade, tint } from './primitives.js';
 import type { SkylineCrown } from './structures.js';
 
 // Widest path motif: the bureaucratic filing cabinet at 28 px plus its rings.
 const MOTIF_SLACK = 60;
 
 export type IdentityTier = 0 | 1 | 2 | 3;
-export interface PathIdentityDescriptor { pathId: string; tier: IdentityTier; motif: string; landmark: string; crown: SkylineCrown | 'none'; }
+/**
+ * The building grammar a civilization settles into, one step above the crown. Where `crown` finishes
+ * a single tall solid, the frame is the mass the whole settlement is wrapped in: a biome collective
+ * grows a membrane over itself and avoids an edge anywhere, an industrial order stacks orthogonal
+ * volumes and vents them, and an apotheosis leaves the ground altogether. Three grammars rather than
+ * ten, because this reads at the scale of a settlement and ten silhouettes at that scale would be
+ * ten variations of nothing; the ten paths stay distinguishable by their landmark, their crown and
+ * their ambient marks.
+ */
+export type SettlementFrame = 'organic' | 'industrial' | 'transcendent';
+export interface PathIdentityDescriptor { pathId: string; tier: IdentityTier; motif: string; landmark: string; crown: SkylineCrown | 'none'; frame: SettlementFrame | 'none'; }
 export interface InstitutionLandmarkDescriptor { institution: string; kind: 'lunar_relay' | 'sanity_dome' | 'consensus_hall'; }
 
 /**
@@ -19,16 +29,16 @@ export interface InstitutionLandmarkDescriptor { institution: string; kind: 'lun
  * stays the single place that decides which path builds which way.
  */
 const PATH_VISUALS: Record<string, Omit<PathIdentityDescriptor,'pathId'|'tier'>> = {
-  machine_faith:{motif:'ritual_geometry',landmark:'engine_spire',crown:'luminous_core'},
-  collective_mind:{motif:'linked_nodes',landmark:'neural_bridge',crown:'synchronized_cluster'},
-  temporal_dominion:{motif:'chronal_rings',landmark:'chronal_pylon',crown:'offset_ring'},
-  reality_engineering:{motif:'lattice_frame',landmark:'constraint_tower',crown:'geometric_frame'},
-  biological_transcendence:{motif:'organic_branching',landmark:'chitin_spire',crown:'living_crown'},
-  cosmic_resistance:{motif:'defense_chevrons',landmark:'shield_bastion',crown:'blackout_shield'},
-  bureaucratic_singularity:{motif:'administrative_grid',landmark:'admin_monolith',crown:'ordered_block'},
-  post_mortal_civilization:{motif:'continuity_halo',landmark:'data_mausoleum',crown:'continuity_beacon'},
-  void_communion:{motif:'negative_space',landmark:'void_obelisk',crown:'absence_well'},
-  recursive_simulation:{motif:'nested_frames',landmark:'recursive_tower',crown:'nested_crown'},
+  machine_faith:{motif:'ritual_geometry',landmark:'engine_spire',crown:'luminous_core',frame:'industrial'},
+  collective_mind:{motif:'linked_nodes',landmark:'neural_bridge',crown:'synchronized_cluster',frame:'organic'},
+  temporal_dominion:{motif:'chronal_rings',landmark:'chronal_pylon',crown:'offset_ring',frame:'transcendent'},
+  reality_engineering:{motif:'lattice_frame',landmark:'constraint_tower',crown:'geometric_frame',frame:'industrial'},
+  biological_transcendence:{motif:'organic_branching',landmark:'chitin_spire',crown:'living_crown',frame:'organic'},
+  cosmic_resistance:{motif:'defense_chevrons',landmark:'shield_bastion',crown:'blackout_shield',frame:'industrial'},
+  bureaucratic_singularity:{motif:'administrative_grid',landmark:'admin_monolith',crown:'ordered_block',frame:'industrial'},
+  post_mortal_civilization:{motif:'continuity_halo',landmark:'data_mausoleum',crown:'continuity_beacon',frame:'transcendent'},
+  void_communion:{motif:'negative_space',landmark:'void_obelisk',crown:'absence_well',frame:'transcendent'},
+  recursive_simulation:{motif:'nested_frames',landmark:'recursive_tower',crown:'nested_crown',frame:'transcendent'},
 };
 
 const CONSOLIDATION_EVENT: Record<string,string> = {
@@ -43,11 +53,11 @@ export function pathIdentity(civ: Civilization): PathIdentityDescriptor {
   let tier: IdentityTier = dominant ? 2 : 0;
   if (!pathId) {
     pathId = [...PATH_IDS].sort((a,b) => CivilizationPaths.affinity(civ,b) - CivilizationPaths.affinity(civ,a))[0] ?? '';
-    if (!pathId || CivilizationPaths.affinity(civ,pathId) < 2) return { pathId:'', tier:0, motif:'unaligned', landmark:'none', crown:'none' };
+    if (!pathId || CivilizationPaths.affinity(civ,pathId) < 2) return { pathId:'', tier:0, motif:'unaligned', landmark:'none', crown:'none', frame:'none' };
     tier = 1;
   }
   if (dominant && (civ.pathState.completedEvents.includes(CONSOLIDATION_EVENT[dominant] ?? '') || (civ.pathState.endgameStates ?? []).length > 0)) tier = 3;
-  const visual = PATH_VISUALS[pathId] ?? { motif:'unaligned', landmark:'none', crown:'none' };
+  const visual = PATH_VISUALS[pathId] ?? { motif:'unaligned', landmark:'none', crown:'none', frame:'none' };
   return { pathId, tier, ...visual };
 }
 
@@ -305,5 +315,166 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         }
       }
       break;
+  }
+}
+
+/** The settlement geometry a frame is wrapped around, resolved by the caller. */
+export interface SettlementFrameGeometry { centerX: number; radius: number; crown: number; seed: number }
+
+/**
+ * Ceiling on how far a frame reaches from its settlement's centre. A settlement's radius reaches 18%
+ * of the world, and a frame that wide would emit single primitives broader than the cull margin
+ * covers -- and, worse, a mass that wide stops being a settlement's silhouette and becomes weather.
+ * Every primitive a frame paints stays inside this, which is what lets the caller cull the whole
+ * frame by one extent.
+ */
+export const FRAME_MAX_REACH = 120;
+export function settlementFrameReach(radius: number): number { return Math.min(FRAME_MAX_REACH, Math.max(28, radius * .92)); }
+
+/**
+ * The contour of a membrane at an angle: two frequencies, so the edge never repeats a lobe. Bounded
+ * to at most `1 + MEMBRANE_WOBBLE * (1 + breath)` of the base radius, which is what lets the caller
+ * fit the whole contour inside the reach it is culled by rather than hoping the wobble is small.
+ */
+const MEMBRANE_WOBBLE = .087;
+/** Base radius as a fraction of the reach, chosen so the widest wobble still fits inside it. */
+const MEMBRANE_FIT = .86;
+function membraneRadius(angle: number, seed: number, breath: number): number {
+  // The two lobe weights sum to one, so the excursion is exactly `MEMBRANE_WOBBLE` at its widest --
+  // the bound is a property of the function rather than an estimate of two loose coefficients.
+  const lobes = Math.sin(angle * 3 + seed) * .63 + Math.cos(angle * 5 - seed * .8) * .37;
+  return 1 + lobes * MEMBRANE_WOBBLE * (1 + breath);
+}
+
+const MEMBRANE_SEGMENTS = 14;
+
+/**
+ * The archetype mass a settlement is built inside, drawn behind its own skyline. Persistent
+ * geometry, so this belongs on the cached scenery layer beside the structures -- and gated on the
+ * identity tier, which is a band `structuralWorldKey` already tracks, never on a ticking stat.
+ *
+ * Each frame is a different set of primitives rather than the same shape in a different accent: a
+ * membrane has no straight edge anywhere, an industrial mass has nothing but straight edges, and a
+ * transcendent one is not touching the ground. That is the same rule the crowns are held to.
+ */
+export function drawSettlementFrame(surface: DrawSurface, frame: SettlementFrame | 'none', geometry: SettlementFrameGeometry, ground: number, accent: number, tier: IdentityTier, lightColor: number): void {
+  if (frame === 'none' || tier < 2) return;
+  const { centerX, crown, seed } = geometry;
+  const reach = settlementFrameReach(geometry.radius);
+  // How far up the frame goes: its own settlement's skyline, so a camp is not wrapped in the mass a
+  // metropolis earns, and never so far that it eats the sky above the city. Bounded against the
+  // *reach* as well as the skyline, because a frame is a mass and not a mast: an arcology's crown is
+  // three times what its footprint allows sideways, and a 120 x 260 dome is a spike.
+  const rise = Math.max(24, Math.min(crown * .78, reach * 1.1, ground * .46));
+  const strength = tier >= 3 ? 1 : .78;
+
+  if (frame === 'organic') {
+    // A membrane over the settlement: a closed dome whose radius is modulated at two frequencies, so
+    // the contour reads as grown tissue rather than as an arc. The fill is a light field on the
+    // cached layer, where a gradient is paid once per scroll.
+    const dome: Array<readonly [number, number]> = [];
+    for (let i = 0; i <= MEMBRANE_SEGMENTS; i++) {
+      const angle = Math.PI + (i / MEMBRANE_SEGMENTS) * Math.PI;
+      const wobble = membraneRadius(angle, seed, 0);
+      dome.push([centerX + Math.cos(angle) * reach * MEMBRANE_FIT * wobble, ground + Math.sin(angle) * rise * MEMBRANE_FIT * wobble]);
+    }
+    surface.fillEllipseGlow(centerX, ground, reach * .92, rise * .92, [
+      { offset: 0, color: accent, alpha: .1 * strength },
+      { offset: .62, color: accent, alpha: .05 * strength },
+      { offset: 1, color: accent, alpha: 0 },
+    ]);
+    surface.lineStyle(1.4, accent, .3 * strength).strokePoly(dome);
+    // The cell walls inside it, so the mass has an interior instead of being one bubble. Lit by the
+    // city under it rather than by a colour of their own -- light is one system.
+    for (let cell = 0; cell < 3; cell++) {
+      const offset = (cell - 1) * reach * .42;
+      surface.lineStyle(1, mixColor(accent, lightColor, .45), .16 * strength).line(centerX + offset, ground, centerX + offset * .55, ground - rise * (.5 + cell * .12));
+    }
+  } else if (frame === 'industrial') {
+    // Orthogonal volumes stepping up behind the skyline, and the stacks that vent them: nothing here
+    // is curved and nothing is off the grid. The terraces are wider than the plots they stand behind,
+    // so the mass silhouettes past the buildings on both sides -- one narrower than the settlement's
+    // own cluster is simply covered by it.
+    for (let block = 0; block < 3; block++) {
+      const halfWidth = reach * (.95 - block * .15);
+      const blockHeight = rise * (.3 + block * .22);
+      surface.fillStyle(shade(accent, .82), .6 * strength).fillRect(centerX - halfWidth, ground - blockHeight, halfWidth * 2, blockHeight);
+      surface.lineStyle(1, accent, .3 * strength).strokeRect(centerX - halfWidth, ground - blockHeight, halfWidth * 2, blockHeight);
+    }
+    for (let stack = 0; stack < 2; stack++) {
+      // Out at the settlement's edge rather than in its core, and taller than the mass they vent:
+      // a chimney inside the cluster is hidden by the first building in front of it.
+      const x = centerX + (stack === 0 ? -reach * .84 : reach * .84);
+      const stackWidth = reach * .12;
+      const stackHeight = rise * (1.45 + stack * .22);
+      // Tapered, because a chimney is: a plain rectangle read as a missing building.
+      surface.fillStyle(shade(accent, .88), .72 * strength).fillPoly([
+        [x - stackWidth, ground], [x - stackWidth * .58, ground - stackHeight],
+        [x + stackWidth * .58, ground - stackHeight], [x + stackWidth, ground],
+      ]);
+      surface.lineStyle(1, lightColor, .3 * strength).line(x - stackWidth * .58, ground - stackHeight, x + stackWidth * .58, ground - stackHeight);
+    }
+  } else {
+    // Apotheosis: the mass has left the ground. A stele of light standing in the settlement, the
+    // shadow of what floats above it, and the plinth the whole thing rose from.
+    const steleWidth = reach * .18;
+    const steleTop = Math.max(4, ground - rise * 1.9);
+    surface.fillLinearGradientRect(centerX - steleWidth, steleTop, steleWidth * 2, ground - steleTop, [
+      { offset: 0, color: accent, alpha: 0 },
+      { offset: .7, color: accent, alpha: .1 * strength },
+      { offset: 1, color: mixColor(accent, lightColor, .4), alpha: .22 * strength },
+    ], centerX, steleTop, centerX, ground);
+    surface.fillEllipseGlow(centerX, ground - 2, reach * .5, reach * .16, [
+      { offset: 0, color: 0x000000, alpha: .34 * strength },
+      { offset: 1, color: 0x000000, alpha: 0 },
+    ]);
+    surface.lineStyle(1.4, accent, .34 * strength).line(centerX - reach * .34, ground - 2, centerX + reach * .34, ground - 2);
+  }
+}
+
+/**
+ * The frame's one animated cue, drawn on the dynamic layer: a membrane breathing, a furnace burning,
+ * a monolith holding itself above the ground. The caller shares a fixed count of settlements out
+ * over what is on screen -- a frame's motion is a cosmetic on top of geometry that is already
+ * legible on the cached layer, so this stays a handful of primitives per frame however wide the
+ * world. Reduced motion keeps every cue and freezes it.
+ */
+export function drawSettlementFrameAccent(surface: DrawSurface, frame: SettlementFrame | 'none', geometry: SettlementFrameGeometry, ground: number, accent: number, lightColor: number, time: number, reducedMotion: boolean): void {
+  if (frame === 'none') return;
+  const { centerX, crown, seed } = geometry;
+  const reach = settlementFrameReach(geometry.radius);
+  const rise = Math.max(24, Math.min(crown * .78, reach * 1.1, ground * .46));
+  const loop = reducedMotion ? 0 : time;
+
+  if (frame === 'organic') {
+    // The membrane breathing: the same contour, one slow cycle further out. Nine segments, because
+    // this is the per-frame half of the cue and its cost is paid sixty times a second.
+    const breath = loop === 0 ? .5 : .5 + .5 * Math.sin(loop * .0007 + seed);
+    const contour: Array<readonly [number, number]> = [];
+    for (let i = 0; i <= 9; i++) {
+      const angle = Math.PI + (i / 9) * Math.PI;
+      const wobble = membraneRadius(angle, seed, breath * .5);
+      contour.push([centerX + Math.cos(angle) * reach * MEMBRANE_FIT * wobble, ground + Math.sin(angle) * rise * MEMBRANE_FIT * wobble]);
+    }
+    surface.lineStyle(1, accent, .1 + breath * .14).strokePoly(contour);
+  } else if (frame === 'industrial') {
+    // The furnaces under the stacks, glimmering out of phase with each other.
+    for (let stack = 0; stack < 2; stack++) {
+      const x = centerX + (stack === 0 ? -reach * .84 : reach * .84);
+      const burn = loop === 0 ? .5 : .5 + .5 * Math.sin(loop * .0016 + stack * 2.1 + seed);
+      // The heat is the settlement's own light pushed toward the fire, not a warm hex of its own, so
+      // a furnace answers the palette the windows and the street lamps already share.
+      const fire = mixColor(lightColor, 0xff5a12, .45);
+      surface.fillStyle(fire, .22 + burn * .4).fillRect(x - reach * .05, ground - rise * .3, reach * .1, rise * .22);
+      surface.fillStyle(fire, .06 + burn * .1).fillCircle(x, ground - rise * (1.5 + burn * .12), reach * .09);
+    }
+  } else {
+    // The monolith itself: levitating on a slow sine, with the ground shadow shrinking as it rises.
+    const lift = loop === 0 ? 0 : Math.sin(loop * .0009 + seed) * 6;
+    const y = ground - rise * 1.15 + lift;
+    const half = reach * .22;
+    surface.fillStyle(tint(accent, .55), .5).fillPoly([[centerX, y - half * 1.5], [centerX + half, y], [centerX, y + half * 1.5], [centerX - half, y]]);
+    surface.lineStyle(1.2, accent, .55).strokePoly([[centerX, y - half * 1.5], [centerX + half, y], [centerX, y + half * 1.5], [centerX - half, y], [centerX, y - half * 1.5]]);
+    surface.fillStyle(0x000000, .2 - lift * .012).fillCircle(centerX, ground - 1, half * .5);
   }
 }

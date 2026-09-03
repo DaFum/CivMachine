@@ -15,7 +15,8 @@ import { agentPlan, type AgentPlan } from './agents.js';
 import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from './construction.js';
 import { factionRoster, UNALIGNED_COLOR, type Faction } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
-import { drawIdentityLandmarks, drawPathAmbience, pathIdentity } from './identity.js';
+import { drawIdentityLandmarks, drawPathAmbience, drawSettlementFrame, drawSettlementFrameAccent, FRAME_MAX_REACH, pathIdentity, settlementFrameReach } from './identity.js';
+import { MAX_ROUTE_FLOW_MARKS, routeInBand, routeOffsetAt, routePointAt, routePolyline, tradeRoutes, type TradeRoute } from './routes.js';
 
 export interface RenderStats { sceneRebuilds: number; staticRedraws: number; sceneryFullRedraws: number; sceneryStripRedraws: number; qualityTier: RenderQualityTier; }
 export interface WorldController { nudge(direction: number): void; destroy(): void; stats(): RenderStats; }
@@ -118,6 +119,7 @@ interface WorldScene {
   settlements: Settlement[];
   structures: Structure[];
   outskirts: Outskirt[];
+  routes: TradeRoute[];
   plan: AgentPlan;
   species: SpeciesProfile;
   roster: Faction[];
@@ -128,10 +130,13 @@ function buildScene(civ: Civilization, width: number, height: number): WorldScen
   const presentation = worldPresentation(civ);
   const settlements = settlementLayout(civ, snapshot.worldWidth, height, snapshot);
   const structures = settlements.flatMap(settlement => settlement.structures);
+  // The route network is resolved before the agents, because a vehicle rides a route rather than a
+  // straight line between two centres: one curve is the authority for both the trace and the traffic.
+  const routes = tradeRoutes(civ, settlements, snapshot);
   return {
-    civ, snapshot, presentation, settlements, structures,
+    civ, snapshot, presentation, settlements, structures, routes,
     outskirts: worldOutskirts(civ, snapshot.worldWidth, snapshot, settlements),
-    plan: agentPlan(civ, snapshot, settlements), species: speciesProfile(civ), roster: factionRoster(civ),
+    plan: agentPlan(civ, snapshot, settlements, routes), species: speciesProfile(civ), roster: factionRoster(civ),
   };
 }
 
@@ -142,6 +147,13 @@ function factionColor(scene: WorldScene, settlement: Settlement): number {
 // Cloud banks are bounded by a count, not by the world: whatever the viewport and however wide the
 // world, one sky repaint emits at most this many silhouettes and this many lit undersides.
 const MAX_CLOUD_BANKS = 12;
+/**
+ * The settlement micro-light budget: the small, unresolved lights that make a night city read as
+ * density rather than as a handful of lit windows. Bounded by a count and shared over the
+ * settlements on screen, because this is per-frame work -- and shed by `windowFraction`, since a
+ * micro-light is a cosmetic on top of the window lighting that already carries the state.
+ */
+export const MAX_SETTLEMENT_LIGHTS = 48;
 /** Widest bank, so the sky's culling can be stated in terms of the design. */
 const CLOUD_MAX_WIDTH = 300;
 // The lattice the sky's atmospheric front is sampled on. Coarse enough that the whole front is one
@@ -666,26 +678,32 @@ export function drawSettlementContent(surface: DrawSurface, scene: WorldScene, h
     drawOutskirt(surface, prop, ground, presentation);
   }
 
-  // Roads connect settlement centers rather than banding the whole world.
+  // The trade network, as the traces it wore into the ground rather than as rectangles between
+  // centres. `routes.ts` owns the geometry and the lattice it is sampled on; this turns one curve
+  // into a roadbed, the lit curb along its near edge and the lane markings that follow it. Every
+  // point comes off a lattice fixed in world space, so a strip redraw emits exactly what a full
+  // redraw of the same slice does.
   if (stage > 0) {
-    for (let i = 0; i < settlements.length; i++) {
-      const from = settlements[i]!;
-      const to = settlements[i + 1] ?? null;
-      const left = to ? from.centerX : from.centerX - from.radius;
-      const right = to ? to.centerX : from.centerX + from.radius;
-      const start = Math.min(left, right); const roadSpan = Math.abs(right - left);
-      if (start > view.to || start + roadSpan < view.from) continue;
-      const roadHeight = 12 + stage * 3;
-      surface.fillStyle(0x11191f, .98).fillRect(start, ground + 4, roadSpan, roadHeight);
-      // A lit curb along the near edge: the road is the one surface that reflects the city.
-      surface.lineStyle(1, colors.lightSpill, .12 + lightLevel * .12).line(Math.max(start, view.from), ground + 4, Math.min(start + roadSpan, view.to), ground + 4);
-      // Dashes sit on a 42 px lattice inside the road; dash d spans [start + 42d + 10, +18], so it
-      // shows once its right edge clears view.from. Ceil, or the run starts one dash too early.
-      const firstDash = Math.max(0, Math.ceil((view.from - start - 28) / 42));
-      for (let dash = firstDash; dash * 42 < roadSpan; dash++) {
-        const dashX = start + dash * 42 + 10;
+    const roadHeight = 12 + stage * 3;
+    for (const route of scene.routes) {
+      if (!routeInBand(route, view.from, view.to)) continue;
+      const spine = routePolyline(route, view.from, view.to);
+      if (spine.length < 2) continue;
+      const near: Array<readonly [number, number]> = spine.map(([x, offset]) => [x, ground + 4 + offset] as const);
+      const bed: Array<readonly [number, number]> = [...near];
+      for (let i = spine.length - 1; i >= 0; i--) bed.push([spine[i]![0], ground + 4 + roadHeight + spine[i]![1]]);
+      surface.fillStyle(0x11191f, .98).fillPoly(bed);
+      // A lit curb along the near edge: the road is the one surface that reflects the city, and a
+      // busier route reflects more of it.
+      surface.lineStyle(1, colors.lightSpill, .12 + lightLevel * .12 + route.flow * .08).strokePoly(near);
+      // Lane markings on a 42 px lattice inside the road, riding the bed rather than ruling a
+      // straight line through it; dash d spans [fromX + 42d + 10, +18], so it shows once its right
+      // edge clears view.from. Ceil, or the run starts one dash too early.
+      const firstDash = Math.max(0, Math.ceil((view.from - route.fromX - 28) / 42));
+      for (let dash = firstDash; dash * 42 < route.span; dash++) {
+        const dashX = route.fromX + dash * 42 + 10;
         if (dashX > view.to) break;
-        surface.fillStyle(colors.window, .18).fillRect(dashX, ground + 10 + stage, 18, 2);
+        surface.fillStyle(colors.window, .18).fillRect(dashX, ground + 10 + stage + routeOffsetAt(route, dashX), 18, 2);
       }
     }
     if (stage >= 2) surface.lineStyle(2, presentation.accent, .24).line(view.from, ground - 9, view.to, ground - 9);
@@ -724,6 +742,17 @@ export function drawSettlementContent(surface: DrawSurface, scene: WorldScene, h
         { offset: .5, color: colors.lightSpill, alpha: .045 * spillStrength },
         { offset: 1, color: colors.lightSpill, alpha: 0 },
       ]);
+    }
+    // The archetype mass this civilization builds inside, behind its own skyline. Culled by its own
+    // reach, which `settlementFrameReach` bounds well inside the settlement's radius -- the frame is
+    // a silhouette around the city, and a mass as wide as a settlement's full radius would read as
+    // weather rather than as architecture.
+    if (identity.frame !== 'none' && identity.tier >= 2) {
+      const frameReach = settlementFrameReach(settlement.radius);
+      if (settlement.centerX + frameReach >= view.from && settlement.centerX - frameReach <= view.to) {
+        drawSettlementFrame(surface, identity.frame, { centerX: settlement.centerX, radius: settlement.radius, crown, seed: settlement.lightPhase * Math.PI * 2 },
+          ground, presentation.accent, identity.tier, colors.lightSpill);
+      }
     }
     for (const structure of settlement.structures) {
       if (structure.x + structure.width < view.from || structure.x - structure.width > view.to) continue;
@@ -908,12 +937,20 @@ function drawParticles(surface: DrawSurface, scene: WorldScene, snapshot: Return
     const stratum = i % 3;
     const depth = .45 + stratum * .275;
     const baseX = hash01(civ.seed + i * 17) * worldWidth;
-    const driftX = (baseX + (reducedMotion ? 0 : Math.sin(loopTime * 0.00022 * depth + i * 11) * 22 * depth)) % worldWidth;
+    // Two frequencies per axis rather than one. A single sine is a pendulum: every mote in a stratum
+    // retraces the same arc, and at 150 of them the air reads as a mechanism. Beating a slow drift
+    // against a faster one gives each mote a wandering path -- which is what suspended dust does --
+    // and it stays a pure function of the clock, so the layer is still reproducible frame for frame.
+    const wanderX = Math.sin(loopTime * .00022 * depth + i * 11) * 22 * depth + Math.sin(loopTime * .00007 + i * 3.7) * 15 * depth;
+    const driftX = (baseX + (reducedMotion ? 0 : wanderX)) % worldWidth;
     const posX = driftX < 0 ? driftX + worldWidth : driftX;
     if (posX < view.from || posX > view.to) continue;
 
     const baseY = hash01(civ.seed + i * 31) * height * (.32 + stratum * .13);
-    const driftY = baseY + (reducedMotion ? 0 : Math.cos(loopTime * 0.00026 + i * 7) * 6 * depth);
+    // The vertical wander carries a slow thermal rise with it, so the strata lift and settle rather
+    // than only swinging: the same bounded excursion, but the air has an up.
+    const wanderY = Math.cos(loopTime * .00026 + i * 7) * 6 * depth + Math.sin(loopTime * .00009 + i * 5.3) * 7 * depth;
+    const driftY = baseY + (reducedMotion ? 0 : wanderY);
     // A slow, per-particle twinkle: the phase comes from the index, so no two are ever in step.
     const twinkle = reducedMotion ? 1 : .72 + Math.sin(loopTime * .0013 + i * 13) * .28;
     const alpha = (.1 + hash01(i * 41) * (.24 + presentation.awareness * .2)) * depth * twinkle;
@@ -1064,6 +1101,33 @@ export function drawCityLights(surface: DrawSurface, scene: WorldScene, snapshot
     }
   }
 
+  // Micro-lights: everything a city emits that is too small to resolve into a window. Distributed
+  // with a quadratic bias toward the ground, so the light is dense where the streets are and thins
+  // out toward the crowns, and each one flickers on its own phase and speed -- a light whose phase
+  // has it switched off this cycle is simply skipped, which is what keeps the field from reading as
+  // a static texture. The budget is shared over the settlements on screen and strided inside each,
+  // for the same reason the window budget is.
+  const microBudget = Math.round(MAX_SETTLEMENT_LIGHTS * Math.max(.2, windowFraction));
+  const microShare = Math.max(1, Math.floor(microBudget / Math.max(1, onScreen.length)));
+  for (const settlement of onScreen) {
+    const crown = settlementCrown(settlement, ground);
+    if (crown <= 0) continue;
+    const lightSeed = civ.seed * 17 + settlement.centerX;
+    for (let i = 0; i < microShare; i++) {
+      const x = settlement.centerX + (hash01(lightSeed + i * 17) - .5) * settlement.radius * 1.84;
+      if (x < view.from || x > view.to) continue;
+      // Quadratic, not uniform: a city has far more lit windows at street level than at its crown,
+      // and a uniform column of lights up a settlement's full height reads as a lit grid instead.
+      const rise = Math.pow(hash01(lightSeed + i * 29), 2);
+      const y = ground - 2 - rise * crown * .82;
+      const flicker = reducedMotion ? 1 : Math.sin(animationTime * .001 * (1.5 + hash01(lightSeed + i * 7) * 3.5) + hash01(lightSeed + i * 13) * Math.PI * 2);
+      if (flicker < -.2) continue;
+      const alpha = (.12 + .48 * Math.max(0, flicker)) * lightLevel;
+      const hue = hash01(lightSeed + i * 53);
+      surface.fillStyle(hue < .62 ? spill : hue < .86 ? presentation.accent : windowColor, alpha).fillRect(x, y, 1.4, 1.4);
+    }
+  }
+
   // Street lamps on the road lattice: the light that ties the settlements to the ground plane.
   if (snapshot.stage >= 1) {
     const firstLamp = Math.max(0, Math.floor(view.from / 118));
@@ -1078,6 +1142,43 @@ export function drawCityLights(surface: DrawSurface, scene: WorldScene, snapshot
       surface.fillStyle(spill, .5 * flicker).fillCircle(x, ground + 1, 1.5);
       surface.fillStyle(spill, .08 * lightLevel * flicker * (glowDetail > 0 ? 1 : .5)).fillCircle(x, ground + 1, 6 + lightLevel * 4);
       surface.lineStyle(1, shade(spill, .55), .45).line(x, ground + 2, x, ground - 9);
+    }
+  }
+}
+
+/**
+ * The kinetic half of the route network: what is moving along it, and which way. A dash pattern
+ * offset over time is the canvas idiom for this, and it is the wrong one here -- `DrawSurface` has
+ * no dash state by design, and a dashed stroke would put the whole route's worth of pattern into
+ * every frame however little of it is on screen. A bounded run of marks placed *on* the curve costs
+ * a fixed handful of primitives instead, and carries something a dash pattern cannot: each mark has
+ * a bright leading end, so the direction of the flow is legible from a single frame.
+ *
+ * The budget is shared over the routes on screen rather than spent along the first one, for the same
+ * reason the window budget is: otherwise the leftmost route takes it all and the rest of the network
+ * looks abandoned.
+ */
+function drawRouteFlow(surface: DrawSurface, scene: WorldScene, presentation: ReturnType<typeof worldPresentation>, ground: number, animationTime: number, view: WorldBand, reducedMotion: boolean, glowDetail: number): void {
+  const visible = scene.routes.filter(route => routeInBand(route, view.from, view.to));
+  if (!visible.length) return;
+  const share = Math.max(1, Math.floor(MAX_ROUTE_FLOW_MARKS / visible.length));
+  const color = mixColor(presentation.colors.lightSpill, presentation.accent, .4);
+  for (const route of visible) {
+    // A busier route moves its goods faster as well as more of them, and the whole run of marks on
+    // one route stays evenly spaced whatever that speed is.
+    const speed = .000028 * (.6 + route.flow);
+    const length = .05 + route.flow * .03;
+    for (let mark = 0; mark < share; mark++) {
+      const phase = mark / share + hash01(route.seed + mark * 31);
+      const head = reducedMotion ? phase % 1 : ((phase + animationTime * speed) % 1 + 1) % 1;
+      const t = route.direction === 1 ? head : 1 - head;
+      const from = routePointAt(route, t - route.direction * length);
+      const to = routePointAt(route, t);
+      if (Math.max(from.x, to.x) < view.from || Math.min(from.x, to.x) > view.to) continue;
+      const alpha = .16 + route.flow * .26;
+      surface.lineStyle(1.6, color, alpha).line(from.x, ground + 7 + from.offset, to.x, ground + 7 + to.offset);
+      // The leading end, brighter than the trail: the direction of the flow in one frame.
+      if (glowDetail > 0) surface.fillStyle(color, Math.min(.9, alpha + .3)).fillCircle(to.x, ground + 7 + to.offset, 1.4);
     }
   }
 }
@@ -1121,7 +1222,10 @@ function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnTy
     const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
     if (x < view.from || x > view.to) continue;
     const length = 5 + snapshot.stage * 1.5;
-    const y = ground + 10 + vehicle.lane * 7;
+    // On the route's own bed, not on a straight line through it: as soon as the road bends, traffic
+    // interpolated between two centres drives visibly beside its own road.
+    const route = vehicle.routeIndex >= 0 ? scene.routes[vehicle.routeIndex] : undefined;
+    const y = ground + 10 + vehicle.lane * 7 + (route ? routeOffsetAt(route, x) : 0);
     surface.fillStyle(vehicle.seed % 2 ? presentation.accent : presentation.colors.window, .72).fillRect(x, y, length, 2.5);
     if (civ.era >= 2) surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
   }
@@ -1291,6 +1395,26 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
     }
   }
 
+  // 2b. What the network is carrying, and the one animated cue each identity frame owns. Both belong
+  // to the settlements and the ground between them, so they sit under the atmosphere with the city
+  // lights rather than over it.
+  drawRouteFlow(surface, scene, presentation, ground, animationTime, view, currentReducedMotion, glowDetail);
+  const identity = pathIdentity(scene.civ);
+  if (identity.frame !== 'none' && identity.tier >= 2) {
+    // Three of them, strided over what is on screen: the frame's geometry is already legible on the
+    // cached layer, so its motion is a fixed-cost cosmetic rather than one cue per settlement.
+    const framed = scene.settlements.filter(settlement =>
+      settlement.centerX + FRAME_MAX_REACH >= view.from && settlement.centerX - FRAME_MAX_REACH <= view.to);
+    const stride = Math.max(1, Math.ceil(framed.length / 3));
+    for (let index = 0, drawn = 0; index < framed.length && drawn < 3; index += stride, drawn++) {
+      const settlement = framed[index]!;
+      drawSettlementFrameAccent(surface, identity.frame, {
+        centerX: settlement.centerX, radius: settlement.radius,
+        crown: settlementCrown(settlement, ground), seed: settlement.lightPhase * Math.PI * 2,
+      }, ground, presentation.accent, presentation.colors.lightSpill, animationTime, currentReducedMotion);
+    }
+  }
+
   // 3. Haze, drifting between the city and the eye.
   drawHazeBands(surface, snapshot, presentation, width, height, animationTime, view, currentReducedMotion);
 
@@ -1305,7 +1429,7 @@ function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: R
   drawBannersAndConstruction(surface, scene, snapshot, presentation, ground, height, time, tracker, animationTime, view, currentReducedMotion);
 
   // 7. Landmarks and the ambient marks of the dominant path.
-  drawPathAmbience(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view, pathIdentity(scene.civ).tier, qualityFactors(tier).ambientLoopFraction);
+  drawPathAmbience(surface, scene.civ, snapshot.worldWidth, height, ground, animationTime, presentation.accent, view, identity.tier, qualityFactors(tier).ambientLoopFraction);
 
   // 8. Fractures, beacons and sanity distortion: the state cues that must never be shed.
   drawAnomalies(surface, scene, snapshot, presentation, ground, height, animationTime, view, currentReducedMotion, glowDetail);

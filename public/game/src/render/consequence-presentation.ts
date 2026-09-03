@@ -211,7 +211,15 @@ export function drawConsequenceImpact(
     surface.lineStyle(1.2, color, fade * .8).strokeRect(cx - radius * .42, cy - radius * .42, radius * .84, radius * .84);
     surface.lineStyle(1.4, color, fade * .55).line(cx, groundY, cx, cy);
   } else {
-    surface.lineStyle(2, color, fade).strokeCircle(cx, cy, Math.max(6, radius));
+    // A wavefront leaving fast and settling, rather than a circle growing at a constant rate: the
+    // radius is eased with a cubic falloff and the stroke thins as it goes, which is what a release
+    // of energy looks like. The second, inner front is the interference behind it -- one extra
+    // stroke, and it is what stops the cue from reading as a single expanding outline.
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const front = Math.max(6, radius * (.52 + ease * .76));
+    const stroke = Math.max(.5, 2.4 - progress * 1.8);
+    surface.lineStyle(stroke, color, fade).strokeCircle(cx, cy, front);
+    if (front > 15) surface.lineStyle(Math.max(.5, stroke * .6), color, fade * .42).strokeCircle(cx, cy, front * .72);
     surface.fillStyle(color, fade * .08).fillCircle(cx, cy, Math.max(3, radius * .55));
   }
 }

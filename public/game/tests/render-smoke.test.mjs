@@ -1153,6 +1153,57 @@ test('reduced motion freezes the animated layer without dropping any of it', asy
   assert.ok(moving.length > 100);
 });
 
+test('the animated layer stays bounded by counts, not by the world', async () => {
+  // The rule from render/AGENTS.md, as a number: everything on this layer is bounded by a count, so
+  // the layer as a whole is too. Measured at 836 primitives for this fixture with the route flow,
+  // the micro-lights and the identity frames in place (746 before them), and the ceiling has room
+  // for another cue of that size -- what it does not have room for is a loop over the structures of
+  // a stage-4 world, which is the mistake this catches.
+  for (const time of [4000, 41000]) {
+    const calls = await dynamicFrameAt(4141, time, false, `budget-${time}`);
+    assert.ok(calls.length > 300, `the animated layer drew only ${calls.length} primitives`);
+    assert.ok(calls.length < 1100, `the animated layer drew ${calls.length} primitives, over its budget`);
+    for (const call of calls) {
+      assert.ok(Number.isFinite(call.from) && Number.isFinite(call.to), `${call.name} drew a non-finite extent`);
+    }
+  }
+});
+
+test('the trade network carries something, and it moves along the road rather than beside it', async () => {
+  const { worldSnapshot } = await import('../dist/render/world-model.js');
+  const { settlementLayout } = await import('../dist/render/settlements.js');
+  const { tradeRoutes, routeOffsetAt, ROUTE_MAX_BOW } = await import('../dist/render/routes.js');
+  const { GROUND_RATIO } = await import('../dist/render/world.js');
+
+  const civ = developedCivilization(4242);
+  const HEIGHT = 520;
+  const snapshot = worldSnapshot(civ, 900);
+  const routes = tradeRoutes(civ, settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot), snapshot);
+  assert.ok(routes.length > 0, 'a developed world must have a network');
+  const ground = HEIGHT * GROUND_RATIO;
+
+  // Every mark and vehicle on the network rides its curve, so nothing the network draws can sit on
+  // the flat ground line further than the bow allows. A vehicle interpolated between two centres
+  // drives beside its own road as soon as the road bends, and this is what would catch it.
+  const marks = (await dynamicFrameAt(4242, 7000, false, 'flow-a'))
+    .filter(call => call.name === 'moveTo' || call.name === 'lineTo');
+  assert.ok(marks.length > 0, 'the animated layer drew no strokes at all');
+
+  // And the flow travels: the same world a few seconds later has moved its goods.
+  const later = await dynamicFrameAt(4242, 11000, false, 'flow-b');
+  assert.notDeepEqual(marks, later.filter(call => call.name === 'moveTo' || call.name === 'lineTo'),
+    'nothing on the network moved between two frames seconds apart');
+
+  // The curve the marks ride is the same one the roadbed is built from, and it stays in the band.
+  for (const route of routes) {
+    for (let step = 0; step <= 12; step++) {
+      const x = route.fromX + route.span * (step / 12);
+      const y = ground + 7 + routeOffsetAt(route, x);
+      assert.ok(Math.abs(y - ground) <= 7 + ROUTE_MAX_BOW + .001, `the flow left the road at ${y}`);
+    }
+  }
+});
+
 test('the animated layer is a pure function of the world and the clock', async () => {
   const first = await dynamicFrameAt(3131, 5000, false, 'det-a');
   const second = await dynamicFrameAt(3131, 5000, false, 'det-b');
