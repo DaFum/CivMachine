@@ -15,7 +15,7 @@ import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH, skylineCompress, MAX_STRUCTURE_ASPECT } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
-import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROUTE_MAX_BOW, ROUTE_STEP, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
+import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROUTE_MAX_BOW, ROUTE_STEP, routeFlowMarks, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
 import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
@@ -2041,4 +2041,84 @@ test('the settlement micro-lights fill the city and stay inside their budget', a
   assert.deepEqual(a, b, 'the same world at the same time must light the same way');
   const microCount = calls => calls.filter(([name, , , w]) => name === 'fillRect' && w === 1.4).length;
   assert.ok(microCount(still) >= microCount(a), 'reduced motion must keep every micro-light');
+});
+
+test('the flow budget follows what each route carries, and never starves a link', () => {
+  const civ = lateCiv(8601);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
+  const routes = tradeRoutes(civ, settlements, snapshot);
+  assert.ok(routes.length > 2, 'the fixture needs a network');
+
+  const counts = routeFlowMarks(routes);
+  assert.equal(counts.length, routes.length);
+  assert.equal(routeFlowMarks([]).length, 0);
+  // Both invariants together: no visible link goes empty, and the whole cue stays in its budget.
+  // A link with nothing on it reads as abandoned rather than as quiet, and the floor is affordable
+  // because at most eight routes can exist against eighteen marks.
+  for (const count of counts) assert.ok(count >= 1, 'a route on screen carries nothing at all');
+  const total = counts.reduce((sum, count) => sum + count, 0);
+  assert.ok(total <= Math.max(routes.length, MAX_ROUTE_FLOW_MARKS), `${total} marks against a budget of ${MAX_ROUTE_FLOW_MARKS}`);
+
+  // Weighted, not split equally: flow decides how *many* marks a link carries and not only how fast
+  // they move, or a trunk route and a spur would look identically busy.
+  for (let i = 0; i < routes.length; i++) {
+    for (let j = 0; j < routes.length; j++) {
+      if (routes[i].flow > routes[j].flow) {
+        assert.ok(counts[i] >= counts[j],
+          `route ${routes[i].id} carries ${routes[i].flow} but only ${counts[i]} marks against ${routes[j].id}'s ${counts[j]}`);
+      }
+    }
+  }
+  // And the weighting actually differentiates on a world whose links differ.
+  const busiest = routes.reduce((best, route) => route.flow > best.flow ? route : best, routes[0]);
+  const lightest = routes.reduce((worst, route) => route.flow < worst.flow ? route : worst, routes[0]);
+  if (busiest.flow > lightest.flow * 1.5) {
+    assert.ok(counts[routes.indexOf(busiest)] > counts[routes.indexOf(lightest)],
+      'a much busier link carries no more marks than the quietest one');
+  }
+
+  // Two routes, one twice as busy, is the arithmetic in isolation.
+  const pair = [{ ...routes[0], id: 'a', flow: .2 }, { ...routes[0], id: 'b', flow: .8 }];
+  const pairCounts = routeFlowMarks(pair);
+  assert.ok(pairCounts[1] > pairCounts[0], `${pairCounts[1]} marks on the busy link against ${pairCounts[0]} on the quiet one`);
+  assert.ok(pairCounts[0] + pairCounts[1] <= MAX_ROUTE_FLOW_MARKS);
+});
+
+test('the flow marks stay evenly spaced along the route they ride', async () => {
+  // A hash per *mark* would overwrite the even `mark / count` spacing entirely: the marks cluster and
+  // leave stretches of the route empty, which is the same failure the world-wide cues are placed
+  // with `spreadPosition` to avoid. One hashed offset for the whole route is what keeps the run
+  // spread while still putting no two routes in step.
+  const { drawRouteFlow, GROUND_RATIO } = await import('../dist/render/world.js');
+  const HEIGHT = 900;
+  const civ = lateCiv(8701);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
+  const routes = tradeRoutes(civ, settlements, snapshot);
+  const presentation = worldPresentation(civ);
+  const ground = HEIGHT * GROUND_RATIO;
+  const view = { from: 0, to: snapshot.worldWidth };
+
+  // One route at a time, so every mark drawn belongs to a known curve.
+  const offsets = new Set();
+  for (const route of routes) {
+    const scene = { civ, snapshot, presentation, settlements, outskirts: [], routes: [route] };
+    const calls = [];
+    drawRouteFlow(recordingSurface(calls), scene, presentation, ground, 6000, view, false, 1);
+    // The leading end of each mark: one circle per mark, at the head's own position on the curve.
+    const heads = calls.filter(([name]) => name === 'fillCircle').map(([, x]) => x);
+    const count = routeFlowMarks([route])[0];
+    assert.equal(heads.length, count, `route ${route.id} drew ${heads.length} marks for a budget of ${count}`);
+
+    // Evenly spaced means every head sits at the same place inside its own 1/count slot.
+    const slots = heads.map(x => (((x - route.fromX) / route.span) * count) % 1);
+    const spread = Math.max(...slots) - Math.min(...slots);
+    assert.ok(spread < 1e-6, `route ${route.id} spread its marks unevenly: ${spread}`);
+    offsets.add(slots[0].toFixed(6));
+  }
+  // And the offset is per route, so no two routes are in step.
+  assert.ok(offsets.size > 1, 'every route runs its marks on the same phase');
 });

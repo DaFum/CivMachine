@@ -101,6 +101,26 @@ export function routePolyline(route, from, to) {
     }
     return points;
 }
+/**
+ * How many flow marks each of the routes on screen gets. Weighted by what each link *carries*, not
+ * split equally: `flow` already sets how fast a mark travels and how long it is, and if it did not
+ * also set how many there are, a trunk route and a spur would look identically busy -- capacity
+ * would be the one thing the cue cannot show, which is most of what it is for.
+ *
+ * Every visible route keeps a floor of one mark, because a link with nothing on it reads as
+ * abandoned rather than as quiet. The floor moves the budget rather than truncating the list -- the
+ * same resolution the window budget uses -- so `sum(marks) <= max(routes.length,
+ * MAX_ROUTE_FLOW_MARKS)` is an identity rather than an approximation, and at most eight links can
+ * ever exist against eighteen marks, so in practice the ceiling is the constant.
+ */
+export function routeFlowMarks(routes) {
+    if (!routes.length)
+        return [];
+    const budget = Math.max(routes.length, MAX_ROUTE_FLOW_MARKS);
+    const spare = budget - routes.length;
+    const totalFlow = routes.reduce((sum, route) => sum + route.flow, 0);
+    return routes.map(route => 1 + (totalFlow > 0 ? Math.floor(spare * route.flow / totalFlow) : 0));
+}
 /** Whether any part of the route reaches the band. Its own extent, so the cull stays exact. */
 export function routeInBand(route, from, to) {
     return route.toX >= from - ROUTE_STEP && route.fromX <= to + ROUTE_STEP;

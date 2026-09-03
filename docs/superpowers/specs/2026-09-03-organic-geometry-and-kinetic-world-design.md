@@ -114,11 +114,19 @@ Reduced motion keeps every light and freezes it.
 
 ## Budgets
 
-Per animated frame, on top of what the layer already spent: at most 18 route flow marks (shared over
-the routes on screen), 48 micro-lights (shared over the settlements on screen), and 3 frame accents
-(strided over the settlements on screen). Measured cost of the whole animated layer for the reference
-developed world: **836 primitives, up from 746** — pinned under 1100 in `render-smoke.test.mjs`, which
-leaves room for one more cue of this size and none for a loop over a stage-4 world's structures.
+Per animated frame, on top of what the layer already spent: at most 18 route flow marks, 48
+micro-lights (shared over the settlements on screen), and 3 frame accents (strided over the
+settlements on screen). Measured cost of the whole animated layer: **816–848 primitives across the
+pinned reference worlds, up from 746** — pinned under 1100 in `render-smoke.test.mjs`, which leaves
+room for one more cue of this size and none for a loop over a stage-4 world's structures.
+
+The flow budget is shared *weighted by flow* rather than equally, with a floor of one mark per
+visible route: flow already sets a mark's speed and length, and an equal split would leave a trunk
+route and a spur looking identically busy — capacity would be the one thing the cue could not show.
+The floor moves the budget (`Math.max(count, MAX_ROUTE_FLOW_MARKS)`) rather than truncating the list,
+the same resolution the window budget uses, so the total is an identity. Inside one route the marks
+are spread by index with a single hashed offset for the whole route; a hash per mark would overwrite
+that spacing, cluster the marks and leave stretches of the route empty.
 
 The cached scenery layer gains one polygon, one polyline and the existing lane markings per route,
 plus one frame per settled settlement. The 12 px reference strip redraw stays under its pinned 320
@@ -146,3 +154,8 @@ primitives.
 - The animated layer stays under 1100 primitives with finite geometry at two clock times.
 - The network carries something, it moves between two frames seconds apart, and everything it draws
   stays within the bow of the road.
+
+And for the budget itself, back in `presentation.test.mjs`: no visible route carries nothing, the
+total stays inside the budget, a busier link never carries fewer marks than a quieter one, and every
+mark on a route sits at the same place inside its own slot — even spacing, with the per-route offset
+differing between routes.

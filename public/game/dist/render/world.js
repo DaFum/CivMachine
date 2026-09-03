@@ -13,7 +13,7 @@ import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from '.
 import { factionRoster, UNALIGNED_COLOR } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 import { drawIdentityLandmarks, drawPathAmbience, drawSettlementFrame, drawSettlementFrameAccent, FRAME_MAX_REACH, pathIdentity, settlementFrameReach } from './identity.js';
-import { MAX_ROUTE_FLOW_MARKS, routeInBand, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from './routes.js';
+import { routeFlowMarks, routeInBand, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from './routes.js';
 function getDevicePixelRatio() {
     return Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1));
 }
@@ -1136,19 +1136,26 @@ export function drawCityLights(surface, scene, snapshot, presentation, ground, a
  * reason the window budget is: otherwise the leftmost route takes it all and the rest of the network
  * looks abandoned.
  */
-function drawRouteFlow(surface, scene, presentation, ground, animationTime, view, reducedMotion, glowDetail) {
+export function drawRouteFlow(surface, scene, presentation, ground, animationTime, view, reducedMotion, glowDetail) {
     const visible = scene.routes.filter(route => routeInBand(route, view.from, view.to));
     if (!visible.length)
         return;
-    const share = Math.max(1, Math.floor(MAX_ROUTE_FLOW_MARKS / visible.length));
+    // Weighted by what each link carries rather than split equally; `routes.ts` owns the arithmetic.
+    const counts = routeFlowMarks(visible);
     const color = mixColor(presentation.colors.lightSpill, presentation.accent, .4);
-    for (const route of visible) {
+    for (let index = 0; index < visible.length; index++) {
+        const route = visible[index];
+        const count = counts[index];
         // A busier route moves its goods faster as well as more of them, and the whole run of marks on
         // one route stays evenly spaced whatever that speed is.
         const speed = .000028 * (.6 + route.flow);
         const length = .05 + route.flow * .03;
-        for (let mark = 0; mark < share; mark++) {
-            const phase = mark / share + hash01(route.seed + mark * 31);
+        // One hashed offset for the whole route, so two routes are never in step -- never one per mark,
+        // which is what a hash inside the loop would be: it would overwrite the even `mark / count`
+        // spacing entirely, cluster the marks and leave stretches of the route empty.
+        const offset = hash01(route.seed);
+        for (let mark = 0; mark < count; mark++) {
+            const phase = mark / count + offset;
             const head = reducedMotion ? phase % 1 : ((phase + animationTime * speed) % 1 + 1) % 1;
             const t = route.direction === 1 ? head : 1 - head;
             const from = routePointAt(route, t - route.direction * length);

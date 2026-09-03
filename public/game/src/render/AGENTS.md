@@ -17,7 +17,8 @@ agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outski
 banks, 3 reality shears, 5 entropy fissures, 8 trade routes, 18 route flow marks, 48 settlement
 micro-lights, 3 animated identity frames, and device pixel ratio capped at 2. The sky-and-
 terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
-pixel, and the animated layer under 1100 — measured at 836 for the reference developed world, which
+pixel, and the animated layer under 1100 — measured at 816–848 across the pinned reference worlds,
+about ninety more than before the route flow, the micro-lights and the identity frames. The ceiling
 leaves room for another cue of that size and none at all for a loop over a stage-4 world's
 structures. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
 scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
@@ -142,6 +143,16 @@ so shedding thins the cue everywhere rather than truncating it after the first f
 The same rule reaches the transient cues. The phase-transition cue is anchored to the settlements the
 renderer resolves into screen space, and takes exactly three of them — anchoring replaces the fixed
 fractions rather than adding to them, because that cue's stroke count is fixed by design and pinned.
+
+Sharing a budget is not always splitting it *equally*. Where the things sharing it differ in what
+they are showing, the split is weighted and the floor keeps everyone in: `routeFlowMarks` gives every
+visible route one mark and shares the remainder by `flow`, because flow already sets how fast a mark
+moves and how long it is, and an equal split would leave a trunk route and a spur looking identically
+busy. The floor moves the *budget* rather than truncating the list — `Math.max(count, MAX)`, the same
+resolution the window budget uses — so the total stays an identity rather than an approximation. And
+the phase inside such a run is spread by index with **one** hashed offset for the whole run: a hash
+per mark overwrites the even spacing entirely, clusters the marks and leaves stretches empty, which
+is the failure `spreadPosition` exists to prevent for the world-wide cues.
 
 ## A repeated cell is visible; a sampled profile is not
 
