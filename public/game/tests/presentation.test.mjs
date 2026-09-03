@@ -1307,8 +1307,16 @@ test('the passive phase-transition cue is small, transient and reduced-motion sa
   // Anchoring replaces the fixed bars rather than adding to them: the cost stays what it was.
   assert.equal(anchored.filter(([name]) => name === 'line' || name === 'strokeCircle').length, strokes.length,
     'anchoring the cue to the world changed what it costs');
-  // A viewport with no settlement in it still gets the cue, on the frame's own thirds.
-  assert.ok(draw(1, 2, 1200, false).length > 0, 'open country must not lose the phase cue');
+  // A viewport with no settlement in it still gets the cue, on the frame's own thirds. Asserted as
+  // placement rather than as a count: three bars that all landed in the same place would satisfy a
+  // length check while losing the whole point of the fallback. Stated as thirds rather than as the
+  // three literal centres, so the cue keeps its freedom to be re-composed without failing here.
+  const open = draw(1, 2, 1200, false);
+  assert.ok(open.length > 0, 'open country must not lose the phase cue');
+  const openBars = open.filter(([name, x1, y1, x2, y2]) => name === 'line' && y1 === y2 && x2 > x1)
+    .map(([, x1, , x2]) => (x1 + x2) / 2);
+  const thirds = new Set(openBars.filter(x => x > 0 && x < 900).map(x => Math.floor(x / 300)));
+  assert.ok(thirds.size >= 3, `the fallback bars cover only ${thirds.size} third(s) of the frame`);
 });
 
 
@@ -1563,7 +1571,13 @@ test('the city breathes across the whole viewport, not only its leftmost settlem
   const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
   const presentation = worldPresentation(civ);
   const scene = { civ, snapshot, presentation, settlements };
-  const view = { from: 0, to: 1440 };
+
+  // Two bands, because the two failure modes live at opposite ends of the settlement count. A
+  // viewport-wide band holds a couple of settlements and is where a left-to-right counter left the
+  // right half dark; a world-wide band holds all nine, and that is the only place a per-settlement
+  // floor can outrun the budget -- nine at two windows each against a budget of fourteen.
+  const bands = [{ from: 0, to: 1440 }, { from: 0, to: snapshot.worldWidth }];
+  for (const view of bands) {
   const onScreen = settlements.filter(s => s.centerX - s.radius <= view.to && s.centerX + s.radius >= view.from);
   assert.ok(onScreen.length >= 2, 'the fixture needs more than one settlement in the viewport');
 
@@ -1577,6 +1591,26 @@ test('the city breathes across the whole viewport, not only its leftmost settlem
       const lit = marks.some(x => Math.abs(x - settlement.centerX) <= settlement.radius + 40);
       assert.ok(lit, `settlement at ${Math.round(settlement.centerX)} is dark at windowFraction ${windowFraction}`);
     }
+    // The other half of the same invariant: covering every settlement must not buy its way past the
+    // budget. A per-settlement floor of two windows did exactly that -- nine settlements at two each
+    // against a budget of six windows -- so the share and the cap are checked together.
+    //
+    // Counted exactly, by the position each structure's *first* window is required to take. Neither
+    // slack measure works here: footprints follow height and overlap heavily, so "a mark near this
+    // structure" attributes one structure's windows to its neighbours, and a lit structure draws
+    // between one and three windows, so bounding the rectangles at three per structure is loose
+    // enough to swallow the very overrun this pins. The offset below is the drawing's own formula,
+    // and it reproduces bit-for-bit, so a match identifies the structure that lit.
+    const budget = Math.max(onScreen.length, Math.round(46 * Math.max(.2, windowFraction)));
+    const firstWindowX = structure =>
+      structure.x - structure.width * .34 + hash01(civ.seed + structure.x * 7) * structure.width * .56;
+    const marked = new Set(marks);
+    const litStructures = onScreen.reduce((total, settlement) =>
+      total + settlement.structures.filter(structure => marked.has(firstWindowX(structure))).length, 0);
+    assert.ok(litStructures > 0, 'the fixture must light something');
+    assert.ok(litStructures <= budget,
+      `${litStructures} structures lit against a budget of ${budget} at windowFraction ${windowFraction}`);
+  }
   }
 });
 

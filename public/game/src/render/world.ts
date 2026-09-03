@@ -1010,8 +1010,6 @@ export function drawCityLights(surface: DrawSurface, scene: WorldScene, snapshot
   const lightLevel = presentation.lightLevel;
   const windowColor = presentation.colors.window;
   const spill = presentation.colors.lightSpill;
-  const budget = Math.max(6, Math.round(46 * Math.max(.2, windowFraction)));
-
   // The budget is shared out over the settlements actually on screen, and strided inside each one,
   // rather than spent by a single counter walking the world from left to right. That counter made
   // the lighting a function of where a settlement sat in the world: the leftmost one on screen took
@@ -1020,7 +1018,13 @@ export function drawCityLights(surface: DrawSurface, scene: WorldScene, snapshot
   // the share spread across a settlement instead of crowding into its first few plots.
   const onScreen = settlements.filter(settlement =>
     settlement.centerX - settlement.radius <= view.to && settlement.centerX + settlement.radius >= view.from);
-  const share = Math.max(2, Math.floor(budget / Math.max(1, onScreen.length)));
+  // Two invariants that have to hold together: no visible settlement goes dark, and the whole layer
+  // stays inside its budget. A per-settlement floor above 1 cannot deliver both -- nine settlements
+  // at two windows each is eighteen against a budget whose own floor was six -- so the floor moves
+  // to the budget instead. Sized never below the number of settlements it has to cover, `share` is
+  // at least 1 and `share * onScreen.length <= budget` is an identity rather than an approximation.
+  const budget = Math.max(onScreen.length, Math.round(46 * Math.max(.2, windowFraction)));
+  const share = Math.max(1, Math.floor(budget / Math.max(1, onScreen.length)));
 
   for (const settlement of onScreen) {
     const inView = settlement.structures.filter(structure =>
