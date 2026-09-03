@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rce-app-v1.24.0';
+const CACHE_NAME = 'rce-app-v1.25.0';
 const APP_ASSETS = [
   '/',
   '/manifest.webmanifest',
