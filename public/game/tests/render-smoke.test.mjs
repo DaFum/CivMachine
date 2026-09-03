@@ -1204,7 +1204,7 @@ test('the trade network carries something, and it rides the road rather than run
   const { worldSnapshot } = await import('../dist/render/world-model.js');
   const { settlementLayout } = await import('../dist/render/settlements.js');
   const { tradeRoutes, routeOffsetAt, MAX_ROUTE_FLOW_MARKS } = await import('../dist/render/routes.js');
-  const { GROUND_RATIO } = await import('../dist/render/world.js');
+  const { FLOW_HEAD_RADIUS, GROUND_RATIO } = await import('../dist/render/world.js');
 
   const HEIGHT = 520;
   const civ = developedCivilization(4242);
@@ -1218,7 +1218,7 @@ test('the trade network carries something, and it rides the road rather than run
   // ambience, the strain lines and the creature legs satisfy these assertions without the route
   // flow being drawn at all.
   const heads = calls => calls
-    .filter(([name, , , radius]) => name === 'arc' && radius === 1.4)
+    .filter(([name, , , radius]) => name === 'arc' && radius === FLOW_HEAD_RADIUS)
     .map(([, x, y]) => ({ x, y }));
 
   const frame = await dynamicRecordingAt(4242, 7000, 'flow-a');

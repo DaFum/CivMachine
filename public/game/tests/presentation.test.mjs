@@ -2091,7 +2091,7 @@ test('the flow marks stay evenly spaced along the route they ride', async () => 
   // leave stretches of the route empty, which is the same failure the world-wide cues are placed
   // with `spreadPosition` to avoid. One hashed offset for the whole route is what keeps the run
   // spread while still putting no two routes in step.
-  const { drawRouteFlow, GROUND_RATIO } = await import('../dist/render/world.js');
+  const { drawRouteFlow, FLOW_HEAD_RADIUS, GROUND_RATIO } = await import('../dist/render/world.js');
   const HEIGHT = 900;
   const civ = lateCiv(8701);
   civ.development = 1400; civ.era = 4;
@@ -2108,8 +2108,9 @@ test('the flow marks stay evenly spaced along the route they ride', async () => 
     const scene = { civ, snapshot, presentation, settlements, outskirts: [], routes: [route] };
     const calls = [];
     drawRouteFlow(recordingSurface(calls), scene, presentation, ground, 6000, view, false, 1);
-    // The leading end of each mark: one circle per mark, at the head's own position on the curve.
-    const heads = calls.filter(([name]) => name === 'fillCircle').map(([, x]) => x);
+    // The leading end of each mark: the core disc, at the head's own position on the curve. Matched
+    // by radius, because the falloff around it is a second, wider circle at full glow detail.
+    const heads = calls.filter(([name, , , radius]) => name === 'fillCircle' && radius === FLOW_HEAD_RADIUS).map(([, x]) => x);
     const count = routeFlowMarks([route])[0];
     assert.equal(heads.length, count, `route ${route.id} drew ${heads.length} marks for a budget of ${count}`);
 
@@ -2155,5 +2156,82 @@ test('every traffic lane keeps its whole body on the roadbed, at every stage', (
     const offset = roadLaneOffset(3, lane, VEHICLE_HEIGHT);
     assert.ok(offset >= ROAD_TOP_OFFSET && offset + VEHICLE_HEIGHT <= ROAD_TOP_OFFSET + roadbedHeight(3) + 1e-9,
       `lane ${lane} left the bed at ${offset}`);
+  }
+});
+
+test('a degraded tier keeps the flow\'s direction, and reduced motion keeps it too', async () => {
+  // The contract in `quality.ts`: `glowDetail` 0 means "paint the flat core, skip the falloff", never
+  // "skip the light". The leading end of a flow mark is not a soft light around the cue, it *is* the
+  // cue's direction -- so gating it on glow detail left a tier-3 frame showing dashes with no
+  // direction in them, and a tier-3 frame under reduced motion showed dashes that neither point
+  // anywhere nor move, so the direction could not be recovered over time either.
+  const { drawRouteFlow, FLOW_HEAD_RADIUS, GROUND_RATIO } = await import('../dist/render/world.js');
+  const HEIGHT = 900;
+  const civ = lateCiv(8801);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
+  const routes = tradeRoutes(civ, settlements, snapshot);
+  assert.ok(routes.length > 0, 'the fixture needs a network');
+  const presentation = worldPresentation(civ);
+  const ground = HEIGHT * GROUND_RATIO;
+  const view = { from: 0, to: snapshot.worldWidth };
+
+  // Marks paired with their own heads: the head follows the stroke it belongs to, so the pairing is
+  // the drawing order rather than a guess from positions.
+  const marksOf = calls => {
+    const marks = [];
+    let stroke = null;
+    for (const [name, ...args] of calls) {
+      if (name === 'line') stroke = { tailX: args[0], headX: args[2], headY: args[3] };
+      else if (name === 'fillCircle' && args[2] === FLOW_HEAD_RADIUS && stroke) {
+        marks.push({ ...stroke, coreX: args[0], coreY: args[1] });
+        stroke = null;
+      }
+    }
+    return marks;
+  };
+
+  const frame = (glowDetail, reducedMotion, time) => {
+    const scene = { civ, snapshot, presentation, settlements, routes };
+    const calls = [];
+    drawRouteFlow(recordingSurface(calls), scene, presentation, ground, time, view, reducedMotion, glowDetail);
+    return { calls, marks: marksOf(calls) };
+  };
+
+  const full = frame(1, false, 6000);
+  assert.ok(full.marks.length > 0, 'the cue drew nothing at full quality');
+
+  // Tier 3 is `glowDetail: 0`. Every mark keeps its head, and keeps it on the curve.
+  const degraded = frame(0, false, 6000);
+  assert.equal(degraded.marks.length, full.marks.length, 'a degraded tier dropped flow marks');
+  for (const mark of degraded.marks) {
+    assert.equal(mark.coreX, mark.headX, 'the core left the head of its own mark');
+    assert.equal(mark.coreY, mark.headY, 'the core left the curve its mark rides');
+  }
+  // What the tier may take is the falloff: the wider, dimmer disc around the core, and nothing else.
+  const wide = calls => calls.filter(([name, , , radius]) => name === 'fillCircle' && radius > FLOW_HEAD_RADIUS).length;
+  assert.ok(wide(full.calls) > 0, 'full quality must paint the falloff around the core');
+  assert.equal(wide(degraded.calls), 0, 'a degraded tier must not pay for the falloff');
+
+  // And the direction is still encoded, because the head sits at the leading end of its own mark.
+  let ahead = 0;
+  for (const mark of degraded.marks) {
+    const route = routes.find(candidate => mark.headX >= candidate.fromX - 1e-6 && mark.headX <= candidate.toX + 1e-6);
+    assert.ok(route, `a mark at ${Math.round(mark.headX)} belongs to no route`);
+    if (route.direction === 1) assert.ok(mark.headX >= mark.tailX - 1e-9, 'a mark points backwards along its route');
+    else assert.ok(mark.headX <= mark.tailX + 1e-9, 'a mark points backwards along its route');
+    if (Math.abs(mark.headX - mark.tailX) > 1e-6) ahead++;
+  }
+  assert.ok(ahead > 0, 'every mark collapsed to a point: the direction is not encoded at all');
+
+  // Reduced motion at the same tier: the heads are still there, and now they hold still.
+  const still = frame(0, true, 6000);
+  const muchLater = frame(0, true, 90000);
+  assert.ok(still.marks.length > 0, 'reduced motion dropped the flow marks');
+  assert.deepEqual(muchLater.marks, still.marks, 'reduced motion must not move the flow');
+  for (const mark of still.marks) {
+    assert.equal(mark.coreX, mark.headX);
+    assert.equal(mark.coreY, mark.headY);
   }
 });

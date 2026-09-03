@@ -50,6 +50,7 @@ a constant rate, which reads as a growing circle rather than as a release of ene
 | Route geometry | Cubic Bézier bowed perpendicular to its own chord, in a new `render/routes.ts` | Both ends of a route sit on the same ground line, so the perpendicular is vertical and the deflection is a bow toward and away from the eye — a road that bends in the depth plane, which is what a side-on view can show. |
 | Control point spacing | Exactly a third and two thirds of the span | With the x components evenly spaced the Bernstein sum in x collapses to `fromX + span * t`, so a world x maps to a curve parameter in closed form. That is what lets the curve be sampled on a lattice fixed in world space, which the cached scenery layer requires. |
 | Flow direction cue | A bounded run of marks placed *on* the curve, each with a bright leading end | `lineDashOffset` is the canvas idiom and the wrong tool here: `DrawSurface` has no dash state by design, and a dashed stroke puts the whole route's pattern into every frame however little of it is on screen. A mark with a lit head also carries direction in a single frame, which a dash pattern does not. |
+| What quality may shed from a mark | The falloff around the leading end, never the core | The core *is* the direction, so it is drawn at every tier — `glowDetail` 0 means "paint the flat core, skip the falloff", never "skip the light". A tier-3 frame under reduced motion is the case that settles it: the marks hold still, so a headless mark leaves the direction unreadable in the frame and unrecoverable over time. |
 | Settlement silhouette | Three building grammars (`organic`, `industrial`, `transcendent`) on `PathIdentityDescriptor.frame` | Ten silhouettes at settlement scale would be ten variations of nothing; the ten paths stay distinguishable by landmark, crown and ambient marks. `identity.ts` stays the single authority on which path builds which way. |
 | Frame gating | Identity tier ≥ 2, i.e. a settled dominant path | A leading affinity is not yet an architecture — the same threshold the crown uses. The tier is a band `structuralWorldKey` already tracks, so the cached layer rebuilds when it changes. |
 | Night density | A second, separate micro-light budget, shared over the settlements on screen | The window budget animates *structures* and carries the state; density is a cosmetic on top of it, so it gets its own count and sheds with `windowFraction`. |
@@ -123,7 +124,7 @@ Reduced motion keeps every light and freezes it.
 
 Per animated frame, on top of what the layer already spent: at most 18 route flow marks, 48
 micro-lights (shared over the settlements on screen), and 3 frame accents (strided over the
-settlements on screen). Measured cost of the whole animated layer: **816–848 primitives across the
+settlements on screen). Measured cost of the whole animated layer: **830–861 primitives across the
 pinned reference worlds, up from 746** — pinned under 1100 in `render-smoke.test.mjs`, which leaves
 room for one more cue of this size and none for a loop over a stage-4 world's structures.
 
@@ -167,6 +168,10 @@ primitives.
 Every traffic lane keeps its whole body inside the bed at every stage, the lanes stay ordered and
 distinct, a deeper road spreads them further apart, and an out-of-range lane clamps instead of
 leaving the road.
+
+At `glowDetail` 0 every flow mark keeps its leading core, on the curve and at the leading end of its
+own stroke, while the falloff around it is gone; under reduced motion at the same tier the cores are
+still drawn and no longer move.
 
 And for the budget itself, back in `presentation.test.mjs`: no visible route carries nothing, the
 total stays inside the budget, a busier link never carries fewer marks than a quieter one, and every

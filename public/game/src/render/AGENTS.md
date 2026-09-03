@@ -17,11 +17,12 @@ agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outski
 banks, 3 reality shears, 5 entropy fissures, 8 trade routes, 18 route flow marks, 48 settlement
 micro-lights, 3 animated identity frames, and device pixel ratio capped at 2. The sky-and-
 terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
-pixel, and the animated layer under 1100 — measured at 816–848 across the pinned reference worlds,
+pixel, and the animated layer under 1100 — measured at 830–861 across the pinned reference worlds,
 about ninety more than before the route flow, the micro-lights and the identity frames. The ceiling
 leaves room for another cue of that size and none at all for a loop over a stage-4 world's
 structures. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
-scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
+scars, the current impact or a flow mark's leading end — and must never touch `GameState` or
+`simulationSpeed`.
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
 the point sample, `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
@@ -116,6 +117,14 @@ cost mistake is paid 60 times a second. Two rules follow. A `CanvasGradient` is 
 so `fillLinearGradientRect`, `fillLinearGradientPoly`, `fillRadialGlow` and `fillEllipseGlow` belong
 on the cached layers and in the bounded per-frame cues (a reactor core, one horizon field) — the haze bands and
 the window lights build their softness out of layered rectangles and circles instead.
+`glowDetail` is the lever for that softness and only for it: `quality.ts` states it as "paint the
+flat core, skip the falloff", never "skip the light", and the distinction is not always obvious from
+the shape. A flow mark's lit leading end is a 1.4 px disc that looks like a glow and *is* the
+direction of the flow — gating it on `glowDetail` left a tier-3 frame drawing dashes that point
+nowhere, and under reduced motion, where the marks also hold still, the direction could not be
+recovered over time either. Ask what a cue would still say without the primitive: if the answer is
+"less light", it may shed; if it is "less information", it may not.
+
 `fillEllipseGlow` is the flattened light field — a city's glow over its own skyline, a cloud's lit
 underside, the seam of a reality shear — and it squashes the *context* vertically rather than the
 gradient, so its horizontal extent is exactly the radius the caller culls by. It costs one

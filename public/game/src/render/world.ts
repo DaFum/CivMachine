@@ -156,6 +156,15 @@ const MAX_CLOUD_BANKS = 12;
 export const MAX_SETTLEMENT_LIGHTS = 48;
 /** How tall a vehicle is drawn, so the lane it rides can keep its whole body on the road. */
 const VEHICLE_HEIGHT = 2.5;
+/**
+ * The lit leading end of a flow mark. Exported because it is the primitive a test identifies the cue
+ * by, and named because of what it *is*: the direction of the flow, not a soft light around it. It is
+ * drawn at every quality tier -- `quality.ts` is explicit that `glowDetail` 0 means "paint the flat
+ * core, skip the falloff", never "skip the light", and gating the head on it took the direction out
+ * of a tier-3 frame entirely. Under reduced motion that also removes the only other way to read it:
+ * the marks do not move, so direction could not be recovered over time either.
+ */
+export const FLOW_HEAD_RADIUS = 1.4;
 /** Widest bank, so the sky's culling can be stated in terms of the design. */
 const CLOUD_MAX_WIDTH = 300;
 // The lattice the sky's atmospheric front is sampled on. Coarse enough that the whole front is one
@@ -1185,9 +1194,12 @@ export function drawRouteFlow(surface: DrawSurface, scene: WorldScene, presentat
       const to = routePointAt(route, t);
       if (Math.max(from.x, to.x) < view.from || Math.min(from.x, to.x) > view.to) continue;
       const alpha = .16 + route.flow * .26;
-      surface.lineStyle(1.6, color, alpha).line(from.x, ground + 7 + from.offset, to.x, ground + 7 + to.offset);
-      // The leading end, brighter than the trail: the direction of the flow in one frame.
-      if (glowDetail > 0) surface.fillStyle(color, Math.min(.9, alpha + .3)).fillCircle(to.x, ground + 7 + to.offset, 1.4);
+      const headY = ground + 7 + to.offset;
+      surface.lineStyle(1.6, color, alpha).line(from.x, ground + 7 + from.offset, to.x, headY);
+      // The leading end, brighter than the trail: the direction of the flow in one frame. Only the
+      // falloff around it answers `glowDetail`; the core is unconditional, the way a beacon's is.
+      if (glowDetail > 0) surface.fillStyle(color, Math.min(.4, alpha * .5 + .1) * glowDetail).fillCircle(to.x, headY, FLOW_HEAD_RADIUS * 1.9);
+      surface.fillStyle(color, Math.min(.9, alpha + .3)).fillCircle(to.x, headY, FLOW_HEAD_RADIUS);
     }
   }
 }
