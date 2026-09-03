@@ -60,6 +60,42 @@ from the settlement itself. `render-smoke.test.mjs` fails anything drawn entirel
 `CULL_MARGIN + WIDEST_STATIC_PRIMITIVE`, which is also the ceiling on how wide a single primitive
 may be: keep a glow radius or a prop's reach inside it rather than raising the constant.
 
+## A budget is a knee, not a wall
+
+`skylineCompress` in `settlements.ts` is why. The skyline budget used to be a hard `Math.min`, and a
+hard ceiling on a distribution is a *collision*: 26% of a portrait world's structures and 18% of a
+desktop one's came out at exactly the same height, so the tallest quarter of the city sat on one
+horizontal line and the skyline read as a plateau. The compression is continuous below the knee,
+strictly increasing above it and asymptotic to the ceiling, so the budget is still guaranteed and the
+tallest plot is still the tallest building. Any other ceiling over a spread of values wants the same
+treatment.
+
+`MAX_STRUCTURE_ASPECT` beside it is the other half: the plots that reached the ceiling were also the
+narrowest, and a 37 px wide, 558 px tall slab is a mast rather than a building. The floor widens
+rather than shortening — height is what carries the composition — and only a tether and a launch
+mast are exempt. One consequence is worth remembering: **a light sized off `width` alone is now sized
+off a footprint that follows height.** A temple's crown, a reactor's core and a monument's ring are
+scaled by `emblem` — the *shorter* of the two dimensions — or a landscape phone, where every solid
+is short and wide, fills with lit discs half a building across.
+
+## A path is not a hue
+
+`identity.ts` owns which path builds which way and `structures.ts` knows how to draw it. The capital
+motif and the ambient marks were never enough on their own: two dominant paths rendered the same
+skyline in a different accent, and the design says an identity must not be reducible to a colour. The
+`crown` on `PathIdentityDescriptor` is that identity written into the buildings themselves — every
+tall civic and residential solid ends the way its civilization ends things. It is restricted to
+`dwelling` and `academy` above `CROWN_MIN_HEIGHT` so the signature reads as the city's architecture
+rather than as a stamp on every shed, and `presentation.test.mjs` compares the ten paths' geometry
+with the colour stripped out, so a shared crown cannot slip back in.
+
+**Height and use decide whether a crown exists; the depth lane decides only how strongly it is
+drawn.** The two are easy to confuse, because `detail` carries the lane's contrast and reads like a
+convenient gate — but gating on it dropped the crown from 24.5% of the eligible skyline, back-lane
+towers included, and the tallest of those stood within 3% of the tallest building in the world. A
+back-lane solid is further away, not a different civilization. This is the general rule for anything
+the aerial perspective touches: fade it with `detail`, never gate it on `detail`.
+
 ## Cost lives in the dynamic layer
 
 The cached layers repaint on a scroll; the dynamic layer repaints every frame, so that is where a
@@ -82,6 +118,31 @@ budget, not one primitive per structure in a stage-4 world.
 fraction of the budget, and it sits below one display interval on purpose — any threshold above that
 drops every second animation frame and lands back on 30 FPS. Reduced motion and every degraded tier
 keep the 30 FPS interval.
+
+## A per-frame budget is shared, not spent left to right
+
+A single counter walking the world in order is a bug wearing a budget's clothes: the window budget
+and the strain lines both did it, so the leftmost settlement on screen took everything and the right
+half of the viewport stayed dark and unstrained. It is worst at a degraded tier, where the whole
+budget is fourteen windows. Share the budget over what is *on screen* and stride inside each of them,
+so shedding thins the cue everywhere rather than truncating it after the first few plots.
+
+The same rule reaches the transient cues. The phase-transition cue is anchored to the settlements the
+renderer resolves into screen space, and takes exactly three of them — anchoring replaces the fixed
+fractions rather than adding to them, because that cue's stroke count is fixed by design and pinned.
+
+## A repeated cell is visible; a sampled profile is not
+
+Two shapes in this renderer were built as one trough and one spike per cell on a fixed lattice: the
+old triangle terrain and the foreground bank. That is a sawtooth however the spike height is hashed,
+and the bank's was on the plane closest to the eye. Both are now a two-octave ridge sampled on a
+finer lattice and filled as one polygon — long swells carrying short detail, with no forced return to
+the baseline between them. The lattice stays fixed in world space, so a scenery strip redraw emits
+exactly the points a full redraw does.
+
+The sky's atmospheric front is the same lesson from the other side: the variation is in the front's
+*shape*, never in a per-column alpha. A stepped alpha has to step somewhere, and open sky is the one
+surface in the frame with nothing to break a vertical seam up.
 
 ## Light is one system
 

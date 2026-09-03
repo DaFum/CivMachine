@@ -12,7 +12,7 @@ import { hash01, mixColor, PATH_ACCENTS, DEFAULT_ACCENT, pathAccentFor, FACTION_
 import { canvasSurface } from '../dist/render/draw-surface.js';
 import { speciesProfile, casteFor, drawCreature } from '../dist/render/species.js';
 import { factionRoster, factionSignature } from '../dist/render/factions.js';
-import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH } from '../dist/render/settlements.js';
+import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH, skylineCompress, MAX_STRUCTURE_ASPECT } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
@@ -1294,6 +1294,29 @@ test('the passive phase-transition cue is small, transient and reduced-motion sa
   // Reduced motion keeps the cue but freezes it: same shape, shorter window.
   assert.ok(draw(1, 2, 1200, true).length > 0);
   assert.equal(draw(1, 2, 1400, true).length, 0, 'reduced motion ends the cue inside 320 ms');
+
+  // And the lights that come up belong to the settlements actually on screen. Three bars at fixed
+  // fractions of the frame acknowledged a phase change over whatever happened to be behind them.
+  const anchored = [];
+  drawPhaseTransitionImpact(recordingSurface(anchored), 1, 2, 1000, 1200, 900, 520, 0x6bdcf6, false,
+    [{ x: 140, crown: 200 }, { x: 610, crown: 90 }]);
+  const bars = anchored.filter(([name]) => name === 'line').map(([, x1, , x2]) => (x1 + x2) / 2);
+  for (const centre of [140, 610]) {
+    assert.ok(bars.some(bar => Math.abs(bar - centre) < 1), `nothing lit up over the settlement at ${centre}`);
+  }
+  // Anchoring replaces the fixed bars rather than adding to them: the cost stays what it was.
+  assert.equal(anchored.filter(([name]) => name === 'line' || name === 'strokeCircle').length, strokes.length,
+    'anchoring the cue to the world changed what it costs');
+  // A viewport with no settlement in it still gets the cue, on the frame's own thirds. Asserted as
+  // placement rather than as a count: three bars that all landed in the same place would satisfy a
+  // length check while losing the whole point of the fallback. Stated as thirds rather than as the
+  // three literal centres, so the cue keeps its freedom to be re-composed without failing here.
+  const open = draw(1, 2, 1200, false);
+  assert.ok(open.length > 0, 'open country must not lose the phase cue');
+  const openBars = open.filter(([name, x1, y1, x2, y2]) => name === 'line' && y1 === y2 && x2 > x1)
+    .map(([, x1, , x2]) => (x1 + x2) / 2);
+  const thirds = new Set(openBars.filter(x => x > 0 && x < 900).map(x => Math.floor(x / 300)));
+  assert.ok(thirds.size >= 3, `the fallback bars cover only ${thirds.size} third(s) of the frame`);
 });
 
 
@@ -1417,6 +1440,44 @@ test('outskirts fill the land between settlements deterministically and stay bou
   assert.notDeepEqual(first, other);
 });
 
+test('the foreground bank is a landform, not a row of triangles', async () => {
+  const { drawSettlementContent } = await import('../dist/render/world.js');
+  const HEIGHT = 900;
+  const civ = lateCiv(7401);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot);
+  const scene = { civ, snapshot, presentation: worldPresentation(civ), settlements, outskirts: [] };
+  const calls = [];
+  drawSettlementContent(recordingSurface(calls), scene, HEIGHT, { from: 0, to: 1440 });
+
+  // The bank's crest is the one open polyline running along the bottom of the frame.
+  const crest = calls
+    .filter(([name, points]) => name === 'strokePoly' && Array.isArray(points) && points.length > 8
+      && points.every(([, y]) => y > HEIGHT * .78))
+    .map(([, points]) => points.map(([, y]) => y))
+    .sort((a, b) => b.length - a.length)[0];
+  assert.ok(crest, 'the foreground bank must paint a crest');
+
+  // A trough and a spike on every cell is a sawtooth however the spike height is hashed, so the
+  // profile must not simply change direction at every single sample.
+  let alternations = 0;
+  for (let i = 2; i < crest.length; i++) {
+    const before = Math.sign(crest[i - 1] - crest[i - 2]);
+    const after = Math.sign(crest[i] - crest[i - 1]);
+    if (before !== 0 && after !== 0 && before !== after) alternations++;
+  }
+  assert.ok(alternations < (crest.length - 2) * .6,
+    `the crest reverses on ${alternations} of ${crest.length - 2} samples: it is still a sawtooth`);
+  assert.ok(new Set(crest.map(y => Math.round(y))).size > 6, 'the crest repeats too few heights to be a landform');
+  for (const y of crest) assert.ok(Number.isFinite(y));
+
+  // And it is the same landform every time the same world is painted.
+  const again = [];
+  drawSettlementContent(recordingSurface(again), scene, HEIGHT, { from: 0, to: 1440 });
+  assert.deepEqual(again, calls, 'the settlement layer must be a pure function of the world');
+});
+
 test('settlements compose into districts with gaps instead of an evenly spaced row', () => {
   const civ = lateCiv(6201);
   civ.development = 900; civ.era = 4;
@@ -1458,6 +1519,168 @@ test('use decides silhouette: farms lie low, industry keeps its mass, the core b
   assert.ok(dwellings > 0, 'the fixture must contain dwellings');
   if (tallest('farm') > 0) assert.ok(tallest('farm') < dwellings * .8, 'a farm must not compete with the skyline');
   if (tallest('industry') > 0) assert.ok(tallest('industry') < dwellings, 'industry keeps a low heavy mass');
+});
+
+test('the skyline budget is a knee, not a wall: no two towers share the ceiling', () => {
+  // A hard clamp is what made a quarter of a portrait city exactly one height. The curve has to be
+  // continuous below the knee, strictly increasing above it, and asymptotic to the ceiling.
+  const CEILING = 500;
+  assert.equal(skylineCompress(120, CEILING), 120, 'below the knee nothing is touched');
+  assert.equal(skylineCompress(0, CEILING), 0);
+  assert.equal(skylineCompress(400, 0), 0, 'a zero ceiling cannot produce a height');
+  let previous = -1;
+  for (const raw of [200, 310, 311, 400, 700, 1400, 9000]) {
+    const value = skylineCompress(raw, CEILING);
+    assert.ok(value > previous, `the curve stopped rising at ${raw}`);
+    assert.ok(value < CEILING, `${raw} reached the ceiling at ${value}`);
+    assert.ok(Number.isFinite(value));
+    previous = value;
+  }
+
+  // And what it is for, measured on a real world: a developed skyline no longer piles its towers
+  // onto one line, and every structure still has the footprint its height implies.
+  for (const [viewport, height] of [[1440, 900], [390, 844]]) {
+    const heights = [];
+    for (const seed of [7101, 7102, 7103, 7104]) {
+      const civ = lateCiv(seed);
+      civ.development = 1400; civ.era = 4;
+      const snapshot = worldSnapshot(civ, viewport);
+      for (const settlement of settlementLayout(civ, snapshot.worldWidth, height, snapshot)) {
+        for (const structure of settlement.structures) {
+          heights.push(structure.height);
+          // A mast and a tether are meant to be slender; a building is not.
+          if (structure.kind !== 'orbital_anchor' && structure.kind !== 'spaceport') {
+            assert.ok(structure.height / structure.width <= MAX_STRUCTURE_ASPECT + 1e-6,
+              `a ${structure.kind} stands ${(structure.height / structure.width).toFixed(1)}x taller than it is wide`);
+          }
+        }
+      }
+    }
+    heights.sort((a, b) => b - a);
+    const tallest = heights[0];
+    const sharing = heights.filter(value => Math.abs(value - tallest) < .5).length;
+    assert.ok(sharing <= 2, `${sharing} structures share the tallest height at ${viewport}px: the skyline is a plateau`);
+  }
+});
+
+test('the city breathes across the whole viewport, not only its leftmost settlement', async () => {
+  const { drawCityLights } = await import('../dist/render/world.js');
+  const civ = lateCiv(7301);
+  civ.development = 1400; civ.era = 4;
+  const snapshot = worldSnapshot(civ, 1440);
+  const settlements = settlementLayout(civ, snapshot.worldWidth, 900, snapshot);
+  const presentation = worldPresentation(civ);
+  const scene = { civ, snapshot, presentation, settlements };
+
+  // Two bands, because the two failure modes live at opposite ends of the settlement count. A
+  // viewport-wide band holds a couple of settlements and is where a left-to-right counter left the
+  // right half dark; a world-wide band holds all nine, and that is the only place a per-settlement
+  // floor can outrun the budget -- nine at two windows each against a budget of fourteen.
+  const bands = [{ from: 0, to: 1440 }, { from: 0, to: snapshot.worldWidth }];
+  for (const view of bands) {
+  const onScreen = settlements.filter(s => s.centerX - s.radius <= view.to && s.centerX + s.radius >= view.from);
+  assert.ok(onScreen.length >= 2, 'the fixture needs more than one settlement in the viewport');
+
+  // Tier 3 is where it mattered: the budget is fourteen windows, and a single counter walking the
+  // world in order spent all of them on the first settlement and left the rest of the screen dark.
+  for (const windowFraction of [1, .3]) {
+    const calls = [];
+    drawCityLights(recordingSurface(calls), scene, snapshot, presentation, 700, 4000, view, windowFraction, 1, false);
+    const marks = calls.filter(([name]) => name === 'fillRect').map(([, x]) => x);
+    for (const settlement of onScreen) {
+      const lit = marks.some(x => Math.abs(x - settlement.centerX) <= settlement.radius + 40);
+      assert.ok(lit, `settlement at ${Math.round(settlement.centerX)} is dark at windowFraction ${windowFraction}`);
+    }
+    // The other half of the same invariant: covering every settlement must not buy its way past the
+    // budget. A per-settlement floor of two windows did exactly that -- nine settlements at two each
+    // against a budget of six windows -- so the share and the cap are checked together.
+    //
+    // Counted exactly, by the position each structure's *first* window is required to take. Neither
+    // slack measure works here: footprints follow height and overlap heavily, so "a mark near this
+    // structure" attributes one structure's windows to its neighbours, and a lit structure draws
+    // between one and three windows, so bounding the rectangles at three per structure is loose
+    // enough to swallow the very overrun this pins. The offset below is the drawing's own formula,
+    // and it reproduces bit-for-bit, so a match identifies the structure that lit.
+    const budget = Math.max(onScreen.length, Math.round(46 * Math.max(.2, windowFraction)));
+    const firstWindowX = structure =>
+      structure.x - structure.width * .34 + hash01(civ.seed + structure.x * 7) * structure.width * .56;
+    const marked = new Set(marks);
+    const litStructures = onScreen.reduce((total, settlement) =>
+      total + settlement.structures.filter(structure => marked.has(firstWindowX(structure))).length, 0);
+    assert.ok(litStructures > 0, 'the fixture must light something');
+    assert.ok(litStructures <= budget,
+      `${litStructures} structures lit against a budget of ${budget} at windowFraction ${windowFraction}`);
+  }
+  }
+});
+
+test('a dominant path builds its own skyline, not the same one in another colour', () => {
+  // Path identity has to survive a screenshot with the hue removed, so the comparison is made on the
+  // geometry alone: the same seed, the same world, two paths, and the shapes must differ.
+  const skylineShapes = pathId => {
+    const civ = lateCiv(7201);
+    civ.development = 1400; civ.era = 4;
+    if (pathId) { civ.pathState.affinity[pathId] = 9; civ.pathState.dominantPath = pathId; }
+    const snapshot = worldSnapshot(civ, 1200);
+    const settlements = settlementLayout(civ, snapshot.worldWidth, 800, snapshot);
+    const identity = pathIdentity(civ);
+    const crown = identity.tier >= 2 && identity.crown !== 'none' ? identity.crown : undefined;
+    const calls = [];
+    for (const structure of settlements[0].structures) {
+      drawStructure(recordingSurface(calls), structure, 600, 0x16283a, 0x6fe7e1, 0xf2cd7b, civ.seed, { crown, lightLevel: .6 });
+    }
+    // Colour is deliberately dropped: only the primitive names and their geometry are compared.
+    return calls.filter(([name]) => name !== 'fillStyle' && name !== 'lineStyle')
+      .map(([name, ...args]) => `${name}:${args.filter(a => typeof a === 'number').map(a => a.toFixed(1)).join(',')}`);
+  };
+
+  const unaligned = skylineShapes('');
+  const shapes = new Map();
+  for (const pathId of PATH_IDS) shapes.set(pathId, skylineShapes(pathId));
+  for (const [pathId, shape] of shapes) {
+    assert.notDeepEqual(shape, unaligned, `${pathId} builds exactly what an unaligned civilization builds`);
+  }
+  // Every path against every other, so a shared crown cannot slip in unnoticed.
+  const seen = new Map();
+  for (const [pathId, shape] of shapes) {
+    const key = shape.join('|');
+    assert.ok(!seen.has(key), `${pathId} and ${seen.get(key)} build the identical skyline`);
+    seen.set(key, pathId);
+  }
+  // And the crown is architecture, not decoration on every shed: a short outskirt structure keeps
+  // the plain roofline whatever the path is.
+  const shed = { id: 'x', x: 100, width: 30, height: 40, kind: 'dwelling', level: 1, depthLane: 'mid' };
+  const plain = [];
+  const crowned = [];
+  drawStructure(recordingSurface(plain), shed, 600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, {});
+  drawStructure(recordingSurface(crowned), shed, 600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring' });
+  assert.deepEqual(crowned, plain, 'a 40 px structure is too small to carry an identity crown');
+
+  // Height and use decide whether a crown exists; the lane decides only how strongly it is drawn. A
+  // back lane is further away, not a different civilization -- gating on the lane's `detail` dropped
+  // the crown from a quarter of the eligible skyline, towers within 3% of the tallest included.
+  const ringsOf = lane => {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 't', x: 100, width: 40, height: 220, kind: 'dwelling', level: 4, depthLane: lane },
+      600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring', lightLevel: .6 });
+    // The offset ring's second circle is unique to the crown: no other part of a dwelling strokes one.
+    return calls.filter(([name]) => name === 'strokeCircle');
+  };
+  const backRings = ringsOf('back');
+  const frontRings = ringsOf('front');
+  assert.equal(backRings.length, frontRings.length, 'a tall back-lane tower must still carry its path crown');
+  assert.ok(backRings.length > 0, 'the fixture must actually draw the crown');
+
+  // Faded, though: the crown sits in the same aerial perspective as the solid under it.
+  const strokeAlpha = lane => {
+    const calls = [];
+    drawStructure(recordingSurface(calls), { id: 't', x: 100, width: 40, height: 220, kind: 'dwelling', level: 4, depthLane: lane },
+      600, 0x16283a, 0x6fe7e1, 0xf2cd7b, 5, { crown: 'offset_ring', lightLevel: .6 });
+    // The lineStyle immediately before the crown's first ring carries its alpha.
+    const index = calls.findIndex(([name]) => name === 'strokeCircle');
+    return calls[index - 1][3];
+  };
+  assert.ok(strokeAlpha('back') < strokeAlpha('front'), 'a back-lane crown must be fainter than a front-lane one');
 });
 
 test('a portrait viewport keeps its sky: the skyline is budgeted from the aspect ratio', () => {

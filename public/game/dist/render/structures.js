@@ -31,6 +31,82 @@ export function structureKindsForEra(era, stage) {
         kinds.push('orbital_anchor');
     return kinds;
 }
+// Below this a solid is too small for a crown to be anything but noise on its roofline.
+const CROWN_MIN_HEIGHT = 70;
+/**
+ * One crown, drawn on a roof already painted. Deliberately three or four primitives each: it runs
+ * once per tall structure on the cached layer, and the identity has to read at skyline scale rather
+ * than reward zooming in.
+ */
+function drawCrown(surface, crown, x, top, width, height, accent, body, lightLevel, detail) {
+    // Sized by the *smaller* of the solid's two dimensions, not by its width. A short wide building --
+    // which is what a landscape phone is full of, since a narrow viewport widens its structures and
+    // budgets away its skyline -- was getting a crown half its own footprint across, and the frame
+    // filled with lit discs floating over the roofline.
+    const half = Math.max(4, Math.min(width, height * .55) * .5);
+    // The lane's own contrast, applied to the crown rather than used to gate it. A back-lane solid is
+    // further away, not a different civilization: gating on `detail` dropped the crown from a quarter
+    // of the eligible skyline, including towers within 3% of the tallest in the world, and left those
+    // roofs speaking for no path at all. Fading it keeps the aerial perspective and the identity both.
+    const a = (alpha) => alpha * detail;
+    switch (crown) {
+        case 'luminous_core':
+            // Machine Faith: a mast carrying a lit bead -- the machine kept burning above the roof. Held
+            // deliberately dim: one of these is a signature, and a skyline carries eight of them at once.
+            surface.lineStyle(1.4, accent, a(.42)).line(x, top, x, top - half * .7);
+            surface.fillStyle(accent, a(.34 + lightLevel * .18)).fillCircle(x, top - half * .7, Math.max(1.4, half * .13));
+            surface.lineStyle(1, accent, a(.16)).strokeCircle(x, top - half * .7, half * .3);
+            break;
+        case 'synchronized_cluster':
+            // Collective Mind: three roof nodes wired to each other, never one alone.
+            surface.lineStyle(1, accent, a(.38)).line(x - half * .6, top - half * .3, x + half * .6, top - half * .3);
+            for (let node = -1; node <= 1; node++)
+                surface.fillStyle(accent, a(.5)).fillCircle(x + node * half * .6, top - half * .3, Math.max(1.3, half * .14));
+            break;
+        case 'offset_ring':
+            // Temporal Dominion: the roof and its echo, one beat out of place.
+            surface.lineStyle(1.3, accent, a(.45)).strokeCircle(x, top - half * .34, half * .46);
+            surface.lineStyle(1, accent, a(.24)).strokeCircle(x + half * .22, top - half * .48, half * .46);
+            break;
+        case 'geometric_frame':
+            // Reality Engineering: a constraint standing on the roof, braced.
+            surface.lineStyle(1.2, accent, a(.42)).strokeRect(x - half * .5, top - half * .62, half, half * .62);
+            surface.lineStyle(1, accent, a(.26)).line(x - half * .5, top, x + half * .5, top - half * .62);
+            break;
+        case 'living_crown':
+            // Biological Transcendence: growth, not termination -- three lobes off a short stem.
+            surface.lineStyle(1.2, mixColor(accent, 0x8ee66b, .4), a(.4)).line(x, top, x, top - half * .4);
+            for (let lobe = -1; lobe <= 1; lobe++)
+                surface.fillStyle(mixColor(accent, 0x8ee66b, .4), a(.34)).fillCircle(x + lobe * half * .34, top - half * (.5 + Math.abs(lobe) * -.14), Math.max(1.8, half * .2));
+            break;
+        case 'blackout_shield':
+            // Cosmic Resistance: a chevron cap over the roof, and the warning light under it.
+            surface.lineStyle(1.6, accent, a(.45)).line(x - half * .6, top - half * .06, x, top - half * .5).line(x, top - half * .5, x + half * .6, top - half * .06);
+            surface.fillStyle(accent, a(.3 + lightLevel * .2)).fillRect(x - half * .18, top - half * .1, half * .36, 2);
+            break;
+        case 'ordered_block':
+            // Bureaucratic Singularity: a flat filed block, ruled twice. Nothing rises, nothing glows.
+            surface.fillStyle(shade(body, .25), a(.9)).fillRect(x - half * .58, top - half * .3, half * 1.16, half * .3);
+            surface.lineStyle(1, accent, a(.3)).line(x - half * .58, top - half * .2, x + half * .58, top - half * .2);
+            surface.lineStyle(1, accent, a(.18)).line(x - half * .58, top - half * .1, x + half * .58, top - half * .1);
+            break;
+        case 'continuity_beacon':
+            // Post-Mortal: a halo that never goes out, held clear of the roof it belongs to.
+            surface.lineStyle(1.3, accent, a(.42)).strokeCircle(x, top - half * .55, half * .38);
+            surface.fillStyle(accent, a(.18 + lightLevel * .12)).fillCircle(x, top - half * .55, half * .18);
+            break;
+        case 'absence_well':
+            // Void Communion: the roofline taken away rather than added to, with the rim the loss leaves.
+            surface.fillStyle(0x02040a, a(.82)).fillRect(x - half * .42, top - half * .22, half * .84, half * .34);
+            surface.lineStyle(1, accent, a(.28)).line(x - half * .46, top - half * .22, x + half * .46, top - half * .22);
+            break;
+        case 'nested_crown':
+            // Recursive Simulation: the same roof again, inside itself, twice.
+            surface.lineStyle(1.1, accent, a(.38)).strokeRect(x - half * .62, top - half * .34, half * 1.24, half * .34);
+            surface.lineStyle(1, accent, a(.26)).strokeRect(x - half * .38, top - half * .24, half * .76, half * .24);
+            break;
+    }
+}
 const LANE_FADE = { back: .38, mid: .15, front: .04 };
 const LANE_SHADE = { back: .3, mid: .12, front: 0 };
 // One light direction for the whole world: the sky is brightest at the horizon behind the city, so
@@ -88,6 +164,12 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
     const top = groundY - structure.height;
     const width = structure.width;
     const height = structure.height;
+    // The scale of the lights a building carries -- a temple's crown, a reactor's core, a monument's
+    // ring. Bounded by the *shorter* dimension rather than by the width alone: once a structure's
+    // footprint follows its height, a short wide solid has a wide footprint too, and a lamp sized off
+    // that width alone became a disc half the building across. This is what keeps a light the size of
+    // a light on a landscape phone, where every structure is short and wide.
+    const emblem = Math.min(width, height * .5);
     // Contact shadow: the one thing that stops a building from floating over its own ground line.
     surface.fillStyle(0x020509, .34 * detail).fillRect(left - width * 0.12, groundY - 2, width * 1.24, 4);
     switch (structure.kind) {
@@ -129,13 +211,13 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             surface.fillStyle(mixColor(baseColor, accent, .5), laneAlphaShift).fillRect(left + width * .16, top, width * .68, height * .3);
             // Tight enough to read as a lit crown on the building. A wide one turned every temple in the
             // world into a pale disc behind the skyline that read as a second moon.
-            surface.fillRadialGlow(structure.x, top - width * .1, 0, width * .34, [
+            surface.fillRadialGlow(structure.x, top - emblem * .1, 0, emblem * .34, [
                 { offset: 0, color: accent, alpha: .2 + lightLevel * .14 },
                 { offset: .4, color: accent, alpha: .06 },
                 { offset: 1, color: accent, alpha: 0 },
             ]);
-            surface.fillStyle(accent, .42).fillCircle(structure.x, top - width * .1, width * .15);
-            surface.lineStyle(1.5, accent, .5).line(structure.x, top - width * .4, structure.x, top - width * .1);
+            surface.fillStyle(accent, .42).fillCircle(structure.x, top - emblem * .1, emblem * .15);
+            surface.lineStyle(1.5, accent, .5).line(structure.x, top - emblem * .4, structure.x, top - emblem * .1);
             break;
         }
         case 'academy': {
@@ -151,19 +233,19 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             // A containment block with a genuine core: the glow is the light source, the block is what it
             // lights, and the ring is the only hard edge.
             const bodyHeight = height * .48;
-            const coreY = groundY - bodyHeight - width * .18;
+            const coreY = groundY - bodyHeight - emblem * .18;
             solid(surface, left, groundY - bodyHeight, width, bodyHeight, litColor, darkColor, roofColor, laneAlphaShift, true);
             // The core sits *on* its containment block rather than floating above it, and it is a piece of
             // machinery with a lit centre -- not a disc bright enough to read as a second moon.
-            surface.fillRadialGlow(structure.x, coreY, 0, width * (.7 + lightLevel * .25), [
+            surface.fillRadialGlow(structure.x, coreY, 0, emblem * (.7 + lightLevel * .25), [
                 { offset: 0, color: accent, alpha: .32 + lightLevel * .14 },
                 { offset: .4, color: accent, alpha: .12 },
                 { offset: 1, color: accent, alpha: 0 },
             ]);
-            surface.fillStyle(mixColor(darkColor, accent, .45), .95).fillCircle(structure.x, coreY, width * .3);
-            surface.fillStyle(tint(accent, .35), .72).fillCircle(structure.x, coreY, width * .15);
-            surface.lineStyle(2, accent, .5).strokeCircle(structure.x, coreY, width * .38);
-            surface.lineStyle(1, accent, .3).strokeCircle(structure.x, coreY, width * .52);
+            surface.fillStyle(mixColor(darkColor, accent, .45), .95).fillCircle(structure.x, coreY, emblem * .3);
+            surface.fillStyle(tint(accent, .35), .72).fillCircle(structure.x, coreY, emblem * .15);
+            surface.lineStyle(2, accent, .5).strokeCircle(structure.x, coreY, emblem * .38);
+            surface.lineStyle(1, accent, .3).strokeCircle(structure.x, coreY, emblem * .52);
             break;
         }
         case 'spaceport': {
@@ -177,33 +259,77 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             // Pad floods: the city's own light with a touch of the path's accent in it, never a yellow of
             // its own -- a spaceport lit differently from the street below it reads as a separate world.
             const pad = mixColor(lightColor, accent, .3);
-            surface.fillRadialGlow(structure.x, groundY - apron * .4, 0, width * .8, [
+            surface.fillRadialGlow(structure.x, groundY - apron * .4, 0, emblem * .9, [
                 { offset: 0, color: pad, alpha: .3 + lightLevel * .22 },
                 { offset: 1, color: pad, alpha: 0 },
             ]);
             break;
         }
         case 'orbital_anchor': {
-            // A dramatic vertical: the tether leaves the frame and the rings hold it, nothing else.
-            surface.fillStyle(mixColor(baseColor, accent, .4), laneAlphaShift).fillRect(structure.x - width * .16, top - height * .34, width * .32, height * 1.34);
-            surface.fillStyle(shade(mixColor(baseColor, accent, .4), .45), laneAlphaShift).fillRect(structure.x + width * .07, top - height * .34, width * .09, height * 1.34);
+            // A dramatic vertical, and the emphasis is on *vertical*: the tether leaves the frame, the
+            // rings hold it and the buttressed foot carries it. A constant-width shaft made the drama out
+            // of a 12 px hairline running the height of the frame -- it read as a scratch on the glass, not
+            // as the thing a civilization built to reach orbit. The taper is what gives it a base.
+            const anchorTop = top - height * .34;
+            const footHalf = width * .3;
+            const tipHalf = width * .12;
+            // The mass stays the city's own material; only the bands, the rings and the tether light
+            // carry the accent. At a .4 mix the shaft was the palest thing in the frame and a phone-sized
+            // viewport became one bright wedge with a city behind it.
+            const shaftColor = mixColor(baseColor, accent, .16);
+            const taper = (y) => footHalf + (tipHalf - footHalf) * Math.max(0, Math.min(1, (groundY - y) / Math.max(1, groundY - anchorTop)));
+            // Lit and shadowed plane of the same tapering solid, split on the world's one light direction.
+            const split = (half) => half * (SIDE_SPLIT * 2 - 1);
+            surface.fillStyle(shaftColor, laneAlphaShift).fillPoly([
+                [structure.x - footHalf, groundY], [structure.x - tipHalf, anchorTop],
+                [structure.x + split(tipHalf), anchorTop], [structure.x + split(footHalf), groundY],
+            ]);
+            surface.fillStyle(shade(shaftColor, .45), laneAlphaShift).fillPoly([
+                [structure.x + split(footHalf), groundY], [structure.x + split(tipHalf), anchorTop],
+                [structure.x + tipHalf, anchorTop], [structure.x + footHalf, groundY],
+            ]);
+            // The buttresses the foot stands on, so the tether meets the ground instead of ending at it.
+            for (const side of [-1, 1]) {
+                surface.fillStyle(shade(shaftColor, .58), laneAlphaShift)
+                    .fillTriangle(structure.x + side * footHalf, groundY, structure.x + side * footHalf, groundY - height * .16, structure.x + side * width * .62, groundY);
+            }
             surface.lineStyle(1.2, accent, .45).line(structure.x, top - height * .52, structure.x, groundY);
-            // Segment bands up the tether: without them the shaft was one flat pale slab.
+            // Segment bands up the tether, each one as wide as the shaft is there.
             for (let band = 0; band < 5; band++) {
-                surface.fillStyle(shade(mixColor(baseColor, accent, .4), .3), .8).fillRect(structure.x - width * .16, top - height * .34 + band * height * .27, width * .32, 2);
+                const y = anchorTop + band * height * .27;
+                const half = taper(y);
+                surface.fillStyle(shade(shaftColor, .3), .8).fillRect(structure.x - half, y, half * 2, 2);
             }
             for (let ring = 0; ring < 3; ring++)
                 surface.lineStyle(1, accent, .2).strokeCircle(structure.x, top - height * .06 + ring * height * .3, width * (.5 - ring * .12));
-            surface.fillRadialGlow(structure.x, top - height * .06, 0, width * .8, [
+            surface.fillRadialGlow(structure.x, top - height * .06, 0, emblem * .8, [
                 { offset: 0, color: accent, alpha: .12 + lightLevel * .1 },
                 { offset: 1, color: accent, alpha: 0 },
             ]);
             break;
         }
         case 'monument': {
-            surface.fillStyle(mixColor(litColor, accent, .45), laneAlphaShift).fillTriangle(left + width * .1, groundY, structure.x, top - height * .25, left + width * .52, groundY);
-            surface.fillStyle(shade(mixColor(baseColor, accent, .45), .38), laneAlphaShift).fillTriangle(left + width * .52, groundY, structure.x, top - height * .25, left + width * .9, groundY);
-            surface.lineStyle(1.4, accent, .45).strokeCircle(structure.x, top - height * .3, width * .22);
+            // An obelisk on a stepped plinth, not a needle. Drawn as a full-height triangle a monument was
+            // the most repeated shape in a stage-4 world -- a row of identical spikes standing between the
+            // towers -- so it is built the way a monument is: a base wide enough to read as masonry, a
+            // shaft that tapers only slightly, and a lit cap where the silhouette ends.
+            const capY = top + height * .16;
+            const shaftFoot = width * .42;
+            const shaftHead = width * .29;
+            const stone = mixColor(litColor, accent, .16);
+            surface.fillStyle(stone, laneAlphaShift).fillPoly([
+                [structure.x - shaftFoot, groundY - height * .07], [structure.x - shaftHead, capY],
+                [structure.x, capY], [structure.x, groundY - height * .07],
+            ]);
+            surface.fillStyle(shade(mixColor(baseColor, accent, .16), .4), laneAlphaShift).fillPoly([
+                [structure.x, groundY - height * .07], [structure.x, capY],
+                [structure.x + shaftHead, capY], [structure.x + shaftFoot, groundY - height * .07],
+            ]);
+            // The pyramidion, and the plinth the whole thing stands on.
+            surface.fillStyle(tint(stone, .18), laneAlphaShift).fillTriangle(structure.x - shaftHead, capY, structure.x, top, structure.x + shaftHead, capY);
+            surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(left + width * .1, groundY - height * .09, width * .8, height * .09);
+            surface.fillStyle(shade(baseColor, .34), laneAlphaShift).fillRect(left + width * .22, groundY - height * .13, width * .56, height * .045);
+            surface.lineStyle(1.4, accent, .45).strokeCircle(structure.x, top - emblem * .22, emblem * .18);
             break;
         }
         default: {
@@ -226,6 +352,13 @@ export function drawStructure(surface, structure, baseGroundY, bodyColor, accent
             }
             break;
         }
+    }
+    // The dominant path's own way of ending a building. Restricted to the tall civic and residential
+    // solids -- the ones that make the skyline -- so the signature reads as the city's architecture
+    // rather than as a decoration stamped on every shed in the outskirts. Height and use decide that;
+    // the lane decides only how strongly it is drawn.
+    if (style.crown && height >= CROWN_MIN_HEIGHT && (structure.kind === 'dwelling' || structure.kind === 'academy')) {
+        drawCrown(surface, style.crown, structure.x, top, width, height, accent, baseColor, lightLevel, detail);
     }
     // The persistent window grid. Rows and columns rather than a single stripe per row: a facade with
     // two lit columns and a dark one is what makes a building read as inhabited at real display size.

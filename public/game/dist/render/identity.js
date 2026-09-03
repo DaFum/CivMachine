@@ -2,6 +2,12 @@ import { CivilizationPaths, PATH_IDS } from '../game/paths.js';
 import { hash01 } from './primitives.js';
 // Widest path motif: the bureaucratic filing cabinet at 28 px plus its rings.
 const MOTIF_SLACK = 60;
+/**
+ * `crown` is not decoration on the descriptor: it is the geometry every tall civic and residential
+ * solid in the city is finished with, so a path is legible from the skyline itself and not only from
+ * its capital motif, its ambient marks and its hue. `structures.ts` knows how to draw each one; this
+ * stays the single place that decides which path builds which way.
+ */
 const PATH_VISUALS = {
     machine_faith: { motif: 'ritual_geometry', landmark: 'engine_spire', crown: 'luminous_core' },
     collective_mind: { motif: 'linked_nodes', landmark: 'neural_bridge', crown: 'synchronized_cluster' },

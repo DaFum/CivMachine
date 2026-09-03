@@ -218,7 +218,7 @@ export function drawConsequenceImpact(surface, feedback, startTime, time, width,
  * gets. Renderer-local by design: it reads the phase the cached scene already resolved and writes
  * nothing back, so passive progress never touches gameplay state.
  */
-export function drawPhaseTransitionImpact(surface, from, to, startTime, time, width, height, accent, reducedMotion) {
+export function drawPhaseTransitionImpact(surface, from, to, startTime, time, width, height, accent, reducedMotion, anchors = []) {
     if (to === from || startTime <= 0)
         return;
     const duration = reducedMotion ? 320 : 1500;
@@ -242,11 +242,21 @@ export function drawPhaseTransitionImpact(surface, from, to, startTime, time, wi
     // The horizon itself, and the ground line where the city lights answer it.
     surface.lineStyle(2 + step * .5, accent, alpha * .6).line(0, horizonY, width, horizonY);
     surface.lineStyle(1.5, accent, alpha * .4).line(0, groundY - 2, width, groundY - 2);
-    // Settlement lights activating: three short bars along the skyline, widening as the cue runs.
-    for (let bar = 0; bar < 3; bar++) {
-        const centre = width * (.24 + bar * .26);
-        const half = width * (.05 + .06 * to) * (reducedMotion ? .7 : .35 + progress * .65);
-        surface.lineStyle(1.4 + step * .3, accent, alpha * .9).line(centre - half, groundY - 12 - bar * 9, centre + half, groundY - 12 - bar * 9);
+    // Settlement lights activating -- on the settlements that are actually on screen, at the height
+    // their own skylines reach. Three bars at fixed fractions of the frame acknowledged a phase change
+    // over whatever happened to be behind them, including empty ground; a phase is a change in the
+    // world, so the world it changed is what has to light up. A viewport with no settlement in it
+    // falls back to the frame's own thirds, or a scroll into open country would lose the cue entirely.
+    //
+    // Exactly three of them, whatever the viewport holds -- the cue's cost is fixed by design, so
+    // anchoring it to the world replaces the three fixed fractions rather than adding to them.
+    const lit = [0, 1, 2].map(bar => anchors[bar % anchors.length] ?? { x: width * (.24 + bar * .26), crown: 90 });
+    for (const [bar, anchor] of lit.entries()) {
+        const half = Math.max(width * .05, Math.min(width * .3, anchor.crown * .7)) * (reducedMotion ? .7 : .35 + progress * .65);
+        // Up the settlement's own skyline as the cue runs: its lights come on from the street upward.
+        const reach = Math.min(anchor.crown, height * .3);
+        const y = groundY - 12 - bar * 4 - reach * (reducedMotion ? .5 : .2 + progress * .7);
+        surface.lineStyle(1.4 + step * .3, accent, alpha * .9).line(anchor.x - half, y, anchor.x + half, y);
     }
     // Distant infrastructure resolving out of the haze on either side of the frame.
     for (let mast = 0; mast < 2; mast++) {

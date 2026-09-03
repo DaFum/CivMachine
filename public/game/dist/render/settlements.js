@@ -13,6 +13,32 @@ export function depthLaneYOffset(lane) {
 export function structureEffectiveGround(groundY, lane) {
     return groundY + depthLaneYOffset(lane);
 }
+/**
+ * The skyline ceiling, applied as a knee rather than as a wall. A hard `Math.min` against the budget
+ * put 26% of a portrait world's structures -- and 18% of a desktop one's -- at *exactly* the same
+ * height: every tall building in the city piled onto one horizontal line and the skyline read as a
+ * plateau with a flat top, which is the opposite of the hierarchy the district composition is for.
+ *
+ * Below the knee nothing changes. Above it the height approaches the ceiling without ever reaching
+ * it, so the budget is still guaranteed -- and because the curve is strictly increasing, the tallest
+ * plot is still the tallest structure. The clamp only stops being a collision.
+ */
+export function skylineCompress(height, ceiling) {
+    if (!(ceiling > 0))
+        return 0;
+    const knee = ceiling * .62;
+    if (height <= knee)
+        return height;
+    const range = ceiling - knee;
+    return ceiling - range / (1 + (height - knee) / range);
+}
+/**
+ * How many times taller than it is wide a structure may be. The same tall plots that hit the ceiling
+ * were also the narrowest -- a 37 px wide, 558 px tall slab reads as a mast, not as a building --
+ * and height is what carries the composition, so the floor widens rather than shortens: a structure
+ * keeps the height its plot earned and gains the footprint that height implies.
+ */
+export const MAX_STRUCTURE_ASPECT = 9;
 export function settlementClassFor(structureCount, stage, era) {
     if (stage === 0)
         return structureCount >= 4 ? 'village' : 'camp';
@@ -187,14 +213,18 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
             // structure per neighbourhood so each district reads as a place rather than as a queue.
             const dominance = plot.coreOfCluster ? (plot.district === 'core' ? 1.45 : 1.22) : .92 + hash01(civ.seed * 61 + globalIndex * 23) * .2;
             const heightDensityMult = Math.max(0.42, (1.25 - distFromCenter * 0.62) * classScale * dominance);
-            const width = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * widthScale;
+            const baseWidth = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * widthScale;
             const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * heightScale;
             const kind = kindFor(i, count, settlementClass, civ.era, stage, civ.seed + index * 101, allowed, distFromCenter);
             // Profile by use, so a class is legible from its silhouette alone: farms lie along the ground,
-            // industry keeps a heavy low mass under its chimneys, and only the civic and residential
-            // structures compete for the skyline.
-            const kindProfile = kind === 'farm' ? .4 : kind === 'industry' ? .72 : kind === 'monument' ? .82 : 1;
-            const structureHeight = Math.max(18, Math.min(skylineBudget, baseHeight * kindProfile));
+            // industry keeps a heavy low mass under its chimneys, a monument is a landmark rather than a
+            // second tower, and only the civic and residential structures compete for the skyline.
+            const kindProfile = kind === 'farm' ? .4 : kind === 'industry' ? .72 : kind === 'monument' ? .58 : 1;
+            const structureHeight = Math.max(18, skylineCompress(baseHeight * kindProfile, skylineBudget));
+            // The footprint the height implies. A tether and a mast are meant to be slender, so they keep
+            // their own proportion; everything else widens rather than standing as a hairline slab.
+            const slender = kind === 'orbital_anchor' || kind === 'spaceport';
+            const width = slender ? baseWidth : Math.max(baseWidth, structureHeight / MAX_STRUCTURE_ASPECT);
             structures.push({
                 id: `s${index}:${i}`,
                 x: centerX - radius + radius * 2 * plot.u,
