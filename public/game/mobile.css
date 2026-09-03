@@ -19,18 +19,26 @@ body {
 }
 
 button,
+select,
 summary {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The select belongs here too: with the UA widget turned off it would otherwise fall back to the
+   browser's own white focus ring, which was the only focus indicator in the shell that was not the
+   amber one. */
 button:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+select:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
 
 @media (max-width: 760px) {
-  button {
+  /* The switcher is a touch target like any other control in the topbar, so it grows with them --
+     left out, it was the one control in the row that stayed under the 44px floor. */
+  button,
+  .icon-button {
     min-height: 44px;
   }
 

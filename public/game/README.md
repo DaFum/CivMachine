@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.24.0
+# Reality Consumption Engine — App Edition v1.25.0
 
 A complete browser port of the Godot/Android prototype. The game runs as a static web application with a deterministic Canvas civilization renderer and a responsive DOM management layer. Version 1.9.0 expands the intervention catalog to 185, enough that a naturally ending run never has to repeat one.
 
@@ -52,6 +52,34 @@ npm test
 - `src/data/` — generated content ported from the Godot catalogs
 - `dist/` — precompiled browser JavaScript
 - `tests/` — Node regression tests
+
+## v1.25.0 a machine screen you can read, and a manual that stays open
+
+- The Machine view is about half as long on a fresh save, and a fifth shorter by the first
+  Multiverse. The milestone register stood open as twenty-eight cards — half the screen on a fresh
+  save, at nothing completed — directly above a field manual that was already collapsed. Both are
+  closed now, carrying `0 / 28` and the discovery count on their own summary lines, so what a player
+  has reached stays readable while the cards do not. A fresh save went from 4.2 screens to 2.3, and
+  a first Multiverse from 6.3 to 5.1.
+- The field manual stays open. Opening a section and then changing anything on the screen closed it
+  again: a rebuilt panel came back from a template that had forgotten which section was being read.
+  The post-run report's CIVILIZATION RECORD had the same fault. Both remember now, the way every
+  disclosure in a run already did.
+- The next run is decided in one place. The Directive and the Breeding Matrix are one choice — a run
+  consumes both together — but the matrix was its own panel four cards below the button that commits
+  it, far enough down that a run could be started without it ever having been on screen. Both are
+  labelled blocks in NEXT CIVILIZATION now.
+- START stays reachable. The card holding the whole run build is the tallest on the screen, so the
+  button sticks to its bottom edge rather than sitting a screen and a half below the fold — and the
+  reason it is disabled travels with it instead of waiting further down.
+- The three ways to end a tier sit together. Great Convergence was mid-screen while Consume Universe
+  and Collapse Multiverse were at the very bottom, with the register and the manual between them.
+  Reference material closes the view instead of interrupting the actions.
+- The language switcher is part of the instrument. It was a stock browser dropdown between two
+  hand-built buttons: square corners against a shell where one radius drives every other corner, a
+  grey border between two blue ones, its own height, no hover, and the browser's white focus ring in
+  the one place the shell does not use amber. It takes all of that from the same rule every button
+  uses now.
 
 ## v1.24.0 a skyline with hierarchy, and a path you can see
 

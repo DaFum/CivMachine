@@ -86,6 +86,7 @@ const ENGLISH = {
             "machineDescription": "Cultivate civilizations, shape their histories, and harvest reality without allowing the crop to understand the farm.",
             "nextCivilization": "NEXT CIVILIZATION",
             "startingTraitsPreview": "STARTING TRAITS // DETERMINISTIC PREVIEW",
+            "runDirectiveDraft": "DIRECTIVE // ONE PER CIVILIZATION",
             "traitArchiveUnavailable": "Trait archive unavailable",
             "startCivilization": "START CIVILIZATION",
             "machineUpgrades": "Machine Upgrades",
@@ -599,7 +600,7 @@ const ENGLISH = {
                     "prestige": {
                         "term": "Consume Universe / Collapse Multiverse",
                         "what": "18 Cultivation Credits consume the Universe for Universal Residue; 4 Universes collapse the Multiverse for Axioms.",
-                        "where": "The buttons at the bottom of the Machine view, once unlocked.",
+                        "where": "The buttons below the upgrade panels in the Machine view, just above the MILESTONE REGISTER, once unlocked.",
                         "why": "Each layer resets the one below it and pays a currency the reset cannot touch."
                     },
                     "convergence": {
@@ -622,7 +623,7 @@ const ENGLISH = {
         },
         "explainNotes": {
             "machine_hero": "The Machine view is between runs. Nothing accumulates here — spend the last harvest, then start the next civilization.",
-            "run_preparation": "What the next run will be: its seed-derived starting traits and, once unlocked, one of three drafted Directives. Both are visible before you commit.",
+            "run_preparation": "What the next run will be: its seed-derived starting traits, plus one of three drafted Directives and a Breeding Matrix once each is unlocked. All of it is visible before you commit.",
             "machine_upgrades": "Permanent purchases that change every following run. Containment buys length; the harvest modules buy yield.",
             "milestones": "Every milestone pays Machine Insight, which no prestige takes back. Read it as the list of things worth aiming a run at.",
             "run_report": "What the run just did, why it stopped and what it paid. The lessons are derived from this run’s own numbers.",
@@ -4824,6 +4825,7 @@ const GERMAN = {
             "machineDescription": "Zivilisationen kultivieren, ihre Geschichte formen und Realität harvesten, ohne dass die Zivilisation die Kultivierung erkennt.",
             "nextCivilization": "NÄCHSTE ZIVILISATION",
             "startingTraitsPreview": "STARTING TRAITS // DETERMINISTISCHE VORSCHAU",
+            "runDirectiveDraft": "DIRECTIVE // EINE PRO ZIVILISATION",
             "traitArchiveUnavailable": "Trait-Archiv nicht verfügbar",
             "startCivilization": "ZIVILISATION STARTEN",
             "machineUpgrades": "Machine Upgrades",
@@ -5337,7 +5339,7 @@ const GERMAN = {
                     "prestige": {
                         "term": "Consume Universe / Collapse Multiverse",
                         "what": "18 Cultivation Credits verbrauchen das Universe und erzeugen Universal Residue; 4 Universes kollabieren das Multiverse und erzeugen Axioms.",
-                        "where": "Die Schaltflächen am unteren Rand der Machine-Ansicht, sobald die Systeme freigeschaltet sind.",
+                        "where": "Die Schaltflächen unter den Upgrade-Panels der Machine-Ansicht, direkt über dem MILESTONE REGISTER, sobald die Systeme freigeschaltet sind.",
                         "why": "Jede Ebene setzt die darunterliegende zurück und erzeugt eine Währung, die vom Reset nicht betroffen ist."
                     },
                     "convergence": {
@@ -5360,7 +5362,7 @@ const GERMAN = {
         },
         "explainNotes": {
             "machine_hero": "Die Machine-Ansicht liegt zwischen den Runs. Hier sammelt sich nichts passiv an — Ertrag des letzten Harvest ausgeben und anschließend die nächste Zivilisation starten.",
-            "run_preparation": "Die Konfiguration des nächsten Runs: aus dem Seed abgeleitete Starting Traits und nach der Freischaltung eine von drei angebotenen Directives. Beides ist vor dem Start sichtbar.",
+            "run_preparation": "Die Konfiguration des nächsten Runs: aus dem Seed abgeleitete Starting Traits, dazu eine von drei angebotenen Directives und eine Breeding Matrix, sobald beide freigeschaltet sind. Alles davon ist vor dem Start sichtbar.",
             "machine_upgrades": "Dauerhafte Käufe, die jeden folgenden Run verändern. Containment verlängert Runs; Harvest-Module erhöhen den Ertrag.",
             "milestones": "Jeder Milestone gewährt Machine Insight, das kein Prestige entfernt. Der Bereich zeigt lohnende Ziele für zukünftige Runs.",
             "run_report": "Zusammenfassung des letzten Runs: Entwicklung, Endgrund und Ertrag. Die Hinweise werden aus den tatsächlichen Werten dieses Runs abgeleitet.",

@@ -247,7 +247,83 @@ test('mobile UI hierarchy features collapsible event details, high harvest actio
   assert.match(app, /data-disclosure="strategic-overview"/);
   assert.match(app, /data-disclosure="records-intel"/);
   assert.match(app, /data-disclosure="machine-record"/);
-  assert.match(app, /openDisclosures/);
+  // The Machine view's reference panels are closed too. The milestone register was half of that
+  // view on a fresh save -- 28 cards, none of them actionable, at 0 completed -- sitting open
+  // directly above a field manual that was already collapsed.
+  assert.match(app, /collapsedCard\('milestones'/);
+  assert.match(app, /collapsedCard\('next-discoveries'/);
+  // And its progress has to survive the collapse, or closing it hides where the player stands.
+  const register = app.slice(app.indexOf("collapsedCard('milestones'"), app.indexOf('milestone-register'));
+  assert.match(register, /milestones\.completed/, 'the summary must carry the completed count');
+  assert.match(register, /milestones\.total/, 'the summary must carry the total');
+
+  // Every disclosure in the shell must render its restore attribute right beside its id. The set of
+  // open ids lives in `ui/disclosure.js`, but owning the state is not the invariant that matters --
+  // pairing it with each `<details>` is. `replaceIfChanged` rebuilds a panel's HTML whenever one of
+  // its numbers moves, so a `data-disclosure` without a `disclosureAttr` beside it is a disclosure
+  // that closes itself on the next rebuild. The field manual shipped six sections with no id at all
+  // and did exactly that: opening a section and switching locale closed it again. Checking only that
+  // `app.js` mentioned the state store said nothing about any of them.
+  const modules = Object.fromEntries(await Promise.all(
+    ['app', 'guide-view', 'report-view', 'tutorial-view', 'disclosure'].map(async name =>
+      [name, await readFile(new URL(`../dist/ui/${name}.js`, import.meta.url), 'utf8')]),
+  ));
+  assert.match(modules.disclosure, /openDisclosures/, 'the open set must live in ui/disclosure');
+  let paired = 0;
+  for (const [name, code] of Object.entries(modules)) {
+    for (const found of code.matchAll(/data-disclosure="([^"]*)"(.{0,24})/g)) {
+      assert.match(
+        found[2],
+        /^\$\{disclosureAttr\(/,
+        `${name}: data-disclosure="${found[1]}" must be followed by disclosureAttr, or it snaps shut on the next rebuild`,
+      );
+      paired += 1;
+    }
+  }
+  assert.ok(paired >= 10, `only ${paired} disclosures were checked`);
+  // And a bare `<details>` in a rebuilt panel is the same bug without the id, so none may ship.
+  // Comments are stripped first, for the same reason `declarationsOf` strips them from the CSS: a
+  // note explaining this rule quotes the tag it forbids, and scanning the text failed the module
+  // that documents the invariant.
+  for (const [name, code] of Object.entries(modules)) {
+    const bare = [...statementsOf(code).matchAll(/<details(?![^>]*data-disclosure)[^>]*>/g)].map(match => match[0]);
+    assert.deepEqual(bare, [], `${name}: every <details> must carry a data-disclosure id`);
+  }
+});
+
+test('the Machine view decides, then spends, then ascends, then explains', async () => {
+  const app = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  const machine = app.slice(app.indexOf('function renderMachine'), app.indexOf('const rewardText='));
+
+  // Both halves of `runBuild` render inside the card that commits them. The Breeding Matrix used to
+  // be its own top-level card below Machine Upgrades, which put it 916px under START -- and since
+  // `canStartCivilization` only requires the Directive, a run could be started without the matrix
+  // panel ever having been on screen.
+  const preparation = machine.slice(machine.indexOf('t.nextCivilization'), machine.indexOf('t.machineUpgrades'));
+  for (const draft of ['${directiveDraft}', '${matrixDraft}']) {
+    assert.ok(preparation.includes(draft), `the run build must render ${draft} inside the run-preparation card`);
+  }
+  assert.ok(preparation.indexOf('${matrixDraft}') < preparation.indexOf('data-action="start"'),
+    'the run build must be chosen above the button that commits it');
+  assert.ok(!machine.includes("card(esc(t.breedingMatrix)"), 'the matrix must not also be its own card');
+
+  // START sticks to the card's bottom edge, because the card holding the whole run build is the
+  // tallest on the screen and the button would otherwise sit a screen and a half below the fold.
+  const styles = declarationsOf(await readFile(new URL('../styles.css', import.meta.url), 'utf8'));
+  assert.match(styles, /\.run-commit\{[^}]*position:sticky/, 'the commit row must stay reachable inside the card');
+
+  // The three "end this tier" actions sit together: Convergence used to be at position 8 with the
+  // Universe and Multiverse buttons at the very bottom, 1668px apart with the register and the
+  // manual between them.
+  assert.ok(machine.indexOf('convergenceCard(vm)') < machine.indexOf('class="prestige-row"'));
+  assert.ok(machine.indexOf('class="prestige-row"') < machine.indexOf('milestoneRegister(vm)'),
+    'the prestige actions must sit with Convergence, not below the reference panels');
+
+  // And reference material closes the view rather than interrupting the actions.
+  for (const reference of ['milestoneRegister(vm)', "collapsedCard('next-discoveries'", 'fieldManual(']) {
+    assert.ok(machine.indexOf('class="prestige-row"') < machine.indexOf(reference),
+      `${reference} is reference material and must come after the actions`);
+  }
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {
@@ -306,6 +382,22 @@ test('save reset never depends on a native modal dialog', async () => {
 // comment that quotes a property -- `font:inherit`, or a note recording that a size used to be 16px --
 // used to fail them for describing exactly the thing they enforce. Strip comments before scanning.
 const declarationsOf = css => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+// The same idea for a compiled module: block and line comments out, so a rule that has to name the
+// construct it forbids does not fail the file that documents it.
+const statementsOf = code => code
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/^[ \t]*\/\/.*$/gm, ' ');
+
+// The body of the first rule whose comma-separated selector list names `element` by itself. A
+// selector list is how two controls share one contract, so the element's base rule is not
+// necessarily a rule whose selector is only that element.
+const baseRuleOf = (css, element) => {
+  for (const rule of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (rule[1].split(',').map(selector => selector.trim()).includes(element)) return rule[2].trim();
+  }
+  return null;
+};
 
 // --- The design system ---------------------------------------------------------------------------
 // Radius and type are the two scales that make a dozen unrelated panel types read as one UI. Both
@@ -375,15 +467,26 @@ test('the elements that inherit a size from outside the scale name a tier', asyn
   // flat 16px. Both are fixed px that ignore the clamps, so on a phone a detail line rendered larger
   // than the label above it. Declared at the element, not at the call sites -- patching the six
   // selectors that happened to exist would have left the seventh inheriting the default again.
-  for (const [element, rule] of [['small', /(?<![-\w])small\{([^}]*)\}/], ['button', /(?<![-\w])button\{([^}]*)\}/]]) {
-    const match = styles.match(rule);
-    assert.ok(match, `${element} must carry a base rule`);
+  // The base rule is the one that names the element on its own, whether it sits alone in the
+  // selector or shares the rule with something else: `button{...}` and `button,select.icon-button{...}`
+  // are both it. Matching the bare form as text was enough right up until the locale select joined
+  // that rule -- the pattern then skipped the base rule entirely and matched
+  // `.tactical-action-wrap button{...}`, a descendant rule that says nothing about what a plain
+  // button inherits, and the guard reported the base rule as untiered while it was tiered all along.
+  for (const [element, tier] of [['small', baseRuleOf(styles, 'small')], ['button', baseRuleOf(styles, 'button')]]) {
+    assert.ok(tier, `${element} must carry a base rule`);
     assert.match(
-      match[1],
+      tier,
       /font-size:var\(--text-/,
       `${element} must name a type tier -- without one it silently takes a fixed size from the UA`,
     );
   }
+  // A descendant rule is not a base rule, and an element that only ever appears as one must still
+  // read as missing -- that is the failure mode this finder exists to rule out.
+  assert.equal(baseRuleOf('.wrap button{color:red}', 'button'), null);
+  assert.equal(baseRuleOf('button,select.icon-button{font-size:var(--text-lg)}', 'button'),
+    'font-size:var(--text-lg)');
+  assert.equal(baseRuleOf('.x{a:1}\nsmall{font-size:var(--text-2xs)}', 'small'), 'font-size:var(--text-2xs)');
 });
 
 test('running prose is capped by one --measure token', async () => {

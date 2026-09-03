@@ -261,7 +261,7 @@ export const HELP_SECTIONS: ReadonlyArray<HelpSection> = [
         id: 'prestige',
         term: 'Consume Universe / Collapse Multiverse',
         what: '18 Cultivation Credits consume the Universe for Universal Residue; 4 Universes collapse the Multiverse for Axioms.',
-        where: 'The buttons at the bottom of the Machine view, once unlocked.',
+        where: 'The buttons below the upgrade panels in the Machine view, just above the MILESTONE REGISTER, once unlocked.',
         why: 'Each layer resets the one below it and pays a currency the reset cannot touch.',
       },
       {
@@ -291,7 +291,7 @@ export const HELP_ABBREVIATIONS: Readonly<Record<string, string>> = {
 // what decision it is supposed to inform.
 export const EXPLAIN_NOTES: Readonly<Record<string, string>> = {
   machine_hero: 'The Machine view is between runs. Nothing accumulates here — spend the last harvest, then start the next civilization.',
-  run_preparation: 'What the next run will be: its seed-derived starting traits and, once unlocked, one of three drafted Directives. Both are visible before you commit.',
+  run_preparation: 'What the next run will be: its seed-derived starting traits, plus one of three drafted Directives and a Breeding Matrix once each is unlocked. All of it is visible before you commit.',
   machine_upgrades: 'Permanent purchases that change every following run. Containment buys length; the harvest modules buy yield.',
   milestones: 'Every milestone pays Machine Insight, which no prestige takes back. Read it as the list of things worth aiming a run at.',
   run_report: 'What the run just did, why it stopped and what it paid. The lessons are derived from this run’s own numbers.',

@@ -5,6 +5,7 @@ import { buildViewModel, civilizationRenderKey } from './view-model.js';
 import { CivilizationPaths } from '../game/paths.js';
 import { esc, fmt, pct } from './format.js';
 import { abbreviationLegend, abbreviationTitle, explainNote, fieldManual } from './guide-view.js';
+import { bindDisclosureListener, disclosureAttr } from './disclosure.js';
 import { tutorialOverlay, tutorialReplay } from './tutorial-view.js';
 import { runReportPanel } from './report-view.js';
 import type { WorldController } from '../render/world.js';
@@ -25,6 +26,11 @@ const reserveCostText=(entry:any)=>fill(text().ui.app.reserveCost,{cost:fmt(entr
 const harvestSummaryText=(details:any)=>{const t=text().ui.app;return fill(details.credits===1?t.harvestSummaryOne:t.harvestSummaryMany,{multiplier:details.rewardMultiplier.toFixed(2),credits:details.credits,objectiveBonus:details.objectiveCompleted?t.objectiveBonusActive:''});};
 function statBar(name:string,value:number,max=100,kind=''){return `<div class="stat-row" data-stat="${esc(kind)}"><div><span>${esc(name)}</span><b>${value.toFixed(1)}${max!==100?` / ${max.toFixed(0)}`:''}</b></div><div class="meter ${kind}"><i style="width:${pct(value,max)}"></i></div></div>`;}
 function card(title:string,body:string,cls=''){return `<section class="panel ${cls}"><h3>${title}</h3>${body}</section>`;}
+// The same panel, closed by default: for the surfaces a player consults rather than acts on. The
+// register's own progress line and the discovery count move into the summary, so closing the body
+// hides the twenty-eight cards without hiding where the player stands. `title` and `status` arrive
+// escaped, as `card`'s do.
+function collapsedCard(id:string,title:string,status:string,body:string,cls=''){return `<details class="panel ${cls}" data-disclosure="${esc(id)}"${disclosureAttr(id)}><summary><span>${title}</span>${status?`<small>${status}</small>`:''}</summary>${body}</details>`;}
 function sanitizeHTML(html:string){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const walker=document.createTreeWalker(doc.body,NodeFilter.SHOW_ELEMENT);
@@ -97,20 +103,7 @@ function decisionFeedback(feedback:any,focus='',explain=false){
   return `<section class="panel decision-feedback tone-${esc(feedback.tone)}${focus}" aria-live="polite" aria-atomic="true"><div class="panel-kicker">${esc(t.decisionResolved)}</div>${explainNote('decision_feedback',explain)}<div class="decision-heading"><div><h2>${esc(feedback.choiceLabel)}</h2><p>${esc(feedback.eventTitle)}</p></div><span>${esc(fill(feedback.metrics.length===1?t.metricChangedOne:t.metricChangedMany,{count:feedback.metrics.length}))}</span></div>${changes}${additions?`<div class="decision-additions">${additions}</div>`:''}</section>`;
 }
 
-const openDisclosures=new Set<string>();
-function isDisclosureOpen(id:string):boolean{return openDisclosures.has(id);}
-function disclosureAttr(id:string):string{return isDisclosureOpen(id)?' open':'';}
-
-if(typeof document!=='undefined'&&!(document as any).__disclosureListenerBound){
-  (document as any).__disclosureListenerBound=true;
-  document.addEventListener('toggle',(e)=>{
-    const target=e.target as HTMLDetailsElement;
-    if(target&&target.dataset&&target.dataset.disclosure){
-      if(target.open)openDisclosures.add(target.dataset.disclosure);
-      else openDisclosures.delete(target.dataset.disclosure);
-    }
-  },true);
-}
+if(typeof document!=='undefined')bindDisclosureListener(document);
 
 export function createGameUI(engine:GameEngine,world:WorldController){
   const resourceBar=document.querySelector('#resource-bar') as HTMLElement;
@@ -219,29 +212,35 @@ export function createGameUI(engine:GameEngine,world:WorldController){
       // meant was "you are in Transcendence, this wants Apotheosis". The meter still tracks the
       // ordinal, because the distance is real -- only the counter was a lie.
       :`${esc(entry.currentTerm)}: ${esc(entry.currentLabel)} → ${esc(entry.targetTerm)}: ${esc(entry.targetLabel)}`;
-    const open=entries.filter((entry:any)=>!entry.completed).map((entry:any)=>`<article class="milestone milestone-${esc(entry.display)}"><div><b>${esc(entry.title)}</b><p>${esc(entry.description)}</p></div><div class="milestone-progress"><div class="meter"><i style="width:${pct(entry.current,entry.target)}"></i></div><small>${progressText(entry)} · ${insight(entry.insight)}</small></div></article>`).join('');const done=entries.filter((entry:any)=>entry.completed).map((entry:any)=>`<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>${insight(entry.insight)}</small></article>`).join('');return `<div class="milestone-group"><span class="panel-kicker">${esc(milestoneGroupLabel(group)??group)}</span>${open}${done}</div>`;}).join('');return card(esc(t.milestoneRegister),`<div class="milestone-register">${explainNote('milestones',vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary,{completed:vm.milestones.completed,total:vm.milestones.total}))}</p>${sections}</div>`,'milestone-card');};
+    const open=entries.filter((entry:any)=>!entry.completed).map((entry:any)=>`<article class="milestone milestone-${esc(entry.display)}"><div><b>${esc(entry.title)}</b><p>${esc(entry.description)}</p></div><div class="milestone-progress"><div class="meter"><i style="width:${pct(entry.current,entry.target)}"></i></div><small>${progressText(entry)} · ${insight(entry.insight)}</small></div></article>`).join('');const done=entries.filter((entry:any)=>entry.completed).map((entry:any)=>`<article class="milestone complete"><b>\u2713 ${esc(entry.title)}</b><small>${insight(entry.insight)}</small></article>`).join('');return `<div class="milestone-group"><span class="panel-kicker">${esc(milestoneGroupLabel(group)??group)}</span>${open}${done}</div>`;}).join('');return collapsedCard('milestones',esc(t.milestoneRegister),`${fmt(vm.milestones.completed)} / ${fmt(vm.milestones.total)}`,`<div class="milestone-register">${explainNote('milestones',vm.explain)}<p class="register-summary">${esc(fill(t.milestoneSummary,{completed:vm.milestones.completed,total:vm.milestones.total}))}</p>${sections}</div>`,'milestone-card');};
   const convergenceCard=(vm:any)=>{if(!vm.convergence.visible)return '';const t=text().ui.app;const rows=vm.convergence.requirements.map((entry:any)=>`<li class="${entry.met?'met':'open'}"><span>${entry.met?'\u2713':'\u25CB'} ${esc(entry.label)}</span><b>${fmt(entry.current)} / ${fmt(entry.target)}</b></li>`).join('');return card(esc(t.greatConvergence),`<div class="convergence-card"><p>${esc(fill(t.convergenceDescription,{targetDepth:vm.convergence.targetDepth.toFixed(1)}))}</p><ul class="convergence-requirements">${rows}</ul><button class="primary big" data-action="convergence" ${vm.convergence.unlocked?'':'disabled'}>${esc(t.initiateGreatConvergence)}</button>${vm.convergence.unlocked?'':`<p class="start-reason" role="status">${esc(vm.convergence.reason)}</p>`}${vm.convergence.convergences?`<small>${esc(fill(t.convergencesAchieved,{count:vm.convergence.convergences}))}</small>`:''}</div>`,'convergence-panel');};
   function renderMachine(vm:any){
     const t=text().ui.app;
     const previews=vm.previews.map((p:any)=>`<article class="unlock-preview"><b>🔒 ${esc(p.name)}</b><span>${esc(p.condition)}</span></article>`).join('');
     const previewTraits=vm.previewTraits.map((trait:any)=>`<span>${esc(trait.name)}</span>`).join('');
-    const directiveDraft=vm.systems.directives?(vm.directives.length?`<div class="option-grid directive-draft">${optionCards(vm.directives,'directive',vm.runBuild.selectedDirective,vm.runBuild.directiveLocked)}</div>`:`<p>${esc(t.noDirectiveOffers)}</p>`):'';
+    // `state.machine.runBuild` holds the Directive and the Breeding Matrix, and `startCivilization`
+    // consumes both together -- they are one decision. The matrix used to be its own top-level card
+    // four panels below this one, which put it 916px under the button that commits it: a run could be
+    // started without the panel ever having been on screen. Both are blocks in this card now, each
+    // labelled, because two unlabelled grids of Select cards stacked would read as one list.
+    const draftBlock=(kicker:string,body:string)=>`<div><span class="panel-kicker">${esc(kicker)}</span>${body}</div>`;
+    const directiveDraft=vm.systems.directives?draftBlock(t.runDirectiveDraft,vm.directives.length?`<div class="option-grid directive-draft">${optionCards(vm.directives,'directive',vm.runBuild.selectedDirective,vm.runBuild.directiveLocked)}</div>`:`<p>${esc(t.noDirectiveOffers)}</p>`):'';
+    const matrixDraft=vm.systems.breedingMatrices?draftBlock(t.breedingMatrix,vm.matrices.length?`<div class="option-grid matrix-draft">${optionCards(vm.matrices,'matrix',vm.runBuild.selectedBreedingMatrix,vm.runBuild.matrixLocked)}</div>`:`<p>${esc(t.noBreedingMatrices)}</p>`):'';
     const lastCredits=fmt(Number(vm.lastHarvest.credits??0));
     const lastHarvest=vm.lastHarvest.grade?`<div class="last-harvest"><span>${esc(t.lastHarvest)}</span><b>${esc(gradeText(vm.lastHarvest.grade))}</b><small>${esc(fill(Number(vm.lastHarvest.credits??0)===1?t.lastHarvestDetailOne:t.lastHarvestDetailMany,{credits:lastCredits,multiplier:Number(vm.lastHarvest.reward_multiplier??1).toFixed(2)}))}</small></div>`:'';
     replaceIfChanged(machine,`
       ${runReportPanel(vm.runReport,vm.explain,focusClass(vm,'.run-report'))}
       <section class="machine-hero${focusClass(vm,'.machine-hero')}"><div><p class="eyebrow">${esc(t.browserNode)}</p><h2>${esc(t.machineControl)}</h2><p>${esc(t.machineDescription)}</p>${explainNote('machine_hero',vm.explain)}</div>${lastHarvest}</section>
       ${situationBanner(vm)}
-      ${card(esc(t.nextCivilization),`<div class="run-preview">${explainNote('run_preparation',vm.explain)}<div><span class="panel-kicker">${esc(t.startingTraitsPreview)}</span><div class="tag-row preview-traits">${previewTraits||`<span>${esc(t.traitArchiveUnavailable)}</span>`}</div></div>${directiveDraft}<button class="primary big start-run" data-action="start" ${vm.canStartCivilization?'':'disabled'}>${esc(t.startCivilization)}</button>${vm.startReason?`<p class="start-reason" role="status">${esc(vm.startReason)}</p>`:''}${tutorialReplay(vm.tutorial)}</div>`,`run-preparation${focusClass(vm,'.run-preparation')}`)}
+      ${card(esc(t.nextCivilization),`<div class="run-preview">${explainNote('run_preparation',vm.explain)}<div><span class="panel-kicker">${esc(t.startingTraitsPreview)}</span><div class="tag-row preview-traits">${previewTraits||`<span>${esc(t.traitArchiveUnavailable)}</span>`}</div></div>${directiveDraft}${matrixDraft}<div class="run-commit"><button class="primary big start-run" data-action="start" ${vm.canStartCivilization?'':'disabled'}>${esc(t.startCivilization)}</button>${vm.startReason?`<p class="start-reason" role="status">${esc(vm.startReason)}</p>`:''}</div>${tutorialReplay(vm.tutorial)}</div>`,`run-preparation${focusClass(vm,'.run-preparation')}`)}
       ${card(esc(t.machineUpgrades),`${explainNote('machine_upgrades',vm.explain)}<div class="upgrade-list">${upgrades(vm.machineUpgrades,'machine')}</div>`)}
-      ${vm.systems.breedingMatrices?card(esc(t.breedingMatrix),vm.matrices.length?`<div class="option-grid">${optionCards(vm.matrices,'matrix',vm.runBuild.selectedBreedingMatrix,vm.runBuild.matrixLocked)}</div>`:`<p>${esc(t.noBreedingMatrices)}</p>`):''}
       ${vm.systems.universeUpgrades?card(esc(t.universeUpgrades),`<div class="upgrade-list">${upgrades(vm.universeUpgrades,'universe')}</div>`):''}
       ${vm.systems.axioms?card(esc(t.axiomUpgrades),`<div class="upgrade-list">${upgrades(vm.axiomUpgrades,'axiom')}</div>`):''}
       ${convergenceCard(vm)}
+      <section class="prestige-row">${vm.systems.universePrestige?`<button data-action="universe" ${vm.canConsumeUniverse?'':'disabled'}>${esc(t.consumeUniverse)} <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} ${esc(t.metaCultivationCredits)}</span></button>`:''}${vm.systems.multiversePrestige?`<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse?'':'disabled'}>${esc(t.collapseMultiverse)} <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>`:''}</section>
       ${milestoneRegister(vm)}
-      ${fieldManual(vm.explain,focusClass(vm,'.field-manual'))}
-      ${previews?card(esc(t.nextDiscoveries),`<div class="preview-grid">${previews}</div>`):''}
-      <section class="prestige-row">${vm.systems.universePrestige?`<button data-action="universe" ${vm.canConsumeUniverse?'':'disabled'}>${esc(t.consumeUniverse)} <span>${vm.cultivationCreditsThisUniverse}/${vm.universeRequirement} ${esc(t.metaCultivationCredits)}</span></button>`:''}${vm.systems.multiversePrestige?`<button class="danger" data-action="multiverse" ${vm.canConsumeMultiverse?'':'disabled'}>${esc(t.collapseMultiverse)} <span>${vm.universesThisMultiverse}/${vm.multiverseRequirement}</span></button>`:''}</section>`);
+      ${previews?collapsedCard('next-discoveries',esc(t.nextDiscoveries),String(vm.previews.length),`<div class="preview-grid">${previews}</div>`):''}
+      ${fieldManual(vm.explain,focusClass(vm,'.field-manual'))}`);
   }
 
   const rewardText=(key:string,details:any)=>`${resourceShort()[key]} ${key==='causal_mass'||engine.resourceDiscovered(key)?fmt(details.rewards[key]):'???'}`;
