@@ -107,9 +107,20 @@ export function drawIdentityLandmarks(surface, civ, settlements, ground, accent,
             surface.lineStyle(1.2, accent, .5).strokeCircle(x, top, 36);
         }
         else if (identity.pathId === 'void_communion') {
-            surface.fillStyle(0x02040a, .95).fillCircle(x, top, 30);
+            // Light absorbed rather than a hole cut in the skyline: the well is dense at its centre and
+            // gives out into the world at its edge, so the city behind it darkens instead of disappearing.
+            surface.fillRadialGlow(x, top, 0, 34, [
+                { offset: 0, color: 0x02040a, alpha: .96 },
+                { offset: .62, color: 0x02040a, alpha: .72 },
+                { offset: 1, color: 0x02040a, alpha: 0 },
+            ]);
             surface.lineStyle(2.2, accent, .7).strokeCircle(x, top, 36);
             surface.lineStyle(1.2, accent, .35).strokeCircle(x, top, 44);
+            // The rim the absorbed light leaves around the well.
+            surface.fillRadialGlow(x, top, 36, 52, [
+                { offset: 0, color: accent, alpha: .16 },
+                { offset: 1, color: accent, alpha: 0 },
+            ]);
         }
         else if (identity.pathId === 'recursive_simulation') {
             for (let r = 0; r < 4; r++)

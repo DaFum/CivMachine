@@ -55,12 +55,31 @@ const SIDE_SPLIT = .72;
  * A lit front plane, a shadowed side plane, a roof edge catching the sky and a contact shadow on the
  * ground. Every kind builds its silhouette out of this, which is what makes the material read as one
  * world rather than as nine unrelated icons.
+ *
+ * The lit face is graded rather than filled flat: the top of a solid stands in the sky's own light
+ * and its base stands in the air and the shadow the city puts there. One gradient per solid, on the
+ * cached layer where it is paid per scroll -- a flat fill is what made a stage-4 skyline read as
+ * cardboard whatever the palette did.
  */
 function solid(surface: DrawSurface, left: number, top: number, width: number, height: number, lit: number, dark: number, roof: number, alpha: number, roofLight: boolean): void {
   if (width <= 0 || height <= 0) return;
   const face = Math.max(1, width * SIDE_SPLIT);
-  surface.fillStyle(lit, alpha).fillRect(left, top, face, height);
+  if (height >= 14) {
+    surface.fillLinearGradientRect(left, top, face, height, [
+      { offset: 0, color: tint(lit, .1), alpha },
+      { offset: .55, color: lit, alpha },
+      { offset: 1, color: shade(lit, .3), alpha },
+    ], left, top, left, top + height);
+  } else {
+    surface.fillStyle(lit, alpha).fillRect(left, top, face, height);
+  }
   surface.fillStyle(dark, alpha).fillRect(left + face, top, Math.max(0, width - face), height);
+  // The edge between the two planes, and the one down the lit side that catches the horizon. Two
+  // hairlines are what actually sell a solid as a solid at the size a skyline is read at.
+  if (height >= 20) {
+    surface.lineStyle(1, shade(dark, .5), .4 * alpha).line(left + face, top, left + face, top + height);
+    surface.lineStyle(1, tint(lit, .28), .22 * alpha).line(left + .5, top + 1, left + .5, top + height);
+  }
   if (roofLight) surface.lineStyle(1, roof, .4).line(left, top, left + width, top);
 }
 

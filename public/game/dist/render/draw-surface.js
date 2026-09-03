@@ -93,6 +93,35 @@ export class CachedCanvasSurface {
         return this;
     }
     /**
+     * The same light field, flattened. Almost nothing a civilization emits is as tall as it is wide:
+     * the glow over a city, the bloom along the horizon and the lit underside of a cloud bank are all
+     * low and broad, and drawing them with `fillRadialGlow` meant choosing between a glow that stopped
+     * short at the sides and one that climbed halfway up the sky. The vertical squash is applied to
+     * the context rather than to the gradient, so the horizontal extent is exactly `radiusX` either
+     * way -- which is what keeps the caller's culling, stated in x, honest.
+     */
+    fillEllipseGlow(cx, cy, radiusX, radiusY, stops) {
+        const rx = Math.max(0, radiusX);
+        const ry = Math.max(0, radiusY);
+        if (rx <= 0 || ry <= 0 || !stops.length)
+            return this;
+        const squash = ry / rx;
+        // No context transform to squash with (a recording double, an older 2D context): fall back to a
+        // circle at the horizontal radius rather than dropping the light entirely.
+        if (typeof this.context.transform !== 'function' || typeof this.context.save !== 'function') {
+            return this.fillRadialGlow(cx, cy, 0, rx, stops);
+        }
+        this.context.save();
+        // Scale about `cy`, so the flattened field stays centred where the caller put it.
+        this.context.transform(1, 0, 0, squash, 0, cy * (1 - squash));
+        this.fillRadialGlow(cx, cy, 0, rx, stops);
+        this.context.restore();
+        // The restore rolls back whatever fill style the glow left behind, so the cache must forget it.
+        // Stroke style and line width were never touched, so they survive the save/restore unchanged.
+        this.lastFillStyle = '';
+        return this;
+    }
+    /**
      * A ridgeline lit from the sky down into its own shadow: one path, one gradient, so a terrain
      * layer gets vertical lighting without a rectangle per band. The gradient axis is given in the
      * same space as the points, which is what lets the caller aim it at the horizon.

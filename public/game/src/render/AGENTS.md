@@ -13,13 +13,43 @@ tests can record primitives. Visuals must derive from `world-model.ts` and `worl
 `world.ts` stays orchestration.
 
 Hard budgets the tests enforce: 150 particles, 9 haze bands, 12 fractures, 10 beacons, 120 planned
-agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outskirt props, and device
-pixel ratio capped at 2. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
+agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outskirt props, 12 cloud
+banks, 3 reality shears, 5 entropy fissures, and device pixel ratio capped at 2. The sky-and-
+terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
+pixel. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
 scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
-the point sample and `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
-profile is built from those, never from a noise library.
+the point sample, `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
+profile is built from those, never from a noise library — and `spreadPosition` beside them is its
+spread form, for a run of marks that has to cover the world without moving when there are more of
+them.
+
+A cue on a **cached** layer is gated on a *band*, never on a raw stat. `structuralWorldKey` rebuilds
+those layers on the bands, so a threshold sitting inside one — entropy at 55, say, inside the 50–74
+band — is crossed with nothing keying on the crossing, and the cue stays absent until an unrelated
+rebuild wanders past. The gate, the count and anything else that decides whether a shape exists at
+all have to be functions of what the key tracks. A continuously drifting *colour* is the exception
+the mood wash exists to cover; a shape appearing is not.
+
+## A layer only reaches as far as its parallax takes it
+
+A layer at parallax `f` shows world coordinates `scroll * f` to `scroll * f + width`, and the scroll
+itself stops at `worldWidth - width` — so the sky, at a tenth of the scroll, never exposes more than
+about a third of a stage-4 world. Anything anchored to a *single* world position on a slow layer has
+to be placed inside `layerReach(worldWidth, width, parallax)` or it is simply never seen: the
+celestial body was visible for about a fifth of the seeds, and the observer's light field, anchored
+at 72% of the world, for none of them. Anything placed on a lattice across the visible band — stars,
+cloud cells, the distant skyline, the ground shelves — needs no such care, because the band already
+*is* the slice that shows.
+
+The same reasoning governs a state cue on any layer. A fracture, a beacon or a sanity ring scattered
+by a hash across four viewports leaves most of the world without it — a cue whose visibility depends
+on where the player happened to scroll is not a cue. But a lattice sized by the count is not the
+answer either: those counts follow live stats, so the frame Stability opens a third fracture, a
+lattice moves the other two from the quarters of the world to its sixths and every mark on screen
+jumps. `spreadPosition` in `primitives.ts` is the placement that is both — every prefix of it is
+spread evenly, and mark `i` sits where it sat however many marks there turn out to be.
 
 ## Everything culls by its own extent
 
@@ -34,9 +64,14 @@ may be: keep a glow radius or a prop's reach inside it rather than raising the c
 
 The cached layers repaint on a scroll; the dynamic layer repaints every frame, so that is where a
 cost mistake is paid 60 times a second. Two rules follow. A `CanvasGradient` is allocated per call,
-so `fillLinearGradientRect`, `fillLinearGradientPoly` and `fillRadialGlow` belong on the cached
-layers and in the bounded per-frame cues (a reactor core, one horizon field) — the haze bands and
-the window lights build their softness out of layered rectangles and circles instead. And per-frame
+so `fillLinearGradientRect`, `fillLinearGradientPoly`, `fillRadialGlow` and `fillEllipseGlow` belong
+on the cached layers and in the bounded per-frame cues (a reactor core, one horizon field) — the haze bands and
+the window lights build their softness out of layered rectangles and circles instead.
+`fillEllipseGlow` is the flattened light field — a city's glow over its own skyline, a cloud's lit
+underside, the seam of a reality shear — and it squashes the *context* vertically rather than the
+gradient, so its horizontal extent is exactly the radius the caller culls by. It costs one
+`save`/`restore` on top of a radial glow, which is why it belongs beside the other gradients rather
+than in a per-frame loop. And per-frame
 work stays bounded by a count, never by the world: twelve strain lines, twelve embers, a window
 budget, not one primitive per structure in a stage-4 world.
 

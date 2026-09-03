@@ -50,6 +50,29 @@ export function ridgeNoise(x, seed, detail = .45) {
     const fine = valueNoise(x * 2.7 + 11.3, seed * 1.7 + 31);
     return Math.max(0, Math.min(1, base * (1 - detail) + fine * detail));
 }
+/**
+ * The van der Corput sequence in base 2, offset onto a span. Where `hash01` answers "where does
+ * mark `i` go", this answers "where do the *first n* marks go, for every n at once": every prefix of
+ * the sequence is spread evenly across the span, and mark `i` sits at the same place however many
+ * marks there turn out to be.
+ *
+ * That second half is the point. A cue whose count follows a live stat -- fractures on Stability,
+ * beacons on Awareness -- cannot be laid out on a lattice sized by that count: the frame Stability
+ * ticks a third fracture into existence, a lattice moves the other two from the quarters of the
+ * world to its sixths, and every mark on screen jumps at exactly the moment the player is reading
+ * the state. Nor can it be scattered by a hash, which clusters and leaves whole viewports of a
+ * stage-4 world with no cue in them at all. This is the one placement that is both.
+ */
+export function spreadPosition(span, index, offset) {
+    let position = 0, denominator = 1, value = Math.max(0, Math.trunc(index));
+    while (value > 0) {
+        denominator *= 2;
+        position += (value % 2) / denominator;
+        value = Math.floor(value / 2);
+    }
+    const shifted = (position + offset) % 1;
+    return span * (shifted < 0 ? shifted + 1 : shifted);
+}
 /** `color` pushed toward black. The single name for the darker plane of a 2.5D solid. */
 export function shade(color, amount) { return mixColor(color, 0x000000, amount); }
 /** `color` pushed toward white. The single name for a rim light or a lit roof edge. */
