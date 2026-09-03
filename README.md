@@ -27,11 +27,12 @@ ending run runs out of unseen ones.
 
 ## v1.25.0 a machine screen you can read, and a manual that stays open
 
-- The Machine view is less than half as long. The milestone register stood open as twenty-eight
-  cards — half the screen on a fresh save, at nothing completed — directly above a field manual that
-  was already collapsed. Both are closed now, carrying `0 / 28` and the discovery count on their own
-  summary lines, so what a player has reached stays readable while the cards do not. A fresh save
-  went from 4.2 screens to 2.3, and a first Multiverse from 6.3 to 5.1.
+- The Machine view is about half as long on a fresh save, and a fifth shorter by the first
+  Multiverse. The milestone register stood open as twenty-eight cards — half the screen on a fresh
+  save, at nothing completed — directly above a field manual that was already collapsed. Both are
+  closed now, carrying `0 / 28` and the discovery count on their own summary lines, so what a player
+  has reached stays readable while the cards do not. A fresh save went from 4.2 screens to 2.3, and
+  a first Multiverse from 6.3 to 5.1.
 - The field manual stays open. Opening a section and then changing anything on the screen closed it
   again: a rebuilt panel came back from a template that had forgotten which section was being read.
   The post-run report's CIVILIZATION RECORD had the same fault. Both remember now, the way every
