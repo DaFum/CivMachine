@@ -20,8 +20,17 @@ pixel. `quality.ts` may shed cosmetics only — never fractures, beacons, landma
 scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
-the point sample and `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
-profile is built from those, never from a noise library.
+the point sample, `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
+profile is built from those, never from a noise library — and `spreadPosition` beside them is its
+spread form, for a run of marks that has to cover the world without moving when there are more of
+them.
+
+A cue on a **cached** layer is gated on a *band*, never on a raw stat. `structuralWorldKey` rebuilds
+those layers on the bands, so a threshold sitting inside one — entropy at 55, say, inside the 50–74
+band — is crossed with nothing keying on the crossing, and the cue stays absent until an unrelated
+rebuild wanders past. The gate, the count and anything else that decides whether a shape exists at
+all have to be functions of what the key tracks. A continuously drifting *colour* is the exception
+the mood wash exists to cover; a shape appearing is not.
 
 ## A layer only reaches as far as its parallax takes it
 
@@ -35,9 +44,12 @@ cloud cells, the distant skyline, the ground shelves — needs no such care, bec
 *is* the slice that shows.
 
 The same reasoning governs a state cue on any layer. A fracture, a beacon or a sanity ring scattered
-by a hash across four viewports leaves most of the world without it, so each of those is placed on a
-lattice sized by its own count: a cue whose visibility depends on where the player happened to
-scroll is not a cue.
+by a hash across four viewports leaves most of the world without it — a cue whose visibility depends
+on where the player happened to scroll is not a cue. But a lattice sized by the count is not the
+answer either: those counts follow live stats, so the frame Stability opens a third fracture, a
+lattice moves the other two from the quarters of the world to its sixths and every mark on screen
+jumps. `spreadPosition` in `primitives.ts` is the placement that is both — every prefix of it is
+spread evenly, and mark `i` sits where it sat however many marks there turn out to be.
 
 ## Everything culls by its own extent
 

@@ -1345,3 +1345,76 @@ test('the cached sky and terrain stay cheap enough to repaint on every scrolled 
     assertFiniteGeometry(calls, `static/budget-${scroll}`);
   }
 });
+
+test('a cue keeps its place when the count around it changes', async () => {
+  const { spreadPosition } = await import('../dist/render/primitives.js');
+  const SPAN = 3600, OFFSET = .37;
+  const at = count => Array.from({ length: count }, (_, i) => spreadPosition(SPAN, i, OFFSET));
+
+  // The bug this pins: fractures and beacons are laid out on the dynamic layer and their counts
+  // follow Stability, Entropy and Awareness, so a count changes while the player is watching. A
+  // lattice sized by the count moved every existing mark the moment one more appeared -- two
+  // fractures at the quarters of the world jumped to the sixths as the third arrived.
+  for (const count of [2, 3, 4, 7, 12]) {
+    assert.deepEqual(at(count), at(12).slice(0, count), `the first ${count} marks must not move when there are 12`);
+  }
+
+  // And it still has to spread: every prefix covers the world rather than clustering in one corner.
+  for (const count of [2, 3, 5, 8, 12]) {
+    const sorted = at(count).slice().sort((a, b) => a - b);
+    const gaps = sorted.map((value, index) => (index === 0 ? value + SPAN - sorted[sorted.length - 1] : value - sorted[index - 1]));
+    assert.ok(Math.max(...gaps) <= SPAN * (1.6 / count), `${count} marks left a ${Math.round(Math.max(...gaps))}px gap in a ${SPAN}px world`);
+    for (const value of sorted) assert.ok(value >= 0 && value < SPAN, 'a mark must stay inside the world');
+  }
+});
+
+test('fractures stay put as Stability ticks another one into existence', async () => {
+  const positions = async stability => {
+    const civ = developedCivilization(404);
+    civ.stats.stability = stability;
+    civ.tactical.entropy = 0;
+    const { worldSnapshot } = await import('../dist/render/world-model.js');
+    const snapshot = worldSnapshot(civ, 900);
+    return { count: snapshot.fractureCount, civ };
+  };
+  const fewer = await positions(50);
+  const more = await positions(30);
+  assert.ok(more.count > fewer.count, 'lower Stability must open more fractures');
+
+  // Read the placement straight off the primitive both counts share, so the invariant is about
+  // where a fracture goes and not about how the frame that draws it happens to be recorded.
+  const { spreadPosition, hash01 } = await import('../dist/render/primitives.js');
+  const { worldSnapshot } = await import('../dist/render/world-model.js');
+  const worldWidth = worldSnapshot(fewer.civ, 900).worldWidth;
+  const offset = hash01(fewer.civ.seed * 61);
+  const place = count => Array.from({ length: count }, (_, i) => spreadPosition(worldWidth, i, offset));
+  assert.deepEqual(place(fewer.count), place(more.count).slice(0, fewer.count),
+    'the fractures already on screen must not move when another one opens');
+});
+
+test('the cached entropy cues are gated on the band the scene is keyed on', async () => {
+  // The bug this pins: `structuralWorldKey` rebuilds the cached layers on the entropy *band*, so a
+  // threshold sitting inside a band -- 45, or 55 -- is crossed with nothing keying on the crossing,
+  // and the cue stays absent until an unrelated rebuild wanders past.
+  const { worldPresentation } = await import('../dist/render/world-presentation.js');
+  const emberStrokes = async (entropy, tag) => {
+    const civ = developedCivilization(404);
+    civ.tactical.entropy = entropy;
+    const ember = worldPresentation(civ).colors.ember;
+    const prefix = `rgba(${ember >> 16 & 0xff},${ember >> 8 & 0xff},${ember & 0xff},`;
+    const calls = await staticLayerCalls(civ, tag);
+    return calls.filter(([name, value]) => name === 'strokeStyle' && typeof value === 'string' && value.startsWith(prefix)).length;
+  };
+  const quiet = await emberStrokes(30, 'band-1');
+  const cracked = await emberStrokes(60, 'band-2');
+  const torn = await emberStrokes(90, 'band-3');
+  assert.equal(quiet, 0, 'below the second band the land must be whole');
+  assert.ok(cracked > 0, 'the second band must crack the land');
+  assert.ok(torn > cracked, 'the top band must shear the ridgeline as well as crack the land');
+
+  // And the cue must not depend on anything finer than the band, or it changes without a rebuild.
+  for (const [low, high, band] of [[50, 74, 'second'], [75, 99, 'top']]) {
+    assert.equal(await emberStrokes(low, `flat-${low}`), await emberStrokes(high, `flat-${high}`),
+      `the ${band} band must draw the same land at ${low} and at ${high}`);
+  }
+});

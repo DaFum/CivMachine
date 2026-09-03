@@ -6,7 +6,7 @@ import { applyQualityToLiveSample, liveWorldSample, worldSnapshot } from './worl
 import { dynamicFrameIntervalMs, qualityFactors, RenderQualityController, type RenderQualityTier } from './quality.js';
 import { structuralWorldKey, worldPresentation } from './world-presentation.js';
 import { drawConsequenceImpact, drawPhaseTransitionImpact } from './consequence-presentation.js';
-import { hash01, mixColor, ridgeNoise, shade, tint } from './primitives.js';
+import { hash01, mixColor, ridgeNoise, shade, spreadPosition, tint } from './primitives.js';
 import { CachedCanvasSurface, canvasSurface, type DrawSurface } from './draw-surface.js';
 import { settlementLayout, structureEffectiveGround, worldOutskirts, type Outskirt, type Settlement, type Structure } from './settlements.js';
 import { bannerGeometry, drawBanner, drawStructure, settlementCrown } from './structures.js';
@@ -176,8 +176,10 @@ function drawCloudStrata(surface: DrawSurface, scene: WorldScene, height: number
     const last = Math.ceil(view.to / cell) + 1;
     for (let index = first; index <= last && drawn < MAX_CLOUD_BANKS; index++) {
       // Most cells stay open sky. Awareness thickens the deck; entropy tears it open, so a failing
-      // world loses its cloud cover instead of merely turning red.
-      if (hash01(civ.seed * 3 + deck * 137 + index * 61) > .36 + deck * .06 + presentation.awareness * .16 - presentation.entropy * .24) continue;
+      // world loses its cloud cover instead of merely turning red. Read off the bands rather than
+      // the raw stats for the same reason the entropy cues are: this deck is cached, and a threshold
+      // that moves inside a band decides whether a cell holds cloud without anything keying on it.
+      if (hash01(civ.seed * 3 + deck * 137 + index * 61) > .36 + deck * .06 + presentation.bands.awareness * .053 - presentation.bands.entropy * .08) continue;
       const anchor = (index + hash01(deck * 29 + index * 17)) * cell;
       if (anchor > skyReach) continue;
       const halfWidth = Math.min(CLOUD_MAX_WIDTH, cell * (.62 + hash01(index * 13 + deck * 7) * .5)) * .5;
@@ -333,6 +335,8 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
   // Same rule as the sky: anything this layer anchors to a single world position rather than to a
   // lattice across the visible band has to be placed inside the slice its parallax can reach.
   const terrainReach = layerReach(worldWidth, width, TERRAIN_PARALLAX);
+  // The band, not the value: this layer is cached and only rebuilt when the band changes.
+  const entropyBand = presentation.bands.entropy;
   const horizon = height * HORIZON_RATIO;
   const span = view.to - view.from;
   if (span <= 0) return;
@@ -374,14 +378,20 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
     surface.lineStyle(1, mixColor(colors.skyHorizon, 0xffffff, .2), .16 + presentation.signals.activity * .1).strokePoly(mid.slice(1, -1));
   }
 
-  // Reality shear. Above the third entropy band the ridgeline itself stops being continuous: a slice
-  // of it stands displaced from the land on either side, with the split lit from inside. Entropy had
-  // no silhouette of its own before this -- it was a red sky, and a red sky is a palette, not a
-  // world coming apart. Bounded to three slices, each one polygon and two seams.
-  if (presentation.entropy > .55) {
-    const shears = Math.min(3, 1 + Math.round((presentation.entropy - .55) * 5));
+  // Reality shear. In the top entropy band the ridgeline itself stops being continuous: a slice of
+  // it stands displaced from the land on either side, with the split lit from inside. Entropy had no
+  // silhouette of its own before this -- it was a red sky, and a red sky is a palette, not a world
+  // coming apart. Bounded to three slices, each one polygon and two seams.
+  //
+  // Both entropy cues are gated on the *band*, never on the raw value. This layer is cached and
+  // `structuralWorldKey` rebuilds it on the band, so a threshold at 55 would sit inside the 50-74
+  // band: the state would cross it, nothing would key on the crossing, and the shear would stay
+  // absent until some unrelated rebuild happened to come along. Both the gate and the count have to
+  // be functions of what the key tracks, or the cue is only as current as the last rebuild.
+  if (entropyBand >= 3) {
+    const shears = 3;
     for (let i = 0; i < shears; i++) {
-      const centre = terrainReach * ((i + .5) / shears + (hash01(civ.seed * 43 + i * 29) - .5) * .6 / shears);
+      const centre = spreadPosition(terrainReach, i, hash01(civ.seed * 43 + 5));
       const halfWidth = 80 + hash01(civ.seed + i * 61) * 70;
       const from = Math.max(0, centre - halfWidth);
       const to = Math.min(worldWidth, centre + halfWidth);
@@ -398,7 +408,7 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
         { offset: 0, color: mixColor(colors.midTerrain, colors.skyHorizon, .16), alpha: .97 },
         { offset: 1, color: shade(colors.midTerrain, .2), alpha: .97 },
       ], from, horizon - midAmplitude - lift, from, midBase);
-      const seam = .3 + presentation.entropy * .4;
+      const seam = .62;
       for (const edge of [from, to]) {
         surface.lineStyle(1.6, colors.ember, seam).line(edge, midBase, edge, midBase - midAmplitude * .55 - lift);
       }
@@ -460,10 +470,10 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
   // Entropy crossing the land itself. Reality failing is a state the sky already carries as colour;
   // this is the same state written into the ground, so a collapsing world is legible from its
   // terrain and not only from its palette. Bounded to five, and only above the second entropy band.
-  if (presentation.entropy > .45) {
-    const cracks = Math.min(5, 2 + Math.round(presentation.entropy * 4));
+  if (entropyBand >= 2) {
+    const cracks = entropyBand >= 3 ? 5 : 3;
     for (let i = 0; i < cracks; i++) {
-      const x = terrainReach * ((i + .5) / cracks + (hash01(civ.seed * 31 + i * 17) - .5) * .5 / cracks);
+      const x = spreadPosition(terrainReach, i, hash01(civ.seed * 31 + 9));
       if (x + FISSURE_REACH < view.from || x - FISSURE_REACH > view.to) continue;
       // Up through the ridges and down to the edge of the settlement plane. Below that the scenery
       // layer's own ground is painted over this one, so a crack drawn to the bottom of the frame
@@ -472,13 +482,13 @@ function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: numb
       const bottomY = horizon + 54 + hash01(i * 41) * 14;
       const lean = (hash01(civ.seed + i * 53) - .5) * 90;
       const mid = topY + (bottomY - topY) * .55;
-      const glow = .2 + presentation.entropy * .38;
+      const glow = entropyBand >= 3 ? .56 : .36;
       // The land split open and lit from inside it: a wide dim seam under a narrow bright one, plus
       // a branch off the elbow. Three strokes per crack, five cracks -- the cost of a state cue, not
       // of a weather system.
-      surface.lineStyle(4 + presentation.entropy * 4, colors.ember, glow * .22)
+      surface.lineStyle(entropyBand >= 3 ? 8 : 5, colors.ember, glow * .22)
         .strokePoly([[x, topY], [x + lean * .35, mid], [x + lean, bottomY]]);
-      surface.lineStyle(1.2 + presentation.entropy * 1.4, colors.ember, glow)
+      surface.lineStyle(entropyBand >= 3 ? 2.6 : 1.8, colors.ember, glow)
         .strokePoly([[x, topY], [x + lean * .35, mid], [x + lean, bottomY]]);
       surface.lineStyle(1, colors.ember, glow * .5)
         .strokePoly([[x + lean * .35, mid], [x + lean * .35 - 34, bottomY]]);
@@ -1094,12 +1104,13 @@ function drawBannersAndConstruction(surface: DrawSurface, scene: WorldScene, sna
 function drawAnomalies(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean, glowDetail: number): void {
   const { civ } = scene;
   const worldWidth = snapshot.worldWidth;
-  // Fractures on a lattice across the world rather than at a hash of it: scattered freely over four
-  // viewports the same budget clustered, and Stability could be read or not depending only on where
-  // the player had scrolled to.
-  const fractureSpacing = worldWidth / Math.max(1, snapshot.fractureCount);
+  // Spread across the world rather than hashed over it: scattered freely across four viewports the
+  // same budget clustered, and Stability could be read or not depending only on where the player had
+  // scrolled to. `spreadPosition` is what makes that spread affordable -- the count follows
+  // Stability and Entropy and changes while the player watches, and a lattice sized by the count
+  // would move every existing fracture each time one more appeared.
   for (let i = 0; i < snapshot.fractureCount; i++) {
-    const x = (i + .5) * fractureSpacing + (hash01(civ.seed + i * 61) - .5) * fractureSpacing * .7;
+    const x = spreadPosition(worldWidth, i, hash01(civ.seed * 61));
     if (x < view.from - 60 || x > view.to + 60) continue;
     // A fracture belongs to the world, not to the ground line: it opens in the earth and continues
     // up through the air the settlement stands in, so low Stability is legible in the skyline too.
@@ -1114,11 +1125,11 @@ function drawAnomalies(surface: DrawSurface, scene: WorldScene, snapshot: Return
     surface.lineStyle(1, 0xee6973, (.1 + presentation.danger * .26) * (reducedMotion ? 1 : .75 + Math.sin(animationTime * .0016 + i) * .25))
       .line(x, ground + 2, x - lean * .6, ground - 30 - hash01(i * 23) * 70);
   }
-  // Beacons, likewise on a lattice: Awareness has to be readable wherever the world is being looked
-  // at, not only where the hash happened to put its ten marks.
-  const beaconSpacing = worldWidth / Math.max(1, snapshot.beaconCount);
+  // Beacons, spread the same way and for the same two reasons: Awareness has to be readable wherever
+  // the world is being looked at, and a beacon must not jump across the world the moment Awareness
+  // ticks the next one into existence.
   for (let i = 0; i < snapshot.beaconCount; i++) {
-    const x = (i + .5) * beaconSpacing + (hash01(civ.seed + i * 97) - .5) * beaconSpacing * .6;
+    const x = spreadPosition(worldWidth, i, hash01(civ.seed * 97 + 3));
     if (x < view.from - 30 || x > view.to + 30) continue;
     const pulse = reducedMotion ? 1 : .7 + Math.sin(animationTime * .003 + i) * .3;
     const y = ground - 55 - (i % 3) * 28;
