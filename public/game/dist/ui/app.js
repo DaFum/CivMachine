@@ -4,6 +4,7 @@ import { buildViewModel, civilizationRenderKey } from './view-model.js';
 import { CivilizationPaths } from '../game/paths.js';
 import { esc, fmt, pct } from './format.js';
 import { abbreviationLegend, abbreviationTitle, explainNote, fieldManual } from './guide-view.js';
+import { bindDisclosureListener, disclosureAttr } from './disclosure.js';
 import { tutorialOverlay, tutorialReplay } from './tutorial-view.js';
 import { runReportPanel } from './report-view.js';
 // The short resource names the harvest grid uses. `ui.viewModel.resources` is the long form the
@@ -94,21 +95,8 @@ function decisionFeedback(feedback, focus = '', explain = false) {
     const changes = metrics || affinities ? `<div class="decision-deltas">${metrics}${affinities}</div>` : `<p class="no-delta">${esc(t.noMeasurableStateChange)}</p>`;
     return `<section class="panel decision-feedback tone-${esc(feedback.tone)}${focus}" aria-live="polite" aria-atomic="true"><div class="panel-kicker">${esc(t.decisionResolved)}</div>${explainNote('decision_feedback', explain)}<div class="decision-heading"><div><h2>${esc(feedback.choiceLabel)}</h2><p>${esc(feedback.eventTitle)}</p></div><span>${esc(fill(feedback.metrics.length === 1 ? t.metricChangedOne : t.metricChangedMany, { count: feedback.metrics.length }))}</span></div>${changes}${additions ? `<div class="decision-additions">${additions}</div>` : ''}</section>`;
 }
-const openDisclosures = new Set();
-function isDisclosureOpen(id) { return openDisclosures.has(id); }
-function disclosureAttr(id) { return isDisclosureOpen(id) ? ' open' : ''; }
-if (typeof document !== 'undefined' && !document.__disclosureListenerBound) {
-    document.__disclosureListenerBound = true;
-    document.addEventListener('toggle', (e) => {
-        const target = e.target;
-        if (target && target.dataset && target.dataset.disclosure) {
-            if (target.open)
-                openDisclosures.add(target.dataset.disclosure);
-            else
-                openDisclosures.delete(target.dataset.disclosure);
-        }
-    }, true);
-}
+if (typeof document !== 'undefined')
+    bindDisclosureListener(document);
 export function createGameUI(engine, world) {
     const resourceBar = document.querySelector('#resource-bar');
     const metaBar = document.querySelector('#meta-bar');

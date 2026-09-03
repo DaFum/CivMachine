@@ -1,5 +1,6 @@
 import { duration, esc, fmt, pct } from './format.js';
 import { explainNote } from './guide-view.js';
+import { disclosureAttr } from './disclosure.js';
 import { endgameStateLabel, fill, institutionName, text } from '../data/i18n.js';
 // Three normalized polylines over the same box: Development against its own peak (the run's growth),
 // Entropy against 100 (the clock), Stability against its maximum (what pays for the clock). Inline
@@ -110,7 +111,7 @@ export function runReportPanel(report, explain = false, focus = '') {
       <ul>${report.lessons.map(lesson => `<li>${esc(lesson)}</li>`).join('')}</ul>
     </div>
     ${chips ? `<div class="report-chips">${chips}</div>` : ''}
-    <details class="report-record"><summary>${esc(copy.civilizationRecord)}</summary><ol class="history">${timeline}</ol></details>
+    <details class="report-record" data-disclosure="report-record"${disclosureAttr('report-record')}><summary>${esc(copy.civilizationRecord)}</summary><ol class="history">${timeline}</ol></details>
     <button class="ghost" data-action="dismiss-report">${esc(copy.dismissReport)}</button>
   </section>`;
 }

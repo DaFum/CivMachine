@@ -1,5 +1,6 @@
 import { duration, esc, fmt, pct } from './format.js';
 import { explainNote } from './guide-view.js';
+import { disclosureAttr } from './disclosure.js';
 import { endgameStateLabel, fill, institutionName, text } from '../data/i18n.js';
 import type { RunReport, RunTraceSample } from '../game/types.js';
 
@@ -124,7 +125,7 @@ export function runReportPanel(report: RunReport | null, explain = false, focus 
       <ul>${report.lessons.map(lesson => `<li>${esc(lesson)}</li>`).join('')}</ul>
     </div>
     ${chips ? `<div class="report-chips">${chips}</div>` : ''}
-    <details class="report-record"><summary>${esc(copy.civilizationRecord)}</summary><ol class="history">${timeline}</ol></details>
+    <details class="report-record" data-disclosure="report-record"${disclosureAttr('report-record')}><summary>${esc(copy.civilizationRecord)}</summary><ol class="history">${timeline}</ol></details>
     <button class="ghost" data-action="dismiss-report">${esc(copy.dismissReport)}</button>
   </section>`;
 }

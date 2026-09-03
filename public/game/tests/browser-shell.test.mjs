@@ -247,7 +247,39 @@ test('mobile UI hierarchy features collapsible event details, high harvest actio
   assert.match(app, /data-disclosure="strategic-overview"/);
   assert.match(app, /data-disclosure="records-intel"/);
   assert.match(app, /data-disclosure="machine-record"/);
-  assert.match(app, /openDisclosures/);
+
+  // Every disclosure in the shell must render its restore attribute right beside its id. The set of
+  // open ids lives in `ui/disclosure.js`, but owning the state is not the invariant that matters --
+  // pairing it with each `<details>` is. `replaceIfChanged` rebuilds a panel's HTML whenever one of
+  // its numbers moves, so a `data-disclosure` without a `disclosureAttr` beside it is a disclosure
+  // that closes itself on the next rebuild. The field manual shipped six sections with no id at all
+  // and did exactly that: opening a section and switching locale closed it again. Checking only that
+  // `app.js` mentioned the state store said nothing about any of them.
+  const modules = Object.fromEntries(await Promise.all(
+    ['app', 'guide-view', 'report-view', 'tutorial-view', 'disclosure'].map(async name =>
+      [name, await readFile(new URL(`../dist/ui/${name}.js`, import.meta.url), 'utf8')]),
+  ));
+  assert.match(modules.disclosure, /openDisclosures/, 'the open set must live in ui/disclosure');
+  let paired = 0;
+  for (const [name, code] of Object.entries(modules)) {
+    for (const found of code.matchAll(/data-disclosure="([^"]*)"(.{0,24})/g)) {
+      assert.match(
+        found[2],
+        /^\$\{disclosureAttr\(/,
+        `${name}: data-disclosure="${found[1]}" must be followed by disclosureAttr, or it snaps shut on the next rebuild`,
+      );
+      paired += 1;
+    }
+  }
+  assert.ok(paired >= 10, `only ${paired} disclosures were checked`);
+  // And a bare `<details>` in a rebuilt panel is the same bug without the id, so none may ship.
+  // Comments are stripped first, for the same reason `declarationsOf` strips them from the CSS: a
+  // note explaining this rule quotes the tag it forbids, and scanning the text failed the module
+  // that documents the invariant.
+  for (const [name, code] of Object.entries(modules)) {
+    const bare = [...statementsOf(code).matchAll(/<details(?![^>]*data-disclosure)[^>]*>/g)].map(match => match[0]);
+    assert.deepEqual(bare, [], `${name}: every <details> must carry a data-disclosure id`);
+  }
 });
 
 test('the rail names its keyboard shortcuts once for every bound action', async () => {
@@ -306,6 +338,12 @@ test('save reset never depends on a native modal dialog', async () => {
 // comment that quotes a property -- `font:inherit`, or a note recording that a size used to be 16px --
 // used to fail them for describing exactly the thing they enforce. Strip comments before scanning.
 const declarationsOf = css => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+// The same idea for a compiled module: block and line comments out, so a rule that has to name the
+// construct it forbids does not fail the file that documents it.
+const statementsOf = code => code
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/^[ \t]*\/\/.*$/gm, ' ');
 
 // The body of the first rule whose comma-separated selector list names `element` by itself. A
 // selector list is how two controls share one contract, so the element's base rule is not

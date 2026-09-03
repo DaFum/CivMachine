@@ -10,6 +10,7 @@ const APP_ASSETS = [
   '/game/dist/ui/app.js',
   '/game/dist/ui/view-model.js',
   '/game/dist/ui/format.js',
+  '/game/dist/ui/disclosure.js',
   '/game/dist/ui/guide-view.js',
   '/game/dist/ui/tutorial-view.js',
   '/game/dist/ui/report-view.js',
