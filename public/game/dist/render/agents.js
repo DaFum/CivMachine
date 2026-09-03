@@ -2,7 +2,7 @@ import { hash01 } from './primitives.js';
 export function agentPlanTotal(plan) {
     return plan.pedestrians.length + plan.vehicles.length + plan.aircraft.length + plan.orbital.length + plan.launches.length;
 }
-export function agentPlan(civ, snapshot, settlements) {
+export function agentPlan(civ, snapshot, settlements, routes = []) {
     const budget = snapshot.agentBudget;
     const seed = civ.seed;
     const plan = { pedestrians: [], vehicles: [], aircraft: [], orbital: [], launches: [] };
@@ -28,18 +28,24 @@ export function agentPlan(civ, snapshot, settlements) {
             seed: seed + i * 7,
         });
     }
-    // Vehicles ride the road between two settlement centers, so traffic connects places.
+    // Vehicles ride a trade route, so traffic connects places along the trace that actually joins
+    // them. Without a route -- a world too early to have one -- they fall back to the two centres.
     for (let i = 0; i < budget.vehicles; i++) {
         const from = settlements[i % settlements.length];
         const to = settlements[(i + 1) % settlements.length];
         const same = settlements.length < 2;
+        const routeIndex = routes.length ? i % routes.length : -1;
+        const route = routeIndex >= 0 ? routes[routeIndex] : null;
+        // Half the vehicles run against the route's own direction, or every lane would be one-way.
+        const reversed = i % 2 === 1;
         plan.vehicles.push({
-            fromX: same ? from.centerX - from.radius : from.centerX,
-            toX: same ? from.centerX + from.radius : to.centerX,
+            fromX: route ? (reversed ? route.toX : route.fromX) : (same ? from.centerX - from.radius : from.centerX),
+            toX: route ? (reversed ? route.fromX : route.toX) : (same ? from.centerX + from.radius : to.centerX),
             lane: i % 3,
             speed: .5 + hash01(seed + i * 47) * .9,
             phase: hash01(seed + i * 31),
             seed: seed + i * 19,
+            routeIndex,
         });
     }
     for (let i = 0; i < budget.aircraft; i++) {

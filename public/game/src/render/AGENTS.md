@@ -14,10 +14,15 @@ tests can record primitives. Visuals must derive from `world-model.ts` and `worl
 
 Hard budgets the tests enforce: 150 particles, 9 haze bands, 12 fractures, 10 beacons, 120 planned
 agents, 6 concurrent construction animations, 6 memory marks, 3 scars, 64 outskirt props, 12 cloud
-banks, 3 reality shears, 5 entropy fissures, and device pixel ratio capped at 2. The sky-and-
+banks, 3 reality shears, 5 entropy fissures, 8 trade routes, 18 route flow marks, 48 settlement
+micro-lights, 3 animated identity frames, and device pixel ratio capped at 2. The sky-and-
 terrain layer as a whole is held under 900 primitives, because it is repainted on every scrolled
-pixel. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
-scars or the current impact — and must never touch `GameState` or `simulationSpeed`.
+pixel, and the animated layer under 1100 — measured at 830–861 across the pinned reference worlds,
+about ninety more than before the route flow, the micro-lights and the identity frames. The ceiling
+leaves room for another cue of that size and none at all for a loop over a stage-4 world's
+structures. `quality.ts` may shed cosmetics only — never fractures, beacons, landmarks,
+scars, the current impact or a flow mark's leading end — and must never touch `GameState` or
+`simulationSpeed`.
 
 No `Math.random()`: every visual choice is seeded or hashed so a world is reproducible. `hash01` is
 the point sample, `valueNoise`/`ridgeNoise` in `primitives.ts` are its smooth form — a terrain
@@ -89,6 +94,15 @@ tall civic and residential solid ends the way its civilization ends things. It i
 rather than as a stamp on every shed, and `presentation.test.mjs` compares the ten paths' geometry
 with the colour stripped out, so a shared crown cannot slip back in.
 
+`frame` on the same descriptor is that identity one scale up: the mass a whole settlement is built
+inside, drawn behind its own skyline on the cached layer. There are three grammars rather than ten —
+a membrane with no straight edge anywhere, an orthogonal stack of volumes with nothing but straight
+edges, and a mass that is not touching the ground — because this reads at settlement scale and ten
+silhouettes at that scale would be ten variations of nothing. It is gated on the identity tier, a
+band `structuralWorldKey` already tracks, and every primitive it paints stays inside
+`settlementFrameReach`, which is the extent the caller culls the whole frame by: the light-spill bug
+in a new place, and `presentation.test.mjs` measures the frames' geometry against that reach.
+
 **Height and use decide whether a crown exists; the depth lane decides only how strongly it is
 drawn.** The two are easy to confuse, because `detail` carries the lane's contrast and reads like a
 convenient gate — but gating on it dropped the crown from 24.5% of the eligible skyline, back-lane
@@ -103,6 +117,14 @@ cost mistake is paid 60 times a second. Two rules follow. A `CanvasGradient` is 
 so `fillLinearGradientRect`, `fillLinearGradientPoly`, `fillRadialGlow` and `fillEllipseGlow` belong
 on the cached layers and in the bounded per-frame cues (a reactor core, one horizon field) — the haze bands and
 the window lights build their softness out of layered rectangles and circles instead.
+`glowDetail` is the lever for that softness and only for it: `quality.ts` states it as "paint the
+flat core, skip the falloff", never "skip the light", and the distinction is not always obvious from
+the shape. A flow mark's lit leading end is a 1.4 px disc that looks like a glow and *is* the
+direction of the flow — gating it on `glowDetail` left a tier-3 frame drawing dashes that point
+nowhere, and under reduced motion, where the marks also hold still, the direction could not be
+recovered over time either. Ask what a cue would still say without the primitive: if the answer is
+"less light", it may shed; if it is "less information", it may not.
+
 `fillEllipseGlow` is the flattened light field — a city's glow over its own skyline, a cloud's lit
 underside, the seam of a reality shear — and it squashes the *context* vertically rather than the
 gradient, so its horizontal extent is exactly the radius the caller culls by. It costs one
@@ -131,6 +153,16 @@ The same rule reaches the transient cues. The phase-transition cue is anchored t
 renderer resolves into screen space, and takes exactly three of them — anchoring replaces the fixed
 fractions rather than adding to them, because that cue's stroke count is fixed by design and pinned.
 
+Sharing a budget is not always splitting it *equally*. Where the things sharing it differ in what
+they are showing, the split is weighted and the floor keeps everyone in: `routeFlowMarks` gives every
+visible route one mark and shares the remainder by `flow`, because flow already sets how fast a mark
+moves and how long it is, and an equal split would leave a trunk route and a spur looking identically
+busy. The floor moves the *budget* rather than truncating the list — `Math.max(count, MAX)`, the same
+resolution the window budget uses — so the total stays an identity rather than an approximation. And
+the phase inside such a run is spread by index with **one** hashed offset for the whole run: a hash
+per mark overwrites the even spacing entirely, clusters the marks and leaves stretches empty, which
+is the failure `spreadPosition` exists to prevent for the world-wide cues.
+
 ## A repeated cell is visible; a sampled profile is not
 
 Two shapes in this renderer were built as one trough and one spike per cell on a fixed lattice: the
@@ -143,6 +175,24 @@ exactly the points a full redraw does.
 The sky's atmospheric front is the same lesson from the other side: the variation is in the front's
 *shape*, never in a per-column alpha. A stepped alpha has to step somewhere, and open sky is the one
 surface in the frame with nothing to break a vertical seam up.
+
+`routes.ts` is the third shape built this way, and it carries the rule that makes such a shape
+affordable on a cached layer. A trade route is a cubic Bézier bowed off its own chord, and its two
+control points sit at exactly a third and two thirds of the span so the Bernstein sum in x collapses
+to `fromX + span * t` — a world x therefore maps to a curve parameter in closed form, and the curve
+is sampled on a lattice anchored to the *route*, never to the viewport. That is what keeps a strip
+redraw emitting exactly the points a full redraw of the same slice does. The polyline also reaches a
+step past the band on each side, so the primitive that opens the path is never the first point
+*inside* the exposed strip. Whatever rides a route — the roadbed, the lane markings, the flow marks,
+the vehicles — reads its position off `routeOffsetAt`, because traffic interpolated along the chord
+drives visibly beside its own road the moment the road bends.
+
+The bed itself is the same lesson in the other axis. `roadbedHeight` and `roadLaneOffset` in
+`routes.ts` are the only statement of how deep the road is and where a lane rides in it, because the
+two used to be stated separately: the bed is 12 px plus 3 per stage, the lanes sat on a fixed 7 px
+pitch, and lane 2 therefore rode 5 px *below* a stage-1 bed. A lane is a fraction of the bed's own
+depth minus what rides in it, so an early road crowds its lanes together instead of spilling them
+onto the verge, and `presentation.test.mjs` checks every lane at every stage against the bed.
 
 ## Light is one system
 

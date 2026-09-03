@@ -1,4 +1,4 @@
-# Reality Consumption Engine — App Edition v1.25.0
+# Reality Consumption Engine — App Edition v1.26.0
 
 An installable, offline-capable browser incremental roguelite. Version 1.9.0 ships a scheduler
 that allows each intervention one draw per run, and a catalog large enough that no naturally
@@ -24,6 +24,34 @@ ending run runs out of unseen ones.
 - an interactive twelve-step guided first run, skippable and replayable
 - a post-run report: the run's curve, why it ended, what it farmed, and what to change
 - a live situation line and a permanent Field Manual with an EXPLAIN mode on every panel
+
+## v1.26.0 a world that grew rather than one that was placed
+
+- The trade network bends. Roads were rectangles drawn from one settlement centre to the next, which
+  is the one shape in the world that could not have grown -- it announces that the settlements sit on
+  a number line. Each link is now a curve bowed off its own chord, with the bend decided by the same
+  terrain noise the ridgelines are built from, and the roadbed, the lane markings and the traffic all
+  read their position off that one curve. Vehicles used to interpolate the straight line between two
+  centres, so they would have driven visibly beside their own road.
+- Something is visibly moving along it. A bounded run of marks travels each route, each with a
+  brighter leading end, so which way a link carries its goods is legible from a single frame -- and a
+  busier link moves more of them, faster.
+- A settled civilization has a silhouette at settlement scale. Path identity was written into the
+  buildings, the capital and the world's ambient marks; at the scale of a whole settlement every
+  civilization built the same row of solids on a flat plane. A dominant path now wraps its
+  settlements in one of three building grammars: a membrane with no straight edge anywhere that
+  breathes, orthogonal volumes with vented stacks whose furnaces burn out of phase, or a mass that
+  has left the ground, levitating over its own shrinking shadow.
+- Night reads as density. Beyond the 46 animated windows the world already lit, each settlement now
+  carries a shared budget of micro-lights, denser at street level than near its crowns and each
+  flickering on its own phase -- so a metropolis at night is a lit city rather than a dozen bright
+  rectangles with nothing between them.
+- The air wanders. Every mote used to retrace one clean sine arc, which at 150 of them reads as a
+  mechanism; two frequencies beaten against each other give each one a wandering path instead, with a
+  slow thermal rise carried in it. And a consequence's wavefront now leaves fast and settles, with one
+  interference ring behind it, rather than expanding at a constant rate.
+- All of it inside the renderer's existing budgets: 8 routes, 18 flow marks, 48 micro-lights and 3
+  animated frames, with the animated layer measured at 836 primitives against a new ceiling of 1100.
 
 ## v1.25.0 a machine screen you can read, and a manual that stays open
 

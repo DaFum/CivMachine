@@ -1,12 +1,20 @@
 import type { Civilization } from '../game/types.js';
 import { hash01 } from './primitives.js';
+import type { TradeRoute } from './routes.js';
 import type { Settlement } from './settlements.js';
 import type { worldSnapshot } from './world-model.js';
 
 type Snapshot = ReturnType<typeof worldSnapshot>;
 
 export interface PedestrianSpec { settlementIndex: number; offset: number; speed: number; lane: number; seed: number; }
-export interface VehicleSpec { fromX: number; toX: number; lane: number; speed: number; phase: number; seed: number; }
+/**
+ * `routeIndex` is which trade route this vehicle rides, or -1 when the world has none yet. Traffic
+ * used to interpolate a straight line between two settlement centres, which is visible as soon as
+ * the road itself bends: the vehicles cut the corner and drove beside their own road. Binding a
+ * vehicle to a route instead means one curve is the authority for both the trace and what moves
+ * along it.
+ */
+export interface VehicleSpec { fromX: number; toX: number; lane: number; speed: number; phase: number; seed: number; routeIndex: number; }
 export interface AircraftSpec { fromX: number; toX: number; altitude: number; speed: number; phase: number; }
 export interface OrbitalSpec { altitude: number; speed: number; phase: number; }
 export interface LaunchSpec { x: number; period: number; offset: number; }
@@ -16,7 +24,7 @@ export function agentPlanTotal(plan: AgentPlan): number {
   return plan.pedestrians.length + plan.vehicles.length + plan.aircraft.length + plan.orbital.length + plan.launches.length;
 }
 
-export function agentPlan(civ: Civilization, snapshot: Snapshot, settlements: Settlement[]): AgentPlan {
+export function agentPlan(civ: Civilization, snapshot: Snapshot, settlements: Settlement[], routes: ReadonlyArray<TradeRoute> = []): AgentPlan {
   const budget = snapshot.agentBudget;
   const seed = civ.seed;
   const plan: AgentPlan = { pedestrians: [], vehicles: [], aircraft: [], orbital: [], launches: [] };
@@ -40,18 +48,24 @@ export function agentPlan(civ: Civilization, snapshot: Snapshot, settlements: Se
     });
   }
 
-  // Vehicles ride the road between two settlement centers, so traffic connects places.
+  // Vehicles ride a trade route, so traffic connects places along the trace that actually joins
+  // them. Without a route -- a world too early to have one -- they fall back to the two centres.
   for (let i = 0; i < budget.vehicles; i++) {
     const from = settlements[i % settlements.length]!;
     const to = settlements[(i + 1) % settlements.length]!;
     const same = settlements.length < 2;
+    const routeIndex = routes.length ? i % routes.length : -1;
+    const route = routeIndex >= 0 ? routes[routeIndex]! : null;
+    // Half the vehicles run against the route's own direction, or every lane would be one-way.
+    const reversed = i % 2 === 1;
     plan.vehicles.push({
-      fromX: same ? from.centerX - from.radius : from.centerX,
-      toX: same ? from.centerX + from.radius : to.centerX,
+      fromX: route ? (reversed ? route.toX : route.fromX) : (same ? from.centerX - from.radius : from.centerX),
+      toX: route ? (reversed ? route.fromX : route.toX) : (same ? from.centerX + from.radius : to.centerX),
       lane: i % 3,
       speed: .5 + hash01(seed + i * 47) * .9,
       phase: hash01(seed + i * 31),
       seed: seed + i * 19,
+      routeIndex,
     });
   }
 
