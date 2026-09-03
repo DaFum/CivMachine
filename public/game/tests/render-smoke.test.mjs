@@ -1212,23 +1212,29 @@ test('a strip redraw paints a settlement glow that reaches in from outside its o
 });
 
 
-// Records the static layer only. The renderer creates its three canvases in painting order, so the
-// first context it asks for is the sky-and-terrain one.
-async function staticLayerCalls(civ, tag, scroll = 0) {
+const LAYER_HEIGHT = 520;
+
+/**
+ * Records one layer's primitives *with their styles*, which `bucketsForCivilization` deliberately
+ * does not: `trackingContext` answers "where was this drawn", and some invariants need "and in what
+ * colour". The renderer creates its three canvases in painting order, so layer 0 is sky and terrain,
+ * 1 the settlements and 2 the animated one.
+ */
+async function layerCalls(civ, tag, layerIndex = 0, scroll = 0) {
   const calls = [];
   let frame = null;
   await withStubbedDom(() => {
     let created = 0;
     globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
-    globalThis.document = { createElement: () => { const target = created++ === 0 ? calls : [];
+    globalThis.document = { createElement: () => { const target = created++ === layerIndex ? calls : [];
       return { className: '', style: {}, width: 0, height: 0, getContext: () => recordingContext(target), addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
     globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
     globalThis.cancelAnimationFrame = () => {};
   }, async () => {
-    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: LAYER_HEIGHT }) };
     const engine = { state: { phase: 'civilization', civilization: civ }, worldImpulse: null, onChange: () => () => {} };
-    const { startWorldRenderer } = await import(`../dist/render/world.js?static-${tag}=${Date.now()}`);
+    const { startWorldRenderer } = await import(`../dist/render/world.js?layer-${tag}=${Date.now()}`);
     const controller = startWorldRenderer(engine, host);
     frame(100);
     if (scroll > 0) { controller.nudge(1); calls.length = 0; frame(200); }
@@ -1236,6 +1242,9 @@ async function staticLayerCalls(civ, tag, scroll = 0) {
   });
   return calls;
 }
+
+/** The sky-and-terrain layer, which is the one most of these invariants are about. */
+const staticLayerCalls = (civ, tag, scroll = 0) => layerCalls(civ, tag, 0, scroll);
 
 test('a parallax layer only anchors world geometry inside the slice it can reach', async () => {
   const { layerReach, SKY_PARALLAX, TERRAIN_PARALLAX } = await import('../dist/render/world.js');
@@ -1369,27 +1378,39 @@ test('a cue keeps its place when the count around it changes', async () => {
 });
 
 test('fractures stay put as Stability ticks another one into existence', async () => {
-  const positions = async stability => {
+  // Read off the animated layer the renderer actually paints, never by recomputing the placement the
+  // renderer uses: a test that calls `spreadPosition` itself passes whatever `drawAnomalies` does,
+  // including drawing no fractures at all.
+  const { GROUND_RATIO } = await import('../dist/render/world.js');
+  const { worldSnapshot } = await import('../dist/render/world-model.js');
+  // A fracture's mouth is the one circle in the world filled in the fracture red and sitting on the
+  // ground line; the strain lines that share its colour only ever stroke.
+  const FRACTURE_FILL = 'rgba(238,105,115,';
+  const mouthY = LAYER_HEIGHT * GROUND_RATIO + 3;
+
+  const drawnAt = async (stability, tag) => {
     const civ = developedCivilization(404);
     civ.stats.stability = stability;
     civ.tactical.entropy = 0;
-    const { worldSnapshot } = await import('../dist/render/world-model.js');
-    const snapshot = worldSnapshot(civ, 900);
-    return { count: snapshot.fractureCount, civ };
+    const calls = await layerCalls(civ, tag, 2);
+    const mouths = [];
+    let fill = '';
+    for (const [name, ...args] of calls) {
+      if (name === 'fillStyle') fill = String(args[0]);
+      else if (name === 'arc' && fill.startsWith(FRACTURE_FILL) && Math.abs(args[1] - mouthY) < 1) mouths.push(args[0]);
+    }
+    return { count: worldSnapshot(civ, 900).fractureCount, mouths };
   };
-  const fewer = await positions(50);
-  const more = await positions(30);
-  assert.ok(more.count > fewer.count, 'lower Stability must open more fractures');
 
-  // Read the placement straight off the primitive both counts share, so the invariant is about
-  // where a fracture goes and not about how the frame that draws it happens to be recorded.
-  const { spreadPosition, hash01 } = await import('../dist/render/primitives.js');
-  const { worldSnapshot } = await import('../dist/render/world-model.js');
-  const worldWidth = worldSnapshot(fewer.civ, 900).worldWidth;
-  const offset = hash01(fewer.civ.seed * 61);
-  const place = count => Array.from({ length: count }, (_, i) => spreadPosition(worldWidth, i, offset));
-  assert.deepEqual(place(fewer.count), place(more.count).slice(0, fewer.count),
-    'the fractures already on screen must not move when another one opens');
+  const fewer = await drawnAt(45, 'fracture-fewer');
+  const more = await drawnAt(15, 'fracture-more');
+  assert.ok(more.count > fewer.count, `lower Stability must open more fractures (${fewer.count} then ${more.count})`);
+  assert.ok(fewer.mouths.length > 0, 'the renderer must actually paint the fractures it counts');
+  assert.ok(more.mouths.length > fewer.mouths.length, `more fractures must reach the viewport (${fewer.mouths.length} then ${more.mouths.length})`);
+  for (const mouth of fewer.mouths) {
+    assert.ok(more.mouths.some(other => Math.abs(other - mouth) < 1e-6),
+      `the fracture at ${mouth.toFixed(1)} moved when another one opened; now ${more.mouths.map(v => v.toFixed(1)).join(', ')}`);
+  }
 });
 
 test('the cached entropy cues are gated on the band the scene is keyed on', async () => {

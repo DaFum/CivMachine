@@ -208,6 +208,13 @@ function drawCloudStrata(surface: DrawSurface, scene: WorldScene, height: number
   }
 }
 
+/**
+ * The sky half of the cached static layer: the gradient, the atmospheric falloff, the star field,
+ * one celestial body, the cloud decks, the horizon light and the observer's own field, in that
+ * order. It is repainted on every scrolled pixel, so everything here is either bounded by a count or
+ * a handful of primitives wide. Drawn at `SKY_PARALLAX`, which is why `width` is a parameter:
+ * anything anchored to a single world position has to be placed inside this layer's own reach.
+ */
 function drawSkyContent(surface: DrawSurface, scene: WorldScene, width: number, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation } = scene;
   const worldWidth = snapshot.worldWidth;
@@ -329,6 +336,12 @@ function ridgePoints(view: WorldBand, worldWidth: number, baseY: number, step: n
   return points;
 }
 
+/**
+ * The terrain half of the cached static layer, back to front: three ridge profiles with the air
+ * between them, the distant skyline standing on the mid ridge, the ground plane, the shelves
+ * receding toward it, and -- from the second entropy band up -- the fissures and the reality shear.
+ * Drawn at `TERRAIN_PARALLAX`, so `width` is here for the same reason it is in `drawSkyContent`.
+ */
 function drawTerrainContent(surface: DrawSurface, scene: WorldScene, width: number, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation } = scene;
   const worldWidth = snapshot.worldWidth;
@@ -586,6 +599,13 @@ function drawOutskirt(surface: DrawSurface, prop: Outskirt, ground: number, pres
   }
 }
 
+/**
+ * The whole of the cached scenery layer: the settlement plane, the outskirts, the roads, every
+ * settlement's light spill and structures, the near field, the foreground bank, the identity
+ * landmarks and the world's saved marks. It moves 1:1 with the scroll, so a scroll copies the canvas
+ * onto itself and repaints only the exposed strip -- which is why every primitive here is culled by
+ * its own extent rather than by its owner's, and why nothing in it may animate.
+ */
 export function drawSettlementContent(surface: DrawSurface, scene: WorldScene, height: number, view: WorldBand): void {
   const { civ, snapshot, presentation, settlements, outskirts } = scene;
   const worldWidth = snapshot.worldWidth;
@@ -826,6 +846,12 @@ function drawMoodWash(surface: DrawSurface, scene: WorldScene, live: ReturnType<
   ], view.from, horizonY, view.from, height);
 }
 
+/**
+ * The air itself: three strata of drifting mote, and above the entropy the embers rising off the
+ * settlements. Both counts come from the live sample and are shed by adaptive quality; reduced
+ * motion keeps every particle and freezes its drift, because the state is in how many there are and
+ * not in whether they move.
+ */
 function drawParticles(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, height: number, view: WorldBand, time: number, reducedMotion: boolean): void {
   const civ = scene.civ;
   const worldWidth = snapshot.worldWidth;
@@ -1101,6 +1127,12 @@ function drawBannersAndConstruction(surface: DrawSurface, scene: WorldScene, sna
   }
 }
 
+/**
+ * The three state cues that adaptive quality may never shed: fractures for Stability, beacons for
+ * Awareness and the distortion rings for Sanity. All three are placed with `spreadPosition` or on a
+ * fixed lattice rather than by a hash, so the state can be read wherever the world is being looked
+ * at, and so a cue does not move when the stat behind it opens another one.
+ */
 function drawAnomalies(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, height: number, animationTime: number, view: WorldBand, reducedMotion: boolean, glowDetail: number): void {
   const { civ } = scene;
   const worldWidth = snapshot.worldWidth;
@@ -1156,6 +1188,12 @@ function drawAnomalies(surface: DrawSurface, scene: WorldScene, snapshot: Return
   }
 }
 
+/**
+ * The animated layer, in one pass back to front. This is the composition order itself: the two broad
+ * washes first and everything that has to stay crisp above them, so nothing translucent is ever
+ * painted over fine detail. It repaints every throttled frame, so every step below is bounded by a
+ * count rather than by the world.
+ */
 function drawDynamicContent(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, width: number, height: number, time: number, tracker: ConstructionTracker, view: WorldBand, tier: RenderQualityTier): void {
   const { agentFraction, windowFraction, glowDetail } = qualityFactors(tier);
   const animationTime = currentReducedMotion ? 0 : time;
