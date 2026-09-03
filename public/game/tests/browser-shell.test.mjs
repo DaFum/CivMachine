@@ -307,6 +307,16 @@ test('save reset never depends on a native modal dialog', async () => {
 // used to fail them for describing exactly the thing they enforce. Strip comments before scanning.
 const declarationsOf = css => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
+// The body of the first rule whose comma-separated selector list names `element` by itself. A
+// selector list is how two controls share one contract, so the element's base rule is not
+// necessarily a rule whose selector is only that element.
+const baseRuleOf = (css, element) => {
+  for (const rule of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (rule[1].split(',').map(selector => selector.trim()).includes(element)) return rule[2].trim();
+  }
+  return null;
+};
+
 // --- The design system ---------------------------------------------------------------------------
 // Radius and type are the two scales that make a dozen unrelated panel types read as one UI. Both
 // collapsed to a single source in v1.13.0, and both are trivial to un-collapse by hand later, so
@@ -375,15 +385,26 @@ test('the elements that inherit a size from outside the scale name a tier', asyn
   // flat 16px. Both are fixed px that ignore the clamps, so on a phone a detail line rendered larger
   // than the label above it. Declared at the element, not at the call sites -- patching the six
   // selectors that happened to exist would have left the seventh inheriting the default again.
-  for (const [element, rule] of [['small', /(?<![-\w])small\{([^}]*)\}/], ['button', /(?<![-\w])button\{([^}]*)\}/]]) {
-    const match = styles.match(rule);
-    assert.ok(match, `${element} must carry a base rule`);
+  // The base rule is the one that names the element on its own, whether it sits alone in the
+  // selector or shares the rule with something else: `button{...}` and `button,select.icon-button{...}`
+  // are both it. Matching the bare form as text was enough right up until the locale select joined
+  // that rule -- the pattern then skipped the base rule entirely and matched
+  // `.tactical-action-wrap button{...}`, a descendant rule that says nothing about what a plain
+  // button inherits, and the guard reported the base rule as untiered while it was tiered all along.
+  for (const [element, tier] of [['small', baseRuleOf(styles, 'small')], ['button', baseRuleOf(styles, 'button')]]) {
+    assert.ok(tier, `${element} must carry a base rule`);
     assert.match(
-      match[1],
+      tier,
       /font-size:var\(--text-/,
       `${element} must name a type tier -- without one it silently takes a fixed size from the UA`,
     );
   }
+  // A descendant rule is not a base rule, and an element that only ever appears as one must still
+  // read as missing -- that is the failure mode this finder exists to rule out.
+  assert.equal(baseRuleOf('.wrap button{color:red}', 'button'), null);
+  assert.equal(baseRuleOf('button,select.icon-button{font-size:var(--text-lg)}', 'button'),
+    'font-size:var(--text-lg)');
+  assert.equal(baseRuleOf('.x{a:1}\nsmall{font-size:var(--text-2xs)}', 'small'), 'font-size:var(--text-2xs)');
 });
 
 test('running prose is capped by one --measure token', async () => {
