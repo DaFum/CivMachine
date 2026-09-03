@@ -16,7 +16,7 @@ import { CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, ConstructionTracker } from '.
 import { factionRoster, UNALIGNED_COLOR, type Faction } from './factions.js';
 import { drawWorldMemoryAccents, drawWorldMemoryScenery } from './world-memory.js';
 import { drawIdentityLandmarks, drawPathAmbience, drawSettlementFrame, drawSettlementFrameAccent, FRAME_MAX_REACH, pathIdentity, settlementFrameReach } from './identity.js';
-import { routeFlowMarks, routeInBand, routeOffsetAt, routePointAt, routePolyline, tradeRoutes, type TradeRoute } from './routes.js';
+import { ROAD_TOP_OFFSET, roadbedHeight, roadLaneOffset, routeFlowMarks, routeInBand, routeOffsetAt, routePointAt, routePolyline, tradeRoutes, type TradeRoute } from './routes.js';
 
 export interface RenderStats { sceneRebuilds: number; staticRedraws: number; sceneryFullRedraws: number; sceneryStripRedraws: number; qualityTier: RenderQualityTier; }
 export interface WorldController { nudge(direction: number): void; destroy(): void; stats(): RenderStats; }
@@ -154,6 +154,8 @@ const MAX_CLOUD_BANKS = 12;
  * micro-light is a cosmetic on top of the window lighting that already carries the state.
  */
 export const MAX_SETTLEMENT_LIGHTS = 48;
+/** How tall a vehicle is drawn, so the lane it rides can keep its whole body on the road. */
+const VEHICLE_HEIGHT = 2.5;
 /** Widest bank, so the sky's culling can be stated in terms of the design. */
 const CLOUD_MAX_WIDTH = 300;
 // The lattice the sky's atmospheric front is sampled on. Coarse enough that the whole front is one
@@ -684,14 +686,14 @@ export function drawSettlementContent(surface: DrawSurface, scene: WorldScene, h
   // point comes off a lattice fixed in world space, so a strip redraw emits exactly what a full
   // redraw of the same slice does.
   if (stage > 0) {
-    const roadHeight = 12 + stage * 3;
+    const roadHeight = roadbedHeight(stage);
     for (const route of scene.routes) {
       if (!routeInBand(route, view.from, view.to)) continue;
       const spine = routePolyline(route, view.from, view.to);
       if (spine.length < 2) continue;
-      const near: Array<readonly [number, number]> = spine.map(([x, offset]) => [x, ground + 4 + offset] as const);
+      const near: Array<readonly [number, number]> = spine.map(([x, offset]) => [x, ground + ROAD_TOP_OFFSET + offset] as const);
       const bed: Array<readonly [number, number]> = [...near];
-      for (let i = spine.length - 1; i >= 0; i--) bed.push([spine[i]![0], ground + 4 + roadHeight + spine[i]![1]]);
+      for (let i = spine.length - 1; i >= 0; i--) bed.push([spine[i]![0], ground + ROAD_TOP_OFFSET + roadHeight + spine[i]![1]]);
       surface.fillStyle(0x11191f, .98).fillPoly(bed);
       // A lit curb along the near edge: the road is the one surface that reflects the city, and a
       // busier route reflects more of it.
@@ -1230,10 +1232,12 @@ function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnTy
     if (x < view.from || x > view.to) continue;
     const length = 5 + snapshot.stage * 1.5;
     // On the route's own bed, not on a straight line through it: as soon as the road bends, traffic
-    // interpolated between two centres drives visibly beside its own road.
+    // interpolated between two centres drives visibly beside its own road. The lane comes off the
+    // bed's own depth for the same reason -- a fixed lane pitch put the outer lane on the verge at
+    // every stage but the last, where the road is finally deep enough to hold three of them.
     const route = vehicle.routeIndex >= 0 ? scene.routes[vehicle.routeIndex] : undefined;
-    const y = ground + 10 + vehicle.lane * 7 + (route ? routeOffsetAt(route, x) : 0);
-    surface.fillStyle(vehicle.seed % 2 ? presentation.accent : presentation.colors.window, .72).fillRect(x, y, length, 2.5);
+    const y = ground + roadLaneOffset(snapshot.stage, vehicle.lane, VEHICLE_HEIGHT) + (route ? routeOffsetAt(route, x) : 0);
+    surface.fillStyle(vehicle.seed % 2 ? presentation.accent : presentation.colors.window, .72).fillRect(x, y, length, VEHICLE_HEIGHT);
     if (civ.era >= 2) surface.fillStyle(presentation.accent, .22).fillRect(x - length * .5, y + .8, length * .5, 1);
   }
 

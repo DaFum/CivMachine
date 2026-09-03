@@ -15,7 +15,7 @@ import { factionRoster, factionSignature } from '../dist/render/factions.js';
 import { settlementSizes, settlementClassFor, settlementClassSignature, settlementLayout, CLASS_ORDER, worldOutskirts, MAX_OUTSKIRTS, OUTSKIRT_WIDTH, skylineCompress, MAX_STRUCTURE_ASPECT } from '../dist/render/settlements.js';
 import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settlementCrown, BANNER_POLE_MIN } from '../dist/render/structures.js';
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
-import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROUTE_MAX_BOW, ROUTE_STEP, routeFlowMarks, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
+import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROAD_LANES, ROAD_TOP_OFFSET, ROUTE_MAX_BOW, ROUTE_STEP, roadbedHeight, roadLaneOffset, routeFlowMarks, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
 import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
@@ -2121,4 +2121,39 @@ test('the flow marks stay evenly spaced along the route they ride', async () => 
   }
   // And the offset is per route, so no two routes are in step.
   assert.ok(offsets.size > 1, 'every route runs its marks on the same phase');
+});
+
+test('every traffic lane keeps its whole body on the roadbed, at every stage', () => {
+  // The bug this pins: the bed is `12 + stage * 3` px deep under a 4 px verge, and the lanes sat on
+  // a fixed 7 px pitch -- so lane 2 rode at `ground + 24` against a bed ending at `ground + 19` at
+  // stage 1, and the outer lane drove on the verge at every stage but the last. Both numbers now
+  // come from `roadbedHeight`, so they cannot drift apart again.
+  const VEHICLE_HEIGHT = 2.5;
+  for (let stage = 1; stage <= 4; stage++) {
+    const bedTop = ROAD_TOP_OFFSET;
+    const bedBottom = ROAD_TOP_OFFSET + roadbedHeight(stage);
+    const offsets = [];
+    for (let lane = 0; lane < ROAD_LANES; lane++) {
+      const offset = roadLaneOffset(stage, lane, VEHICLE_HEIGHT);
+      assert.ok(offset >= bedTop, `stage ${stage} lane ${lane} rides above the bed at ${offset}`);
+      assert.ok(offset + VEHICLE_HEIGHT <= bedBottom + 1e-9,
+        `stage ${stage} lane ${lane} ends at ${offset + VEHICLE_HEIGHT}, below a bed that stops at ${bedBottom}`);
+      offsets.push(offset);
+    }
+    // Ordered and distinct, or three lanes are one lane drawn three times.
+    for (let lane = 1; lane < offsets.length; lane++) {
+      assert.ok(offsets[lane] > offsets[lane - 1], `stage ${stage} lane ${lane} does not sit behind lane ${lane - 1}`);
+    }
+    // A deeper road spreads its lanes further apart rather than keeping a pitch it cannot afford.
+    if (stage > 1) {
+      const previous = roadLaneOffset(stage - 1, ROAD_LANES - 1, VEHICLE_HEIGHT) - roadLaneOffset(stage - 1, 0, VEHICLE_HEIGHT);
+      assert.ok(offsets[ROAD_LANES - 1] - offsets[0] > previous, `stage ${stage} did not widen its lanes`);
+    }
+  }
+  // Out-of-range lanes clamp instead of leaving the road.
+  for (const lane of [-3, 0, 2, 9]) {
+    const offset = roadLaneOffset(3, lane, VEHICLE_HEIGHT);
+    assert.ok(offset >= ROAD_TOP_OFFSET && offset + VEHICLE_HEIGHT <= ROAD_TOP_OFFSET + roadbedHeight(3) + 1e-9,
+      `lane ${lane} left the bed at ${offset}`);
+  }
 });

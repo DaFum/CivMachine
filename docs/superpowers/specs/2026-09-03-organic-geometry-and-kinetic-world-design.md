@@ -85,6 +85,13 @@ routes crossing the same land lean the same way and no route moves when somethin
 marks and the traffic. The failure this removes is specific: traffic interpolated along the chord
 drives visibly beside its own road as soon as the road bends.
 
+`roadbedHeight` and `roadLaneOffset` beside them are the only statement of the bed's depth and of
+where a lane rides in it. Those two facts were stated separately — a bed of `12 + stage * 3` px under
+a 4 px verge, and lanes on a fixed 7 px pitch — so lane 2 rode at `ground + 24` against a bed that
+ends at `ground + 19` at stage 1: the outer lane drove on the verge at every stage but the last. A
+lane is now a fraction of the bed's usable depth with the vehicle's own height taken off it, so an
+early road crowds its lanes rather than spilling them.
+
 ### Settlement frames
 
 `identity.ts` gains `SettlementFrame` on the descriptor, `drawSettlementFrame` (cached scenery
@@ -152,8 +159,14 @@ primitives.
 `render-smoke.test.mjs`
 
 - The animated layer stays under 1100 primitives with finite geometry at two clock times.
-- The network carries something, it moves between two frames seconds apart, and everything it draws
-  stays within the bow of the road.
+- The network carries something and it moves between two frames seconds apart — asserted on the
+  flow's own recorded primitives, each checked against its route's curve to the pixel, rather than on
+  "some stroke was drawn on the layer", which the ambience and the strain lines could satisfy on
+  their own.
+
+Every traffic lane keeps its whole body inside the bed at every stage, the lanes stay ordered and
+distinct, a deeper road spreads them further apart, and an out-of-range lane clamps instead of
+leaving the road.
 
 And for the budget itself, back in `presentation.test.mjs`: no visible route carries nothing, the
 total stays inside the budget, a busier link never carries fewer marks than a quieter one, and every

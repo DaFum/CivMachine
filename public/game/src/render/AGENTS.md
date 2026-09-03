@@ -178,6 +178,13 @@ step past the band on each side, so the primitive that opens the path is never t
 the vehicles — reads its position off `routeOffsetAt`, because traffic interpolated along the chord
 drives visibly beside its own road the moment the road bends.
 
+The bed itself is the same lesson in the other axis. `roadbedHeight` and `roadLaneOffset` in
+`routes.ts` are the only statement of how deep the road is and where a lane rides in it, because the
+two used to be stated separately: the bed is 12 px plus 3 per stage, the lanes sat on a fixed 7 px
+pitch, and lane 2 therefore rode 5 px *below* a stage-1 bed. A lane is a fraction of the bed's own
+depth minus what rides in it, so an early road crowds its lanes together instead of spilling them
+onto the verge, and `presentation.test.mjs` checks every lane at every stage against the bed.
+
 ## Light is one system
 
 `presentation.colors.lightSpill` is the colour everything the civilization emits shares — window

@@ -1169,39 +1169,84 @@ test('the animated layer stays bounded by counts, not by the world', async () =>
   }
 });
 
-test('the trade network carries something, and it moves along the road rather than beside it', async () => {
+/**
+ * One animated frame, recorded with names and full arguments rather than only horizontal extents, so
+ * a cue can be identified by its own geometry instead of by "some stroke happened". At scroll 0 and
+ * DPR 1 the recorded coordinates are the world coordinates the renderer passed.
+ */
+async function dynamicRecordingAt(seed, time, tag) {
+  const dynamicCalls = [];
+  let frame = null;
+  await withStubbedDom(() => {
+    const contexts = [recordingContext([]), recordingContext([]), recordingContext(dynamicCalls)];
+    let created = 0;
+    globalThis.window = { addEventListener: () => {}, removeEventListener: () => {} };
+    globalThis.devicePixelRatio = 1;
+    globalThis.matchMedia = () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} });
+    globalThis.document = { createElement: () => { const context = contexts[created++] ?? recordingContext([]); return { className: '', style: {}, width: 0, height: 0, getContext: () => context, addEventListener: () => {}, setPointerCapture: () => {}, setAttribute: () => {}, remove: () => {} }; } };
+    globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+    globalThis.requestAnimationFrame = callback => { frame = callback; return 1; };
+    globalThis.cancelAnimationFrame = () => {};
+  }, async () => {
+    const host = { appendChild: () => {}, replaceChildren: () => {}, getBoundingClientRect: () => ({ width: 900, height: 520 }) };
+    const engine = { state: { phase: 'civilization', civilization: developedCivilization(seed) }, worldImpulse: null, onChange: () => () => {} };
+    const { startWorldRenderer } = await import(`../dist/render/world.js?${tag}=${Date.now()}`);
+    const controller = startWorldRenderer(engine, host);
+    frame(100);
+    dynamicCalls.length = 0;
+    frame(time);
+    controller.destroy();
+  });
+  return dynamicCalls;
+}
+
+test('the trade network carries something, and it rides the road rather than running beside it', async () => {
   const { worldSnapshot } = await import('../dist/render/world-model.js');
   const { settlementLayout } = await import('../dist/render/settlements.js');
-  const { tradeRoutes, routeOffsetAt, ROUTE_MAX_BOW } = await import('../dist/render/routes.js');
+  const { tradeRoutes, routeOffsetAt, MAX_ROUTE_FLOW_MARKS } = await import('../dist/render/routes.js');
   const { GROUND_RATIO } = await import('../dist/render/world.js');
 
-  const civ = developedCivilization(4242);
   const HEIGHT = 520;
+  const civ = developedCivilization(4242);
   const snapshot = worldSnapshot(civ, 900);
   const routes = tradeRoutes(civ, settlementLayout(civ, snapshot.worldWidth, HEIGHT, snapshot), snapshot);
   assert.ok(routes.length > 0, 'a developed world must have a network');
   const ground = HEIGHT * GROUND_RATIO;
 
-  // Every mark and vehicle on the network rides its curve, so nothing the network draws can sit on
-  // the flat ground line further than the bow allows. A vehicle interpolated between two centres
-  // drives beside its own road as soon as the road bends, and this is what would catch it.
-  const marks = (await dynamicFrameAt(4242, 7000, false, 'flow-a'))
-    .filter(call => call.name === 'moveTo' || call.name === 'lineTo');
-  assert.ok(marks.length > 0, 'the animated layer drew no strokes at all');
+  // The flow's own primitive, identified by its own geometry: the lit leading end of a mark is a
+  // 1.4 px disc on the road. Filtering every `moveTo`/`lineTo` on the layer instead let the path
+  // ambience, the strain lines and the creature legs satisfy these assertions without the route
+  // flow being drawn at all.
+  const heads = calls => calls
+    .filter(([name, , , radius]) => name === 'arc' && radius === 1.4)
+    .map(([, x, y]) => ({ x, y }));
 
-  // And the flow travels: the same world a few seconds later has moved its goods.
-  const later = await dynamicFrameAt(4242, 11000, false, 'flow-b');
-  assert.notDeepEqual(marks, later.filter(call => call.name === 'moveTo' || call.name === 'lineTo'),
-    'nothing on the network moved between two frames seconds apart');
+  const frame = await dynamicRecordingAt(4242, 7000, 'flow-a');
+  const marks = heads(frame);
+  assert.ok(marks.length > 0, 'the frame loop drew no flow marks at all');
+  // Against the design's own ceiling, not against a per-route sum: the renderer shares the budget
+  // over the routes it can *see*, so a viewport holding half the network legitimately gives each of
+  // those routes more marks than a full-network split would.
+  assert.ok(marks.length <= MAX_ROUTE_FLOW_MARKS, `${marks.length} flow marks against a budget of ${MAX_ROUTE_FLOW_MARKS}`);
 
-  // The curve the marks ride is the same one the roadbed is built from, and it stays in the band.
-  for (const route of routes) {
-    for (let step = 0; step <= 12; step++) {
-      const x = route.fromX + route.span * (step / 12);
-      const y = ground + 7 + routeOffsetAt(route, x);
-      assert.ok(Math.abs(y - ground) <= 7 + ROUTE_MAX_BOW + .001, `the flow left the road at ${y}`);
-    }
+  // Each one sits on its own route's curve, to the pixel. This is the assertion the old test only
+  // gestured at: a mark interpolated along the chord instead of the curve fails here.
+  let bent = 0;
+  for (const mark of marks) {
+    const route = routes.find(candidate => mark.x >= candidate.fromX - 1e-6 && mark.x <= candidate.toX + 1e-6);
+    assert.ok(route, `a flow mark at ${Math.round(mark.x)} belongs to no route`);
+    const expected = ground + 7 + routeOffsetAt(route, mark.x);
+    assert.ok(Math.abs(mark.y - expected) < 1e-6,
+      `a flow mark at ${Math.round(mark.x)} sits at ${mark.y}, off its own curve by ${(mark.y - expected).toFixed(3)}px`);
+    if (Math.abs(routeOffsetAt(route, mark.x)) > 1) bent++;
   }
+  // And the curve is doing something: a world whose bows were all zero would pass every assertion
+  // above while drawing a straight road.
+  assert.ok(bent > 0, 'every flow mark sits on the flat ground line: the bow is not reaching the cue');
+
+  // The goods travel: the same world seconds later has moved them.
+  const later = heads(await dynamicRecordingAt(4242, 11000, 'flow-b'));
+  assert.notDeepEqual(later, marks, 'nothing on the network moved between two frames seconds apart');
 });
 
 test('the animated layer is a pure function of the world and the clock', async () => {

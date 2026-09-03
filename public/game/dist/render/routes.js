@@ -17,6 +17,28 @@ export const ROUTE_MAX_BOW = 15;
  * the routes actually on screen rather than spent along the first one.
  */
 export const MAX_ROUTE_FLOW_MARKS = 18;
+/**
+ * The roadbed, in one place. The road pass draws the bed and the traffic has to stay on it, and the
+ * two used to say it separately: the bed is `12 + stage * 3` px deep under a fixed 4 px verge, while
+ * the lanes sat on a fixed 7 px pitch, so lane 2 rode at `ground + 24` against a bed that ends at
+ * `ground + 19` at stage 1 -- the outer lane drove on the verge at every stage but the last.
+ */
+export const ROAD_TOP_OFFSET = 4;
+export const ROAD_LANES = 3;
+/** How deep the bed is at a development stage: a wider road as the civilization builds one. */
+export function roadbedHeight(stage) { return 12 + Math.max(0, stage) * 3; }
+/**
+ * Where lane `lane` rides, as an offset from the ground line, for something `thickness` px tall.
+ * Derived from the bed rather than from a pitch, so the lanes crowd together on an early road
+ * instead of walking off it -- and the thickness is taken off the usable depth, so it is the
+ * vehicle's *bottom* edge that stays on the road, not merely its anchor.
+ */
+export function roadLaneOffset(stage, lane, thickness = 0) {
+    const inset = 2;
+    const usable = Math.max(0, roadbedHeight(stage) - inset * 2 - Math.max(0, thickness));
+    const slot = ROAD_LANES > 1 ? Math.min(ROAD_LANES - 1, Math.max(0, lane)) / (ROAD_LANES - 1) : 0;
+    return ROAD_TOP_OFFSET + inset + slot * usable;
+}
 const clamp = (value, limit) => Math.max(-limit, Math.min(limit, value));
 /**
  * The links, in world order. Derived from the settlement layout and the snapshot's building count,
