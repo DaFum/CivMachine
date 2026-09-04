@@ -43,6 +43,16 @@ export const eraLabel = (era) => {
     const id = ERA_NAMES[era];
     return id ? (eraName(id.toLowerCase()) ?? id).toUpperCase() : "";
 };
+let cachedEraLocale = null;
+let cachedEraNames = [];
+function getCachedEraNames() {
+    const currentLocale = activeLocale();
+    if (cachedEraLocale !== currentLocale) {
+        cachedEraLocale = currentLocale;
+        cachedEraNames = ERA_NAMES.map((_, era) => eraLabel(era));
+    }
+    return cachedEraNames;
+}
 const dramaPhaseLabels = () => {
     const phases = text().reports.runReport.dramaPhases;
     return DRAMA_PHASE_IDS.map((id) => phases[id]);
@@ -525,12 +535,7 @@ export class GameEngine {
     // localized name and description are put on the entry the panel renders, not on the definition the
     // economy reads.
     visibleUpgradeEntries(layer) {
-        return visibleUpgradeEntries(this.state, layer, this.catalog(layer)).map((entry) => {
-            const copy = upgradeCopy(String(entry.definition.id));
-            return copy
-                ? { ...entry, definition: { ...entry.definition, name: copy.name, description: copy.description } }
-                : entry;
-        });
+        return visibleUpgradeEntries(this.state, layer, this.catalog(layer));
     }
     visibleResources() {
         return Progression.visibleResourceKeys(this.state);
@@ -548,12 +553,12 @@ export class GameEngine {
         return Progression.machineInsight(this.state);
     }
     availableDirectives() {
-        const offerIds = new Set(this.state.machine.runBuild.directiveOfferIds);
-        return this.directives.filter((d) => offerIds.has(d.id));
+        const offerIds = this.state.machine.runBuild.directiveOfferIds;
+        return this.directives.filter((d) => offerIds.includes(d.id));
     }
     availableMatrices() {
-        const knownIds = new Set(this.state.meta.progression.knownBreedingMatrices);
-        return this.matrices.filter((d) => knownIds.has(d.id));
+        const knownIds = this.state.meta.progression.knownBreedingMatrices;
+        return this.matrices.filter((d) => knownIds.includes(d.id));
     }
     selectDirective(id) {
         const r = this.state.machine.runBuild;
@@ -1178,7 +1183,7 @@ export class GameEngine {
             reason,
             chaotic,
             details,
-            eraNames: ERA_NAMES.map((_, era) => eraLabel(era)),
+            eraNames: getCachedEraNames(),
             dramaLabels: dramaPhaseLabels(),
             resourceLabels: resourceLabels(),
             discoveredResources: this.visibleResources(),
@@ -1347,7 +1352,11 @@ export class GameEngine {
     consumeUniverse() {
         if (!this.canConsumeUniverse())
             return false;
-        const bank = RESOURCE_KEYS.reduce((s, k) => s + this.state.machine.currencies[k], 0);
+        let bank = 0;
+        const currencies = this.state.machine.currencies;
+        for (const k of RESOURCE_KEYS) {
+            bank += currencies[k];
+        }
         const award = universeResidueAward(this.state.machine.cultivationCreditsThisUniverse, bank, 1 + 0.2 * this.upgradeLevel("universe", "residue_refinery"));
         this.state.meta.universalResidue += award;
         this.state.meta.universesTotal++;

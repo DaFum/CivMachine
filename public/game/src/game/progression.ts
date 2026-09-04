@@ -204,13 +204,34 @@ export function upgradeUnlockReason(state:GameState,layer:Layer,id:string):strin
   return req.length?req.join(copy.requirementJoiner):copy.availableAfterRefresh;
 }
 
+function createUpgradeEntry(definition: any, status: 'available'|'locked', reason: string): VisibleUpgradeEntry {
+  const copy = upgradeCopy(String(definition.id));
+  const localizedDefinition = copy
+    ? { ...definition, name: copy.name, description: copy.description }
+    : definition;
+  return { definition: localizedDefinition, status, reason };
+}
+
 export function visibleUpgradeEntries(state:GameState,layer:Layer,catalog:readonly any[]):VisibleUpgradeEntry[] {
   if(layer==='universe'&&!Progression.systemUnlocked(state,'universe_upgrades'))return [];
   if(layer==='axiom'&&!Progression.systemUnlocked(state,'axioms'))return [];
-  const available:VisibleUpgradeEntry[]=[]; const locked:Array<VisibleUpgradeEntry&{threshold:number}>=[];
+  const available:VisibleUpgradeEntry[]=[]; const locked:Array<{entry:VisibleUpgradeEntry;threshold:number}>=[];
   const rules=progressionRulesForLayer(layer);
-  for(const definition of catalog){const id=String(definition.id); if(Progression.canUseUpgrade(state,layer,id)) available.push({definition,status:'available',reason:''}); else locked.push({definition,status:'locked',reason:upgradeUnlockReason(state,layer,id),threshold:rules[id]?.insight??999});}
-  locked.sort((a,b)=>a.threshold-b.threshold); available.push(...locked.slice(0,2).map(({threshold:_t,...entry})=>entry)); return available;
+  for(const definition of catalog){
+    const id=String(definition.id);
+    if(Progression.canUseUpgrade(state,layer,id)) {
+      available.push(createUpgradeEntry(definition, 'available', ''));
+    } else {
+      const entry = createUpgradeEntry(definition, 'locked', upgradeUnlockReason(state,layer,id));
+      locked.push({ entry, threshold: rules[id]?.insight??999 });
+    }
+  }
+  locked.sort((a,b)=>a.threshold-b.threshold);
+  const count = Math.min(locked.length, 2);
+  for(let i=0; i<count; i++){
+    available.push(locked[i]!.entry);
+  }
+  return available;
 }
 
 // The conditions are composed from `SYSTEM_RULES`, never authored beside them: what the panel
