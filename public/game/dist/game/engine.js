@@ -992,8 +992,13 @@ export class GameEngine {
     }
     useRunIntervention(id) {
         const civ = this.state.civilization;
+        if (!civ) {
+            this.lastActionFailure = text().reports.engine.startCivilizationFirst;
+            this.emit();
+            return false;
+        }
         const definition = runInterventionById(id);
-        if (!civ || !definition) {
+        if (!definition) {
             this.lastActionFailure = text().reports.engine.unknownMachineIntervention;
             this.emit();
             return false;
