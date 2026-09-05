@@ -219,7 +219,39 @@ interface GameContent {
   mutations: MutationDefinition[];
   [key: string]: unknown;
 }
-const C = CONTENT as unknown as GameContent;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateGameContent(raw: unknown): GameContent {
+  const obj = isPlainObject(raw) ? raw : {};
+  return {
+    ...obj,
+    traits: Array.isArray(obj.traits) ? (obj.traits as Trait[]) : [],
+    events: Array.isArray(obj.events) ? (obj.events as PathEvent[]) : [],
+    machine_upgrades: Array.isArray(obj.machine_upgrades)
+      ? (obj.machine_upgrades as UpgradeDefinition[])
+      : [],
+    universe_upgrades: Array.isArray(obj.universe_upgrades)
+      ? (obj.universe_upgrades as UpgradeDefinition[])
+      : [],
+    axiom_upgrades: Array.isArray(obj.axiom_upgrades)
+      ? (obj.axiom_upgrades as UpgradeDefinition[])
+      : [],
+    directives: Array.isArray(obj.directives)
+      ? (obj.directives as DirectiveDefinition[])
+      : [],
+    breeding_matrices: Array.isArray(obj.breeding_matrices)
+      ? (obj.breeding_matrices as BreedingMatrixDefinition[])
+      : [],
+    mutations: Array.isArray(obj.mutations)
+      ? (obj.mutations as MutationDefinition[])
+      : [],
+  };
+}
+
+const C = validateGameContent(CONTENT);
 
 export interface EngineOptions {
   storage?: StorageLike;
@@ -254,7 +286,7 @@ export class GameEngine {
   private feedbackSequence = 0;
   private traits: Trait[] = C.traits;
   private events: PathEvent[] = [
-    ...(applyEraCeiling(applyInterventionCopy(C.events as any)) as PathEvent[]),
+    ...applyEraCeiling(applyInterventionCopy(C.events)),
     ...(ENTROPY_CRISES as unknown as PathEvent[]),
     ...(APOTHEOSIS_EVENTS as unknown as PathEvent[]),
     ...(EXPANDED_INTERVENTIONS as unknown as PathEvent[]),
@@ -263,17 +295,17 @@ export class GameEngine {
     ...(EVENT_CHAINS as unknown as PathEvent[]),
   ];
   private machineUpgrades: UpgradeDefinition[] = balancedMachineUpgrades(
-    C.machine_upgrades as any[],
+    C.machine_upgrades,
   ) as UpgradeDefinition[];
   private universeUpgrades: UpgradeDefinition[] = balancedUniverseUpgrades(
-    C.universe_upgrades as any[],
+    C.universe_upgrades,
   ) as UpgradeDefinition[];
   private axiomUpgrades: UpgradeDefinition[] = balancedAxiomUpgrades(
-    C.axiom_upgrades as any[],
-  ) as UpgradeDefinition[];
+    C.axiom_upgrades,
+  );
   private directives: DirectiveDefinition[] = balancedDirectives(
-    C.directives as any[],
-  ) as DirectiveDefinition[];
+    C.directives,
+  );
   private matrices: BreedingMatrixDefinition[] = C.breeding_matrices;
   private mutations: MutationDefinition[] = C.mutations;
   private traitsMap: Map<string, Trait>;

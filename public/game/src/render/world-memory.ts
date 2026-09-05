@@ -18,21 +18,23 @@ export function worldMemorySignature(value: unknown): string {
   return `${marks.join(';')}|${scars.join(';')}`;
 }
 
+function isSettlementsSorted(settlements: ReadonlyArray<Settlement>): boolean {
+  const len = settlements.length;
+  for (let i = 1; i < len; i++) {
+    if (settlements[i]!.centerX < settlements[i - 1]!.centerX) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // A mark belongs to the civilization, not to empty ground, so its deterministic anchor snaps to the
 // nearest settlement centre rather than landing wherever the hash pointed.
-function anchorX(anchor01: number, worldWidth: number, settlements: ReadonlyArray<Settlement>): number {
+function anchorX(anchor01: number, worldWidth: number, settlements: ReadonlyArray<Settlement>, sorted: boolean = isSettlementsSorted(settlements)): number {
   const target = Math.max(0, Math.min(worldWidth, anchor01 * worldWidth));
   const len = settlements.length;
   if (!len) return target;
   if (len === 1) return settlements[0]!.centerX;
-
-  let sorted = true;
-  for (let i = 1; i < len; i++) {
-    if (settlements[i]!.centerX < settlements[i - 1]!.centerX) {
-      sorted = false;
-      break;
-    }
-  }
 
   if (sorted) {
     let low = 0, high = len - 1;
@@ -146,16 +148,18 @@ function drawScar(surface: DrawSurface, scar: WorldScar, x: number, ground: numb
 /** Persistent geometry, so it belongs on the cached scenery layer that scrolls 1:1 with the world. */
 export function drawWorldMemoryScenery(surface: DrawSurface, civ: Civilization, worldWidth: number, ground: number, settlements: ReadonlyArray<Settlement>, accent: number, view: MemoryViewBand): void {
   const memory: WorldMemoryState = sanitizeWorldMemory(civ.visualMemory);
-  for (const mark of memory.marks) { const x = anchorX(mark.anchor01, worldWidth, settlements); if (visible(x,view)) drawMark(surface,mark,x,ground,accent); }
-  for (const scar of memory.scars) { const x = anchorX(scar.anchor01, worldWidth, settlements); if (visible(x,view,120)) drawScar(surface,scar,x,ground,accent); }
+  const sorted = isSettlementsSorted(settlements);
+  for (const mark of memory.marks) { const x = anchorX(mark.anchor01, worldWidth, settlements, sorted); if (visible(x,view)) drawMark(surface,mark,x,ground,accent); }
+  for (const scar of memory.scars) { const x = anchorX(scar.anchor01, worldWidth, settlements, sorted); if (visible(x,view,120)) drawScar(surface,scar,x,ground,accent); }
 }
 
 /** The only animated part of memory: a slow halo over scars, so the geometry itself stays cached. */
 export function drawWorldMemoryAccents(surface: DrawSurface, civ: Civilization, worldWidth: number, ground: number, settlements: ReadonlyArray<Settlement>, accent: number, view: MemoryViewBand, time: number, reducedMotion: boolean): void {
   const memory = sanitizeWorldMemory(civ.visualMemory);
+  const sorted = isSettlementsSorted(settlements);
   const pulse = reducedMotion ? 1 : .65 + Math.sin(time*.002)*.35;
   for (const scar of memory.scars) {
-    const x = anchorX(scar.anchor01, worldWidth, settlements); if (!visible(x,view,120)) continue;
+    const x = anchorX(scar.anchor01, worldWidth, settlements, sorted); if (!visible(x,view,120)) continue;
     if (scar.domain === 'reality') surface.lineStyle(1,0xee6973,.12+.12*pulse).strokeCircle(x,ground-42,22+scar.strength*8);
     if (scar.domain === 'identity') surface.lineStyle(1,accent,.1+.12*pulse).strokeCircle(x,ground-52,28+scar.strength*7);
   }

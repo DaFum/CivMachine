@@ -80,14 +80,14 @@ const UNIVERSE_LADDERS: Readonly<Record<string, readonly number[]>> = {
   stable_constants: STABLE_CONSTANTS_LADDER,
 };
 
-export function balancedMachineUpgrades<T extends { id: string; base_cost: number; growth: number; description: string }>(catalog: readonly T[]): Array<T & { cost_ladder?: readonly number[] }> {
+export function balancedMachineUpgrades<T extends { id: string; base_cost: number; growth: number; description?: string }>(catalog: readonly T[]): Array<T & { cost_ladder?: readonly number[] }> {
   return catalog.map(definition => {
     const override = MACHINE_OVERRIDES[definition.id];
     return override ? { ...definition, ...override } : { ...definition, growth: Math.max(1.45, Math.min(1.65, Number(definition.growth))) };
   });
 }
 
-export function balancedUniverseUpgrades<T extends { id: string; growth: number; description: string }>(catalog: readonly T[]): Array<T & { cost_ladder?: readonly number[] }> {
+export function balancedUniverseUpgrades<T extends { id: string; growth: number; description?: string }>(catalog: readonly T[]): Array<T & { cost_ladder?: readonly number[] }> {
   return catalog.map(definition => ({
     ...definition,
     growth: Math.min(1.75, Number(definition.growth)),
