@@ -78,7 +78,7 @@ export function depthBand(depth) {
             grade = band.grade;
     return grade;
 }
-export function evaluateHarvestQuality(civ, _chaotic = false) {
+export function evaluateHarvestQuality(civ) {
     const depth = cultivationDepth(civ);
     const grade = civ.eventChoices < 3 || civ.era <= 0 ? 'premature' : depthBand(depth);
     if (grade === 'premature')

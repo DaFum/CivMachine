@@ -57,7 +57,7 @@ function simulatedBalanceRun(seed, { accelerateWheneverAvailable = false, collap
 
   while (engine.state.phase === 'civilization' && elapsed < 600) {
     const civ = engine.state.civilization;
-    if (!collapse && civ.eventChoices >= 3 && evaluateHarvestQuality(civ, false).grade !== 'premature') break;
+    if (!collapse && civ.eventChoices >= 3 && evaluateHarvestQuality(civ).grade !== 'premature') break;
     const event = engine.currentEvent();
     if (event) {
       engine.chooseEvent(safestChoiceIndex(event));
@@ -778,7 +778,7 @@ test('v1.20.0 every grade boundary is a Cultivation Credit step', () => {
     civ.eventChoices = 4;
     civ.era = 1;
     civ.development = band.minDepth * DEPTH_DEVELOPMENT_SCALE;
-    const quality = evaluateHarvestQuality(civ, false);
+    const quality = evaluateHarvestQuality(civ);
     assert.equal(quality.credits, band.credits, band.grade + ' must pay its own credits');
     if (band.grade !== 'premature') assert.equal(quality.grade, band.grade);
   }
@@ -789,14 +789,14 @@ test('v1.20.0 harvest quality scales concavely with depth', () => {
   civ.eventChoices = 4;
   civ.era = 1;
   civ.development = 400;
-  const quality = evaluateHarvestQuality(civ, false);
+  const quality = evaluateHarvestQuality(civ);
   assert.equal(quality.grade, 'transcendent');
   assert.equal(quality.depth, 5);
   assert.equal(quality.credits, 3);
   assert.equal(Number(quality.multiplier.toFixed(4)), Number(depthYieldMultiplier(5).toFixed(4)));
 
   civ.development = 1920;
-  const deep = evaluateHarvestQuality(civ, false);
+  const deep = evaluateHarvestQuality(civ);
   assert.equal(deep.grade, 'singular');
   assert.equal(deep.credits, DEPTH_CREDIT_CAP);
 
@@ -819,7 +819,7 @@ test('v1.20.0 no single run can bank more than half a Universe', () => {
   civ.eventChoices = 9;
   civ.era = 3;
   civ.development = 100_000;
-  assert.equal(evaluateHarvestQuality(civ, false).credits, DEPTH_CREDIT_CAP);
+  assert.equal(evaluateHarvestQuality(civ).credits, DEPTH_CREDIT_CAP);
   assert.equal(DEPTH_CREDIT_CAP, 10);
   // A Universe costs 18. The cap is what makes two successful runs the arithmetic floor for a
   // prestige at every stage of the game -- including a completed Directive objective's extra credit.
@@ -832,13 +832,13 @@ test('a premature harvest stays premature at any depth', () => {
   civ.development = 4000;
   civ.era = 0;
   civ.eventChoices = 9;
-  const zeroEra = evaluateHarvestQuality(civ, false);
+  const zeroEra = evaluateHarvestQuality(civ);
   assert.equal(zeroEra.grade, 'premature');
   assert.equal(zeroEra.multiplier, 0.2);
   assert.equal(zeroEra.credits, 0);
   civ.era = 2;
   civ.eventChoices = 2;
-  assert.equal(evaluateHarvestQuality(civ, false).grade, 'premature');
+  assert.equal(evaluateHarvestQuality(civ).grade, 'premature');
 });
 
 test('Entropy costs yield continuously below the cascade threshold', () => {

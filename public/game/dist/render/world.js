@@ -594,38 +594,11 @@ function drawOutskirt(surface, prop, ground, presentation) {
  * onto itself and repaints only the exposed strip -- which is why every primitive here is culled by
  * its own extent rather than by its owner's, and why nothing in it may animate.
  */
-export function drawSettlementContent(surface, scene, height, view) {
-    const { civ, snapshot, presentation, settlements, outskirts } = scene;
-    const worldWidth = snapshot.worldWidth;
+function drawTradeNetwork(surface, scene, ground, view) {
+    const { snapshot, presentation, settlements } = scene;
     const stage = snapshot.stage;
-    const ground = height * GROUND_RATIO;
-    const span = view.to - view.from;
-    if (span <= 0)
-        return;
     const colors = presentation.colors;
     const lightLevel = presentation.lightLevel;
-    // What the dominant path builds with. Read once for the whole layer, and only from a path the
-    // civilization has actually settled into: a leading affinity is not yet an architecture.
-    const identity = pathIdentity(civ);
-    const skylineCrown = identity.tier >= 2 && identity.crown !== 'none' ? identity.crown : undefined;
-    // The settlement plane, graded rather than flat, with the verge right under the buildings catching
-    // the light the city puts out.
-    surface.fillLinearGradientRect(view.from, ground - 6, span, height - ground + 6, [
-        { offset: 0, color: mixColor(colors.groundNear, colors.lightSpill, .1 * lightLevel) },
-        { offset: .35, color: colors.groundNear },
-        { offset: 1, color: colors.groundDeep },
-    ], view.from, ground - 6, view.from, height);
-    // The land between the settlements, before the roads and the buildings that stand on it.
-    for (const prop of outskirts) {
-        if (prop.x + OUTSKIRT_SLACK < view.from || prop.x - OUTSKIRT_SLACK > view.to)
-            continue;
-        drawOutskirt(surface, prop, ground, presentation);
-    }
-    // The trade network, as the traces it wore into the ground rather than as rectangles between
-    // centres. `routes.ts` owns the geometry and the lattice it is sampled on; this turns one curve
-    // into a roadbed, the lit curb along its near edge and the lane markings that follow it. Every
-    // point comes off a lattice fixed in world space, so a strip redraw emits exactly what a full
-    // redraw of the same slice does.
     if (stage > 0) {
         const roadHeight = roadbedHeight(stage);
         for (const route of scene.routes) {
@@ -639,12 +612,7 @@ export function drawSettlementContent(surface, scene, height, view) {
             for (let i = spine.length - 1; i >= 0; i--)
                 bed.push([spine[i][0], ground + ROAD_TOP_OFFSET + roadHeight + spine[i][1]]);
             surface.fillStyle(0x11191f, .98).fillPoly(bed);
-            // A lit curb along the near edge: the road is the one surface that reflects the city, and a
-            // busier route reflects more of it.
             surface.lineStyle(1, colors.lightSpill, .12 + lightLevel * .12 + route.flow * .08).strokePoly(near);
-            // Lane markings on a 42 px lattice inside the road, riding the bed rather than ruling a
-            // straight line through it; dash d spans [fromX + 42d + 10, +18], so it shows once its right
-            // edge clears view.from. Ceil, or the run starts one dash too early.
             const firstDash = Math.max(0, Math.ceil((view.from - route.fromX - 28) / 42));
             for (let dash = firstDash; dash * 42 < route.span; dash++) {
                 const dashX = route.fromX + dash * 42 + 10;
@@ -659,8 +627,6 @@ export function drawSettlementContent(surface, scene, height, view) {
             surface.lineStyle(2, presentation.accent, .4).line(view.from, ground - 18, view.to, ground - 18);
     }
     else {
-        // A track rather than a highway: it only exists where the camp is, so an empty stage-0 world is
-        // not crossed by a full-width brown band.
         for (const settlement of settlements) {
             const trackFrom = settlement.centerX - settlement.radius * 1.6;
             const trackSpan = settlement.radius * 3.2;
@@ -669,35 +635,26 @@ export function drawSettlementContent(surface, scene, height, view) {
             surface.fillStyle(mixColor(0x493821, colors.groundNear, .45), .85).fillRect(trackFrom, ground + 4, trackSpan, 9);
         }
     }
+}
+function drawSettlementStructures(surface, scene, ground, view, identity, skylineCrown) {
+    const { civ, snapshot, presentation, settlements } = scene;
+    const stage = snapshot.stage;
+    const colors = presentation.colors;
+    const lightLevel = presentation.lightLevel;
     for (const settlement of settlements) {
-        // Light spill: the glow a settlement puts into the air above itself, painted behind its own
-        // skyline and shaped by it -- it rises with the tallest structure instead of sitting on the
-        // ground as a patch of fog, and is capped at SPILL_MAX_RADIUS.
         const crown = settlementCrown(settlement, ground);
         const spillRadius = Math.min(SPILL_MAX_RADIUS, Math.max(SPILL_MIN_RADIUS, crown * SPILL_CROWN_FACTOR));
-        // The first cut has to be the *widest* thing this settlement paints, not its footprint. A tall
-        // settlement's glow reaches tens of pixels past its own radius, so a footprint-first guard drops
-        // that glow from a narrow strip redraw while a full redraw of the same slice paints it -- and the
-        // cached layer then differs from a full repaint until the next invalidation. Structures and the
-        // glow are still each checked by their own extent below; this only decides whether anything
-        // belonging to this settlement can reach the band at all.
         const reach = Math.max(settlement.radius, spillRadius);
         if (settlement.centerX - reach > view.to || settlement.centerX + reach < view.from)
             continue;
         if (stage > 0 && settlement.centerX + spillRadius >= view.from && settlement.centerX - spillRadius <= view.to) {
             const spillStrength = lightLevel * (settlement.settlementClass === 'camp' ? .3 : settlement.settlementClass === 'village' ? .5 : 1);
-            // Flattened, because a city's glow is: it spreads along the skyline and thins quickly upward.
-            // A circle of the same horizontal reach climbed a quarter of the sky and read as weather.
             surface.fillEllipseGlow(settlement.centerX, ground - crown * .42, spillRadius, spillRadius * .74, [
                 { offset: 0, color: colors.lightSpill, alpha: .1 * spillStrength },
                 { offset: .5, color: colors.lightSpill, alpha: .045 * spillStrength },
                 { offset: 1, color: colors.lightSpill, alpha: 0 },
             ]);
         }
-        // The archetype mass this civilization builds inside, behind its own skyline. Culled by its own
-        // reach, which `settlementFrameReach` bounds well inside the settlement's radius -- the frame is
-        // a silhouette around the city, and a mass as wide as a settlement's full radius would read as
-        // weather rather than as architecture.
         if (identity.frame !== 'none' && identity.tier >= 2) {
             const frameReach = settlementFrameReach(settlement.radius);
             if (settlement.centerX + frameReach >= view.from && settlement.centerX - frameReach <= view.to) {
@@ -708,27 +665,25 @@ export function drawSettlementContent(surface, scene, height, view) {
             if (structure.x + structure.width < view.from || structure.x - structure.width > view.to)
                 continue;
             drawStructure(surface, structure, ground, colors.settlement, presentation.accent, colors.window, civ.seed, {
-                // Aerial perspective is measured against the air the ridges fade into, so a back-lane
-                // building and a distant ridge agree about how much atmosphere is between them and the eye.
                 fadeColor: mixColor(colors.skyHorizon, colors.haze, .4),
                 fade: 1,
                 lightLevel,
-                // The same light the spill, the lamps and the road reflections use, so a chimney and a
-                // launch pad belong to this settlement's night rather than to a palette of their own.
                 lightColor: colors.lightSpill,
                 crown: skylineCrown,
             });
         }
-        // A faction-colored plinth marks who holds the settlement even in the cached layer.
         const plinthHalf = settlement.radius * .22;
         if (stage > 0 && settlement.centerX + plinthHalf >= view.from && settlement.centerX - plinthHalf <= view.to) {
             surface.fillStyle(factionColor(scene, settlement), .5).fillRect(settlement.centerX - plinthHalf, ground - 3, plinthHalf * 2, 3);
         }
     }
-    // The near field: the strip between the road and the foreground bank. It used to be flat fill, and
-    // an eighth of every frame was dead space because of it. Worked ground and foreground growth on a
-    // fixed lattice, so a scroll reveals more of the same land rather than sliding a texture across it.
-    // This is the plane closest to the eye, so its detail is the highest-contrast in the world.
+}
+function drawForegroundPlanes(surface, scene, height, ground, span, view) {
+    const { civ, snapshot, presentation, settlements } = scene;
+    const worldWidth = snapshot.worldWidth;
+    const stage = snapshot.stage;
+    const colors = presentation.colors;
+    const lightLevel = presentation.lightLevel;
     const fieldTop = ground + 20 + stage * 3;
     const fieldSpan = Math.max(0, height - Math.max(14, (height - ground) * .34) - fieldTop);
     if (fieldSpan > 8) {
@@ -741,11 +696,9 @@ export function drawSettlementContent(surface, scene, height, view) {
                 continue;
             const roll = hash01(civ.seed * 7 + cell * 43);
             const depth = hash01(cell * 61 + civ.seed);
-            // A furrow band per cell, following the ground rather than ruling a straight line across it.
             surface.lineStyle(1, furrowColor, .6)
                 .line(x, fieldTop + fieldSpan * (.18 + roll * .5), x + FIELD_CELL, fieldTop + fieldSpan * (.22 + roll * .5));
             if (roll < .42) {
-                // Foreground growth: a clump of three, the nearest one largest, in near-silhouette.
                 const clumpX = x + FIELD_CELL * (.15 + roll);
                 const clumpY = fieldTop + fieldSpan * (.42 + depth * .5);
                 const size = 5 + depth * 9;
@@ -756,21 +709,15 @@ export function drawSettlementContent(surface, scene, height, view) {
                 }
             }
             else if (roll > .58 && stage >= 1) {
-                // A fence line running with the road, catching the same light the lamps put out.
                 const postY = fieldTop + fieldSpan * (.32 + depth * .3);
                 surface.lineStyle(1, growthColor, .7).line(x + FIELD_CELL * .2, postY, x + FIELD_CELL * .2, postY + 7 + depth * 5);
                 surface.lineStyle(1, mixColor(growthColor, colors.lightSpill, .25), .3 + lightLevel * .2).line(x + FIELD_CELL * .2, postY + 2, x + FIELD_CELL * 1.2, postY + 3);
             }
             if (depth > .82 && stage >= 2) {
-                // A service track catching the same light the road does.
                 surface.fillStyle(colors.lightSpill, .05 + lightLevel * .05).fillRect(x + FIELD_CELL * .2, fieldTop + fieldSpan * .74, FIELD_CELL * .5, 1.6);
             }
         }
     }
-    // Foreground bank: the plane closest to the eye, and the one that used to be a black slab across
-    // the bottom eighth of every frame. It is now a graded bank with a lit crest, a continuous crest
-    // line rather than a row of separate triangles, and a handful of near-silhouette props standing on
-    // it -- so the strip below the road frames the world instead of cutting a hole in it.
     const bankTop = height - Math.max(14, (height - ground) * .34);
     const bankColor = mixColor(colors.groundDeep, 0x000000, .18);
     surface.fillLinearGradientRect(view.from, bankTop - 4, span, height - bankTop + 4, [
@@ -778,12 +725,6 @@ export function drawSettlementContent(surface, scene, height, view) {
         { offset: .3, color: mixColor(bankColor, colors.groundNear, .18) },
         { offset: 1, color: bankColor },
     ], view.from, bankTop - 4, view.from, height);
-    // A sampled profile rather than one trough and one spike per cell. The previous crest alternated
-    // those two on a fixed 96 px lattice, which is a sawtooth however the spike height is hashed -- and
-    // it was the most obviously repeated shape left in the frame, on the plane closest to the eye.
-    // Sampling a two-octave ridge on a finer lattice makes the same two polygons a landform instead:
-    // long swells carrying short detail, with no forced return to the baseline between them. The
-    // lattice is fixed in world space, so a strip redraw emits exactly the points a full redraw does.
     const bankProfile = (index) => {
         const worldX = index * BANK_STEP;
         const swell = ridgeNoise(worldX / 430, civ.seed * 5 + 13, .22);
@@ -802,24 +743,17 @@ export function drawSettlementContent(surface, scene, height, view) {
             backCrest.push([x, height]);
         }
         crestLine.push([x, bankTop - bankProfile(i)]);
-        // The back row is the same landform seen from further away: half the relief, a step behind, and
-        // sampled half a cell across so its crests never line up with the ones in front of them.
         backCrest.push([x, bankTop + 6 - bankProfile(i + 1) * .45]);
     }
     if (crestLine.length > 2) {
         const last = crestLine[crestLine.length - 1][0];
         backCrest.push([last, height]);
-        // The second, lower row of crests behind the first, offset half a cell, so the bank has a back.
         surface.fillStyle(shade(bankColor, .45), 1).fillPoly(backCrest);
         crestLine.push([last, height]);
         surface.fillStyle(bankColor, 1).fillPoly(crestLine);
-        // The rim light where the crest catches the city behind it. Weak and following the crest: a
-        // strong one turned the bank into an outlined shape rather than a landform in shadow.
         surface.lineStyle(1, mixColor(presentation.accent, colors.lightSpill, .5), .05 + lightLevel * .07)
             .strokePoly(crestLine.slice(1, -1));
     }
-    // Foreground growth on the bank itself: large, near-black and sparse, so the nearest plane in the
-    // world has a scale of its own instead of being an empty gradient.
     const firstTuft = Math.max(0, Math.floor(view.from / 148));
     for (let tuft = firstTuft; tuft * 148 <= view.to + 148; tuft++) {
         const roll = hash01(civ.seed * 19 + tuft * 83);
@@ -837,12 +771,39 @@ export function drawSettlementContent(surface, scene, height, view) {
         }
         surface.lineStyle(1, mixColor(colors.lightSpill, bankColor, .55), .1 + lightLevel * .1).line(x - size * .3, rootY - size * .55, x + size * .3, rootY - size * .75);
     }
-    // The capital silhouette and the institution landmarks are permanent structures, so they belong here
-    // beside the buildings rather than being repainted 30x/s.
     drawIdentityLandmarks(surface, civ, settlements, ground, presentation.accent, view);
-    // Saved marks and scars are persistent world geometry, so they belong on this cached layer rather
-    // than being repainted every frame. Each is culled by the same band as everything else here.
     drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, presentation.accent, view);
+}
+/**
+ * The whole of the cached scenery layer: the settlement plane, the outskirts, the roads, every
+ * settlement's light spill and structures, the near field, the foreground bank, the identity
+ * landmarks and the world's saved marks. It moves 1:1 with the scroll, so a scroll copies the canvas
+ * onto itself and repaints only the exposed strip -- which is why every primitive here is culled by
+ * its own extent rather than by its owner's, and why nothing in it may animate.
+ */
+export function drawSettlementContent(surface, scene, height, view) {
+    const { civ, snapshot, presentation, outskirts } = scene;
+    const ground = height * GROUND_RATIO;
+    const span = view.to - view.from;
+    if (span <= 0)
+        return;
+    const colors = presentation.colors;
+    const lightLevel = presentation.lightLevel;
+    const identity = pathIdentity(civ);
+    const skylineCrown = identity.tier >= 2 && identity.crown !== 'none' ? identity.crown : undefined;
+    surface.fillLinearGradientRect(view.from, ground - 6, span, height - ground + 6, [
+        { offset: 0, color: mixColor(colors.groundNear, colors.lightSpill, .1 * lightLevel) },
+        { offset: .35, color: colors.groundNear },
+        { offset: 1, color: colors.groundDeep },
+    ], view.from, ground - 6, view.from, height);
+    for (const prop of outskirts) {
+        if (prop.x + OUTSKIRT_SLACK < view.from || prop.x - OUTSKIRT_SLACK > view.to)
+            continue;
+        drawOutskirt(surface, prop, ground, presentation);
+    }
+    drawTradeNetwork(surface, scene, ground, view);
+    drawSettlementStructures(surface, scene, ground, view, identity, skylineCrown);
+    drawForegroundPlanes(surface, scene, height, ground, span, view);
 }
 /**
  * Difference between the live palette and the one baked into the cached layers, painted as a wash so
@@ -1151,12 +1112,6 @@ export function drawRouteFlow(surface, scene, presentation, ground, animationTim
             surface.fillStyle(color, Math.min(.9, alpha + .3)).fillCircle(to.x, headY, FLOW_HEAD_RADIUS);
         }
     }
-}
-/** A stable prefix, so shedding agents thins the crowd rather than reshuffling who is in it. */
-function cosmeticAgents(agents, fraction) {
-    if (fraction >= 1)
-        return agents;
-    return agents.slice(0, Math.ceil(agents.length * Math.max(0, fraction)));
 }
 // `agentFraction` is the adaptive-quality lever: a slow device draws fewer cosmetic inhabitants,
 // never fewer fractures, beacons, landmarks, scars or construction cues.
