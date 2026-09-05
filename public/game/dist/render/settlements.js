@@ -81,7 +81,7 @@ export function settlementClassSignature(civ, snapshot) {
 }
 // Every candidate is filtered through the era gate, so structureKindsForEra stays the single
 // authority on what an era may contain and the two cannot drift apart.
-function kindFor(index, count, settlementClass, era, stage, seed, allowed, distance) {
+function kindFor(index, count, settlementClass, stage, seed, allowed, distance) {
     const rank = CLASS_ORDER.indexOf(settlementClass);
     const mid = Math.floor(count / 2);
     const pick = (kind) => allowed.has(kind) ? kind : 'dwelling';
@@ -215,7 +215,7 @@ export function settlementLayout(civ, worldWidth, height, snapshot) {
             const heightDensityMult = Math.max(0.42, (1.25 - distFromCenter * 0.62) * classScale * dominance);
             const baseWidth = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * widthScale;
             const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * heightScale;
-            const kind = kindFor(i, count, settlementClass, civ.era, stage, civ.seed + index * 101, allowed, distFromCenter);
+            const kind = kindFor(i, count, settlementClass, stage, civ.seed + index * 101, allowed, distFromCenter);
             // Profile by use, so a class is legible from its silhouette alone: farms lie along the ground,
             // industry keeps a heavy low mass under its chimneys, a monument is a landmark rather than a
             // second tower, and only the civic and residential structures compete for the skyline.

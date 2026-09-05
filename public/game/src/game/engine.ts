@@ -164,6 +164,17 @@ export const eraLabel = (era: number): string => {
   const id = ERA_NAMES[era];
   return id ? (eraName(id.toLowerCase()) ?? id).toUpperCase() : "";
 };
+
+let cachedEraLocale: string | null = null;
+let cachedEraNames: string[] = [];
+function getCachedEraNames(): string[] {
+  const currentLocale = activeLocale();
+  if (cachedEraLocale !== currentLocale) {
+    cachedEraLocale = currentLocale;
+    cachedEraNames = ERA_NAMES.map((_, era) => eraLabel(era));
+  }
+  return cachedEraNames;
+}
 const dramaPhaseLabels = (): string[] => {
   const phases = text().reports.runReport.dramaPhases;
   return DRAMA_PHASE_IDS.map((id) => phases[id]);
@@ -566,7 +577,7 @@ export class GameEngine {
   private traitName(id: string) {
     return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
   }
-  private upgradeName(layer: Layer, definition: any) {
+  private upgradeName(definition: any) {
     return upgradeCopy(String(definition.id))?.name ?? definition.name;
   }
   private objectiveTitle(directiveId: string) {
@@ -641,7 +652,7 @@ export class GameEngine {
     this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
     this.post(
       fill(text().reports.engine.modificationAuthorized, {
-        name: this.upgradeName(layer, d),
+        name: this.upgradeName(d),
         level: this.levels(layer)[id],
       }),
     );
@@ -654,12 +665,7 @@ export class GameEngine {
   // localized name and description are put on the entry the panel renders, not on the definition the
   // economy reads.
   visibleUpgradeEntries(layer: Layer) {
-    return visibleUpgradeEntries(this.state, layer, this.catalog(layer)).map((entry) => {
-      const copy = upgradeCopy(String(entry.definition.id));
-      return copy
-        ? { ...entry, definition: { ...entry.definition, name: copy.name, description: copy.description } }
-        : entry;
-    });
+    return visibleUpgradeEntries(this.state, layer, this.catalog(layer));
   }
   visibleResources() {
     return Progression.visibleResourceKeys(this.state);
@@ -677,12 +683,12 @@ export class GameEngine {
     return Progression.machineInsight(this.state);
   }
   availableDirectives() {
-    const offerIds = new Set(this.state.machine.runBuild.directiveOfferIds);
-    return this.directives.filter((d: any) => offerIds.has(d.id));
+    const offerIds = this.state.machine.runBuild.directiveOfferIds;
+    return this.directives.filter((d: any) => offerIds.includes(d.id));
   }
   availableMatrices() {
-    const knownIds = new Set(this.state.meta.progression.knownBreedingMatrices);
-    return this.matrices.filter((d: any) => knownIds.has(d.id));
+    const knownIds = this.state.meta.progression.knownBreedingMatrices;
+    return this.matrices.filter((d: any) => knownIds.includes(d.id));
   }
   selectDirective(id: string) {
     const r = this.state.machine.runBuild;
@@ -1407,7 +1413,7 @@ export class GameEngine {
       reason,
       chaotic,
       details,
-      eraNames: ERA_NAMES.map((_, era) => eraLabel(era)),
+      eraNames: getCachedEraNames(),
       dramaLabels: dramaPhaseLabels(),
       resourceLabels: resourceLabels(),
       discoveredResources: this.visibleResources(),
@@ -1605,10 +1611,11 @@ export class GameEngine {
   }
   consumeUniverse() {
     if (!this.canConsumeUniverse()) return false;
-    const bank = RESOURCE_KEYS.reduce(
-      (s, k) => s + this.state.machine.currencies[k],
-      0,
-    );
+    let bank = 0;
+    const currencies = this.state.machine.currencies;
+    for (const k of RESOURCE_KEYS) {
+      bank += currencies[k];
+    }
     const award = universeResidueAward(
       this.state.machine.cultivationCreditsThisUniverse,
       bank,

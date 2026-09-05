@@ -182,7 +182,6 @@ function buildHarvestViewModel(engine: GameEngine, civ: Civilization | null, con
 // The live "what is happening and why" line. Everything it needs was already computed for the rails
 // above, so building it costs a function call rather than a second pass over the run.
 function buildSituation(
-  engine: GameEngine,
   civ: Civilization | null,
   tactical: ReturnType<typeof buildTacticalViewModel>,
   harvest: ReturnType<typeof buildHarvestViewModel>,
@@ -242,6 +241,84 @@ function buildCivilizationViewModel(engine: GameEngine, civ: Civilization | null
   };
 }
 
+function buildMilestonesViewModel(state: any, convergenceIsUnlocked: boolean) {
+  const milestoneEntries = milestoneProgress(state, convergenceIsUnlocked);
+  return {
+    entries: milestoneEntries,
+    completed: milestoneEntries.filter(entry => entry.completed).length,
+    total: milestoneEntries.length,
+  };
+}
+
+function buildDirectivesViewModel(engine: GameEngine) {
+  return engine.availableDirectives().map((directive: any) => {
+    const objective = objectiveForDirective(directive.id);
+    const localizedObjective = objectiveCopy(directive.id);
+    const copy = directiveCopy(String(directive.id));
+    return {
+      ...directive,
+      name: copy?.name ?? directive.name,
+      description: copy?.description ?? directive.description,
+      objective: objective ? { ...objective, title: localizedObjective?.title ?? objective.title, description: localizedObjective?.description ?? objective.description } : objective,
+    };
+  });
+}
+
+function buildMatricesViewModel(engine: GameEngine) {
+  return engine.availableMatrices().map((matrix: any) => {
+    const copy = matrixCopy(String(matrix.id));
+    return { ...matrix, name: copy?.name ?? matrix.name, description: copy?.description ?? matrix.description };
+  });
+}
+
+function buildSystemsViewModel(engine: GameEngine) {
+  return {
+    directives: engine.systemUnlocked('directives'),
+    breedingMatrices: engine.systemUnlocked('breeding_matrices'),
+    universePrestige: engine.systemUnlocked('universe_prestige'),
+    universeUpgrades: engine.systemUnlocked('universe_upgrades'),
+    multiversePrestige: engine.systemUnlocked('multiverse_prestige'),
+    axioms: engine.systemUnlocked('axioms'),
+  };
+}
+
+function buildDirectiveObjectiveViewModel(
+  civ: Civilization | null,
+  activeObjective: ReturnType<typeof objectiveForDirective> | null,
+  controlledHarvest: ReturnType<GameEngine["previewHarvestDetails"]> | null,
+) {
+  if (!activeObjective) return null;
+  return {
+    id: activeObjective.id,
+    title: objectiveCopy(String(civ?.directiveId ?? ''))?.title ?? activeObjective.title,
+    description: objectiveCopy(String(civ?.directiveId ?? ''))?.description ?? activeObjective.description,
+    completed: Boolean(controlledHarvest?.objectiveCompleted),
+  };
+}
+
+function buildMachineSituationInput(
+  state: any,
+  engine: GameEngine,
+  directiveRequiredNow: boolean,
+  machineUpgradeEntries: any[],
+  openMilestoneTitle: string,
+) {
+  return {
+    hasReport: Boolean(state.machine.lastRunReport),
+    needsDirective: directiveRequiredNow,
+    canStart: !directiveRequiredNow,
+    affordableUpgrades: machineUpgradeEntries.filter((entry: any) =>
+      entry.status !== 'locked' && engine.canPurchaseUpgrade('machine', entry.definition.id)).length,
+    credits: state.machine.cultivationCreditsThisUniverse,
+    creditsRequired: UNIVERSE_CREDIT_REQUIREMENT,
+    canConsumeUniverse: engine.canConsumeUniverse(),
+    canConsumeMultiverse: engine.canConsumeMultiverse(),
+    convergenceUnlocked: engine.convergenceUnlocked(),
+    openMilestone: openMilestoneTitle,
+    runsTotal: state.machine.civilizationsTotal,
+  };
+}
+
 export function buildViewModel(engine: GameEngine) {
   const state = engine.state;
   const civ = state.civilization;
@@ -255,33 +332,20 @@ export function buildViewModel(engine: GameEngine) {
   const directiveRequired = engine.systemUnlocked('directives') && state.machine.runBuild.directiveOfferIds.length > 0;
   const convergenceIsUnlocked = engine.convergenceUnlocked();
   const convergenceTargetDepth = engine.convergenceTargetDepth();
-  const milestoneEntries = milestoneProgress(state, convergenceIsUnlocked);
+  const milestones = buildMilestonesViewModel(state, convergenceIsUnlocked);
   const machineUpgradeEntries = engine.visibleUpgradeEntries('machine');
   const directiveRequiredNow = directiveRequired && !state.machine.runBuild.selectedDirective;
-  const openMilestone = milestoneEntries.find(entry => !entry.completed);
+  const openMilestone = milestones.entries.find(entry => !entry.completed);
   // Built once and shared with the return below: the situation line reads the same two view models
   // the rails render, so neither can drift from the other and neither is computed twice.
   const tactical = buildTacticalViewModel(engine, civ, bonuses);
   const harvest = buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth);
   const situation = buildSituation(
-    engine, civ, tactical, harvest,
+    civ, tactical, harvest,
     event,
     activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null,
     convergenceTargetDepth,
-    {
-      hasReport: Boolean(state.machine.lastRunReport),
-      needsDirective: directiveRequiredNow,
-      canStart: !directiveRequiredNow,
-      affordableUpgrades: machineUpgradeEntries.filter((entry:any) =>
-        entry.status !== 'locked' && engine.canPurchaseUpgrade('machine', entry.definition.id)).length,
-      credits: state.machine.cultivationCreditsThisUniverse,
-      creditsRequired: UNIVERSE_CREDIT_REQUIREMENT,
-      canConsumeUniverse: engine.canConsumeUniverse(),
-      canConsumeMultiverse: engine.canConsumeMultiverse(),
-      convergenceUnlocked: convergenceIsUnlocked,
-      openMilestone: openMilestone?.title ?? '',
-      runsTotal: state.machine.civilizationsTotal,
-    },
+    buildMachineSituationInput(state, engine, directiveRequiredNow, machineUpgradeEntries, openMilestone?.title ?? ''),
   );
 
   return {
@@ -300,31 +364,14 @@ export function buildViewModel(engine: GameEngine) {
     universesThisMultiverse: state.meta.universesThisMultiverse,
     multiverseRequirement: 4,
     previews: engine.nextPreviews(),
-    milestones: {
-      entries: milestoneEntries,
-      completed: milestoneEntries.filter(entry => entry.completed).length,
-      total: milestoneEntries.length,
-    },
+    milestones,
     convergence: buildConvergenceViewModel(engine),
     victory: state.phase === 'victory' ? { record: engine.lastVictory(), convergences: state.meta.convergences } : null,
     runBuild: { ...state.machine.runBuild },
     // Directives, matrices and upgrades all keep their rule fields and take their copy from the
     // catalog on the way into the view, so the panels that print them never look an id up themselves.
-    directives: engine.availableDirectives().map((directive:any)=>{
-      const objective=objectiveForDirective(directive.id);
-      const localizedObjective=objectiveCopy(directive.id);
-      const copy=directiveCopy(String(directive.id));
-      return {
-        ...directive,
-        name: copy?.name ?? directive.name,
-        description: copy?.description ?? directive.description,
-        objective: objective ? { ...objective, title: localizedObjective?.title ?? objective.title, description: localizedObjective?.description ?? objective.description } : objective,
-      };
-    }),
-    matrices: engine.availableMatrices().map((matrix:any)=>{
-      const copy=matrixCopy(String(matrix.id));
-      return { ...matrix, name: copy?.name ?? matrix.name, description: copy?.description ?? matrix.description };
-    }),
+    directives: buildDirectivesViewModel(engine),
+    matrices: buildMatricesViewModel(engine),
     previewTraits: state.machine.runBuild.previewTraitIds.map((id:string)=>({id,name:engine.traitById(id)?.name??id})),
     canStartCivilization: !directiveRequired || Boolean(state.machine.runBuild.selectedDirective),
     startReason: directiveRequired&&!state.machine.runBuild.selectedDirective?text().ui.viewModel.selectDirective:'',
@@ -334,14 +381,7 @@ export function buildViewModel(engine: GameEngine) {
     axiomUpgrades: engine.visibleUpgradeEntries('axiom'),
     canConsumeUniverse: engine.canConsumeUniverse(),
     canConsumeMultiverse: engine.canConsumeMultiverse(),
-    systems: {
-      directives: engine.systemUnlocked('directives'),
-      breedingMatrices: engine.systemUnlocked('breeding_matrices'),
-      universePrestige: engine.systemUnlocked('universe_prestige'),
-      universeUpgrades: engine.systemUnlocked('universe_upgrades'),
-      multiversePrestige: engine.systemUnlocked('multiverse_prestige'),
-      axioms: engine.systemUnlocked('axioms'),
-    },
+    systems: buildSystemsViewModel(engine),
     event: buildEventViewModel(engine, civ, event, probed, predictionsUnlocked),
     // Cloned so no panel can write back into the engine's copy, and re-localized on the way out: the
     // card is a live surface, and it can still be on screen when the player switches language.
@@ -352,12 +392,7 @@ export function buildViewModel(engine: GameEngine) {
     machineReserve: civ ? engine.runInterventions() : [],
     // The offers list localizes each objective it draws; the running one is the same objective read
     // from the civilization instead of the draft, and it needs the same lookup.
-    directiveObjective: activeObjective ? {
-      id: activeObjective.id,
-      title: objectiveCopy(String(civ?.directiveId ?? ''))?.title ?? activeObjective.title,
-      description: objectiveCopy(String(civ?.directiveId ?? ''))?.description ?? activeObjective.description,
-      completed: Boolean(controlledHarvest?.objectiveCompleted),
-    } : null,
+    directiveObjective: buildDirectiveObjectiveViewModel(civ, activeObjective, controlledHarvest),
     lastHarvest: { ...state.machine.lastHarvest },
     // The post-run account, the guided run and the explain layer. All three are presentation state,
     // and all three are read straight from the engine so a reload resumes exactly where it stopped.

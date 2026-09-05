@@ -1453,7 +1453,6 @@ class WorldInput {
  */
 class WorldRenderer {
     constructor(host, onContextRestoredCallback) {
-        this.host = host;
         this.onContextRestoredCallback = onContextRestoredCallback;
         this.width = 0;
         this.height = 0;
