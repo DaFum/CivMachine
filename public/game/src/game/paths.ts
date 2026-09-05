@@ -1,6 +1,6 @@
 import { CONTENT } from '../data/content.generated.js';
 import { pathName, text } from '../data/i18n.js';
-import type { Civilization, PathState } from './types.js';
+import type { Civilization, EventChoice, PathEvent, PathState } from './types.js';
 
 export const PATH_IDS = [
   'machine_faith','collective_mind','temporal_dominion','reality_engineering','biological_transcendence',
@@ -99,8 +99,8 @@ export class CivilizationPaths {
       return { id, name: this.displayName(id), label };
     });
   }
-  static mergedChoiceEffects(civ: Civilization, choice: any): Record<string, any> {
-    const merged = { ...(choice.effects ?? {}) };
+  static mergedChoiceEffects(civ: Civilization, choice: EventChoice): Record<string, unknown> {
+    const merged: Record<string, unknown> = { ...(choice.effects ?? {}) };
     const secondary = choice.secondary_effects ?? {};
     for (const id of this.secondaryPaths(civ,3)) {
       if (!secondary[id]) continue;
@@ -109,7 +109,7 @@ export class CivilizationPaths {
     }
     return merged;
   }
-  static applyChoice(civ: Civilization, event: any, choice: any): {newDominantPath:string;history:string;endgameState:string} {
+  static applyChoice(civ: Civilization, event: PathEvent, choice: EventChoice): {newDominantPath:string;history:string;endgameState:string} {
     const ps = this.ensure(civ); const deltas = choice.path_affinity ?? {}; const recent: Record<string,number> = {};
     for (const [id, raw] of Object.entries(deltas)) if (PATH_IDS_SET.has(id as any)) { const d=Number(raw); ps.affinity[id] = (ps.affinity[id] ?? 0)+d; recent[id]=d; }
     ps.recentDeltas = recent;
@@ -127,7 +127,7 @@ export class CivilizationPaths {
     }
     return { newDominantPath, history: String(choice.path_history ?? ''), endgameState };
   }
-  static eventIsEligible(event: any, civ: Civilization): boolean {
+  static eventIsEligible(event: PathEvent, civ: Civilization): boolean {
     const id = String(event.path_id ?? ''); if (!id || !PATH_IDS_SET.has(id as any)) return true;
     const req = event.requirements ?? {}; const ps = this.ensure(civ);
     if (req.min_path_affinity != null && this.affinity(civ,id) < Number(req.min_path_affinity)) return false;
@@ -142,7 +142,7 @@ export class CivilizationPaths {
     if (req.excludes_path_flag != null && flagSet.has(String(req.excludes_path_flag))) return false;
     return true;
   }
-  static eventWeightMultiplier(event: any, civ: Civilization): number {
+  static eventWeightMultiplier(event: PathEvent, civ: Civilization): number {
     const id = String(event.path_id ?? ''); if (!id || !PATH_IDS_SET.has(id as any)) return 1;
     const ps=this.ensure(civ); const recent=ps.recentPaths;
     if (recent.length>=4 && recent.slice(-4).every(x=>x===id)) return 0;
@@ -151,7 +151,7 @@ export class CivilizationPaths {
     if (!ps.dominantPath) return 1 + Math.min(2, Math.max(0,this.affinity(civ,id))*0.45);
     return 0.65;
   }
-  static recordSelectedEvent(civ:Civilization,event:any):void { const ps=this.ensure(civ); const id=String(event.path_id??''); ps.recentPaths.push(PATH_IDS_SET.has(id as any)?id:'neutral'); while(ps.recentPaths.length>6) ps.recentPaths.shift(); }
+  static recordSelectedEvent(civ:Civilization,event:PathEvent):void { const ps=this.ensure(civ); const id=String(event.path_id??''); ps.recentPaths.push(PATH_IDS_SET.has(id as any)?id:'neutral'); while(ps.recentPaths.length>6) ps.recentPaths.shift(); }
   static dominanceEffects(id:string):Record<string,any>{ return structuredClone(DEFINITIONS[id]?.dominance_effects ?? {}); }
   static simulationModifier(civ:Civilization,key:string):number { const id=this.ensure(civ).dominantPath; return id ? Number(DEFINITIONS[id]?.simulation?.[key] ?? 1) : 1; }
   static summary(civ:Civilization){ const ps=this.ensure(civ); return { dominantId:ps.dominantPath, dominantName: ps.dominantPath?this.displayName(ps.dominantPath):'', tendencies:this.qualitativeTendencies(civ), endgameState:ps.endgameState, endgameStates:[...ps.endgameStates], successions:ps.successions }; }

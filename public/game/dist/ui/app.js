@@ -249,6 +249,10 @@ function renderCivilization(worldHud, worldStatusDock, civPanels, worldShell, vm
     if (worldStatusDock) {
         replaceIfChanged(worldStatusDock, `<div class="world-status-strip${focusClass(vm, '.world-status-strip')}"><div class="status-group"><span title="${esc(abbreviationTitle('ERA'))}">ERA <b data-live="world-era">${esc(eraLabel(c.era))}</b></span><span title="${esc(abbreviationTitle('DEV'))}">DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('STB'))}">STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('SAN'))}">SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span></div><div class="status-group"><span title="${esc(abbreviationTitle('AWR'))}">AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ATT'))}">ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ENT'))}">ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="status-group cascade-group urgency-${esc(vm.harvest.urgency.state)}"><span>CASCADE <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div></div>`);
     }
+    panelElementCache.delete(civPanels);
+    if (worldStatusDock)
+        worldElementCache.delete(worldStatusDock);
+    worldElementCache.delete(worldHud);
     const eventCard = event ? `<section class="panel intervention situation-card situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm, '.intervention')}" role="status" aria-live="polite"><div class="panel-kicker">${esc(t.situationHeading)} // ${esc(event.probed ? t.currentInterventionProbed : t.currentIntervention)}</div><h2>${esc(event.title)}</h2><details data-disclosure="situation-details"${disclosureAttr('situation-details')}><summary>${esc(t.situationDetailsSummary)}</summary><p class="event-body">${esc(event.body)}</p><div class="situation-cause-advice"><p class="situation-cause"><span>${esc(t.why)}</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>${esc(t.do)}</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p></div>${explainNote('intervention', vm.explain)}</details>${event.predictionLocked ? `<div class="prediction-lock">${esc(t.predictionCoreOffline)}</div>` : ''}<div class="choice-list">${event.choices.map((ch) => `<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction ? `<span>${esc(ch.prediction)}</span>` : ''}</button>`).join('')}</div>${engine.upgradeLevel('axiom', 'axiom_multiple_choice') > 0 ? `<button class="ghost" data-action="reroll">${esc(t.rerollWithParadox)}</button>` : ''}</section>` : `<section class="panel intervention quiet${focusClass(vm, '.intervention')}"><div class="panel-kicker">${esc(t.currentIntervention)}</div><h2>${esc(t.monitoringCivilization)}</h2>${explainNote('intervention', vm.explain)}<p data-live="event-timer">${esc(fill(t.nextInterventionWindow, { seconds: Math.max(0, c.eventTimer).toFixed(1) }))}</p></section>`;
     const tendencies = path.tendencies.length ? path.tendencies.map((entry) => `<li><b>${esc(entry.name)}</b><span>${esc(entry.label)}</span></li>`).join('') : `<li><span>${esc(t.noCoherentTendency)}</span></li>`;
     const objectiveCard = vm.directiveObjective ? `<details class="panel directive-objective" data-disclosure="directive-objective"${disclosureAttr('directive-objective')}><summary>${esc(t.directiveObjectiveTitle)} <small>${esc(vm.directiveObjective.completed ? t.directiveObjectiveComplete : t.directiveObjectiveActive)}</small></summary>${explainNote('objective', vm.explain)}<div class="objective-progress ${vm.directiveObjective.completed ? 'complete' : ''}"><span>${esc(vm.directiveObjective.completed ? t.directiveObjectiveComplete : t.directiveObjectiveActive)}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>${esc(t.objectiveBonus)}</small></div></details>` : '';
@@ -276,13 +280,44 @@ function renderCivilization(worldHud, worldStatusDock, civPanels, worldShell, vm
         stateCtx.impactTimer = window.setTimeout(() => worldShell.classList.remove('decision-impact', 'tone-positive', 'tone-negative', 'tone-mixed'), 1800);
     }
 }
+const panelElementCache = new WeakMap();
+const worldElementCache = new WeakMap();
+function getPanelCachedElement(parent, selector) {
+    let cache = panelElementCache.get(parent);
+    if (!cache) {
+        cache = new Map();
+        panelElementCache.set(parent, cache);
+    }
+    const cached = cache.get(selector);
+    if (cached !== undefined && (!cached || parent.contains(cached)))
+        return cached;
+    const el = parent.querySelector(selector);
+    cache.set(selector, el);
+    return el;
+}
+function getWorldCachedElement(worldStatusDock, worldHud, selector) {
+    const root = worldStatusDock ?? worldHud;
+    let cache = worldElementCache.get(root);
+    if (!cache) {
+        cache = new Map();
+        worldElementCache.set(root, cache);
+    }
+    const cached = cache.get(selector);
+    if (cached !== undefined && (!cached || root.contains(cached)))
+        return cached;
+    const el = (worldStatusDock ? worldStatusDock.querySelector(selector) : null) ?? worldHud.querySelector(selector);
+    cache.set(selector, el);
+    return el;
+}
 function refreshCivilizationLive(civPanels, worldHud, worldStatusDock, vm, engine) {
     const c = vm.civilization;
     if (!c)
         return;
-    const setText = (selector, value) => { const element = civPanels.querySelector(selector); if (element)
+    const getPanelEl = (selector) => getPanelCachedElement(civPanels, selector);
+    const getWorldEl = (selector) => getWorldCachedElement(worldStatusDock, worldHud, selector);
+    const setText = (selector, value) => { const element = getPanelEl(selector); if (element)
         element.textContent = value; };
-    const setWorldText = (selector, value) => { const element = (worldStatusDock ? worldStatusDock.querySelector(selector) : null) ?? worldHud.querySelector(selector); if (element)
+    const setWorldText = (selector, value) => { const element = getWorldEl(selector); if (element)
         element.textContent = value; };
     setText('[data-live="event-timer"]', fill(text().ui.app.nextInterventionWindow, { seconds: Math.max(0, c.eventTimer).toFixed(1) }));
     setText('[data-live="era"]', eraLabel(c.era));
@@ -301,7 +336,7 @@ function refreshCivilizationLive(civPanels, worldHud, worldStatusDock, vm, engin
     for (const entry of vm.machineReserve) {
         setText(`[data-reserve-cost="${entry.id}"]`, reserveCostText(entry));
         setText(`[data-reserve-reason="${entry.id}"]`, entry.reason);
-        const button = civPanels.querySelector(`[data-action="reserve"][data-id="${entry.id}"]`);
+        const button = getPanelEl(`[data-action="reserve"][data-id="${entry.id}"]`);
         if (button)
             button.disabled = !entry.enabled;
     }
@@ -326,30 +361,31 @@ function refreshCivilizationLive(civPanels, worldHud, worldStatusDock, vm, engin
     setText('[data-live="overview-summary"]', `STB ${c.stats.stability.toFixed(0)} · SAN ${c.stats.sanity.toFixed(0)}`);
     setText('[data-live="harvest-grade-inline"]', gradeText(vm.harvest.controlled.grade));
     setText('[data-live="depth-inline"]', vm.harvest.depth.toFixed(1));
-    const entropyMeter = civPanels.querySelector('[data-live="entropy-meter"]');
+    const entropyMeter = getPanelEl('[data-live="entropy-meter"]');
     if (entropyMeter)
         entropyMeter.style.width = pct(vm.tactical.entropy);
-    const harvestMeter = civPanels.querySelector('[data-live="harvest-meter"]');
+    const harvestMeter = getPanelEl('[data-live="harvest-meter"]');
     if (harvestMeter)
         harvestMeter.style.width = pct(vm.harvest.bandProgress);
     civPanels.querySelectorAll('[data-live="harvest-call"]').forEach(el => { el.textContent = urgencyText(vm.harvest); });
     setText('[data-live="situation-headline"]', vm.situation.headline);
     setText('[data-live="situation-cause"]', vm.situation.cause);
     setText('[data-live="situation-advice"]', vm.situation.advice);
-    const banner = civPanels.querySelector('.situation-banner');
+    const banner = getPanelEl('.situation-banner');
     if (banner)
         for (const severity of ['calm', 'watch', 'urgent', 'critical'])
             banner.classList.toggle(`severity-${severity}`, vm.situation.severity === severity);
-    const readout = civPanels.querySelector('.harvest-readout');
+    const readout = getPanelEl('.harvest-readout');
     if (readout)
         for (const state of ['building', 'closing', 'harvest', 'cascading'])
             readout.classList.toggle(`urgency-${state}`, vm.harvest.urgency.state === state);
-    civPanels.querySelectorAll('.control-pips i').forEach((pip, index) => pip.classList.toggle('active', index < vm.tactical.controlCapacity));
+    const pips = civPanels.querySelectorAll('.control-pips i');
+    pips.forEach((pip, index) => pip.classList.toggle('active', index < vm.tactical.controlCapacity));
     for (const action of vm.tactical.actions) {
-        const button = civPanels.querySelector(`[data-action="tactical"][data-id="${action.id}"]`);
+        const button = getPanelEl(`[data-action="tactical"][data-id="${action.id}"]`);
         if (button)
             button.disabled = !action.enabled;
-        const reason = civPanels.querySelector(`[data-tactical-reason="${action.id}"]`);
+        const reason = getPanelEl(`[data-tactical-reason="${action.id}"]`);
         if (reason)
             reason.textContent = action.reason;
     }
@@ -360,7 +396,7 @@ function refreshCivilizationLive(civPanels, worldHud, worldStatusDock, vm, engin
         ['attention', c.stats.attention, 100],
     ];
     liveStats.forEach(([kind, value, max]) => {
-        const row = civPanels.querySelector(`[data-stat="${kind}"]`);
+        const row = getPanelEl(`[data-stat="${kind}"]`);
         const label = row?.querySelector('b');
         const meter = row?.querySelector('i');
         if (label)

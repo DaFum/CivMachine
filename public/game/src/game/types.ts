@@ -294,6 +294,110 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
+export interface Trait {
+  id: string;
+  name: string;
+  description?: string;
+  effects?: Record<string, unknown>;
+  impossible?: boolean;
+  [key: string]: unknown;
+}
+
+export interface UpgradeDefinition {
+  id: string;
+  name: string;
+  base_cost: number;
+  growth: number;
+  max_level: number;
+  currency: string;
+  cost_ladder?: readonly number[];
+  description?: string;
+  effects?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface DirectiveDefinition {
+  id: string;
+  name: string;
+  effects?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface BreedingMatrixDefinition {
+  id: string;
+  name: string;
+  effects?: {
+    trait_bias?: string[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface MutationDefinition {
+  id: string;
+  name: string;
+  effects?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface HarvestDetails {
+  grade: HarvestGrade;
+  multiplier: number;
+  credits: number;
+  depth: number;
+  rewardMultiplier: number;
+  objectiveCompleted: boolean;
+  rewards: Record<ResourceKey, number>;
+}
+
+export interface EventChoice {
+  label: string;
+  prediction?: string;
+  effects?: Record<string, unknown>;
+  secondary_effects?: Record<string, unknown>;
+  path_affinity?: Record<string, number>;
+  path_flag_add?: string;
+  path_history?: string;
+  follow_up?: string;
+  index?: number;
+  [key: string]: unknown;
+}
+
+export interface PathEvent {
+  id: string;
+  title: string;
+  body: string;
+  min_era?: number;
+  max_era?: number;
+  path_id?: string;
+  path_phase?: string;
+  requirements?: {
+    scheduled_only?: boolean;
+    min_attention?: number;
+    max_attention?: number;
+    min_awareness?: number;
+    max_awareness?: number;
+    min_sanity?: number;
+    max_sanity?: number;
+    max_stability?: number;
+    requires_trait?: string;
+    requires_flag?: string;
+    required_institution?: string;
+    excluded_flag?: string;
+    min_development?: number;
+    min_path_affinity?: number;
+    requires_dominant_path?: string;
+    requires_secondary_path?: string;
+    completed_any?: string[];
+    completed_all?: string[];
+    requires_path_flag?: string;
+    excludes_path_flag?: string;
+    [key: string]: unknown;
+  };
+  choices?: EventChoice[];
+  [key: string]: unknown;
+}
+
 // --- Onboarding, guidance and run reporting -------------------------------------------------
 // Everything below is presentation state: it exists so the player can see what happened, where it
 // happened and why. No progression, pressure, harvest or scheduler rule may read any of it.

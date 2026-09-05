@@ -9,6 +9,32 @@ export const ERA_YEAR_THRESHOLDS = [0, 2500, 6500, 14000] as const;
 // import time would keep the language the page booted in. `engine.eraLabel` reads the copy.
 export const ERA_IDS = ['emergence', 'expansion', 'transcendence', 'apotheosis'] as const;
 
+export function mixSeed(value: number): number {
+  let mixed = value >>> 0 || 0x52434531;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x7feb352d);
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x846ca68b);
+  return (mixed ^ (mixed >>> 16)) >>> 0 || 0x6d2b79f5;
+}
+
+export class SeededRng {
+  state: number;
+  constructor(seed: number) {
+    this.state = seed >>> 0 || 0x6d2b79f5;
+  }
+  next() {
+    let t = (this.state += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  range(min: number, max: number) {
+    return min + (max - min) * this.next();
+  }
+  int(min: number, max: number) {
+    return Math.floor(this.range(min, max + 1));
+  }
+}
+
 export function eraForYears(years: number): number {
   const safe = Math.max(0, Number(years) || 0);
   for (let era = ERA_YEAR_THRESHOLDS.length - 1; era > 0; era--) if (safe >= ERA_YEAR_THRESHOLDS[era]!) return era;

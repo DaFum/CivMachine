@@ -16,7 +16,7 @@ export function applyEffects(
 ) {
   if (!effects || typeof effects !== "object") return;
   const b = bonuses;
-  for (const key in effects) {
+  for (const key of Object.keys(effects)) {
     let value = effects[key] as any;
     if (key === "stability" || key === "awareness" || key === "sanity" || key === "attention") {
       let amount = Number(value);

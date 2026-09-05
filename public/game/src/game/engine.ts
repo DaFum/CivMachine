@@ -46,10 +46,12 @@ import {
   ERA_YEAR_THRESHOLDS,
   RESOURCE_KEYS,
   SAVE_VERSION,
+  SeededRng,
   calculateHarvest,
   createCivilizationTemplate,
   createNewState,
   eraForYears,
+  mixSeed,
   multiverseAxiomAward,
   universeResidueAward,
   upgradeCost,
@@ -132,17 +134,26 @@ import {
 } from "./upgrade-balance.js";
 import type { SaveMigrationReport } from "./save-migration.js";
 import type {
+  BreedingMatrixDefinition,
   Civilization,
   DecisionFeedback,
+  DirectiveDefinition,
+  EventChoice,
   GameState,
+  HarvestDetails,
+  HarvestGrade,
   Layer,
+  MutationDefinition,
+  PathEvent,
   ResourceKey,
   RunEndReason,
   RunReport,
   RuntimeBonuses,
   StorageLike,
   TacticalActionId,
+  Trait,
   TutorialFact,
+  UpgradeDefinition,
   VictoryRecord,
 } from "./types.js";
 
@@ -196,33 +207,19 @@ const LOCALE_KEY = "reality_consumption_engine_locale";
 // A save that had to be migrated, repaired or refused is copied here verbatim before anything
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
-const C: any = CONTENT;
 
-function mixSeed(value: number): number {
-  let mixed = value >>> 0 || 0x52434531;
-  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x7feb352d);
-  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x846ca68b);
-  return (mixed ^ (mixed >>> 16)) >>> 0 || 0x6d2b79f5;
+interface GameContent {
+  traits: Trait[];
+  events: PathEvent[];
+  machine_upgrades: UpgradeDefinition[];
+  universe_upgrades: UpgradeDefinition[];
+  axiom_upgrades: UpgradeDefinition[];
+  directives: DirectiveDefinition[];
+  breeding_matrices: BreedingMatrixDefinition[];
+  mutations: MutationDefinition[];
+  [key: string]: unknown;
 }
-
-class SeededRng {
-  state: number;
-  constructor(seed: number) {
-    this.state = seed >>> 0 || 0x6d2b79f5;
-  }
-  next() {
-    let t = (this.state += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-  range(min: number, max: number) {
-    return min + (max - min) * this.next();
-  }
-  int(min: number, max: number) {
-    return Math.floor(this.range(min, max + 1));
-  }
-}
+const C = CONTENT as unknown as GameContent;
 
 export interface EngineOptions {
   storage?: StorageLike;
@@ -255,33 +252,39 @@ export class GameEngine {
   private listeners = new Set<() => void>();
   private tickEmitAccumulator = 0;
   private feedbackSequence = 0;
-  private traits: any[] = C.traits;
-  private events: any[] = [
-    ...applyEraCeiling(applyInterventionCopy(C.events)),
-    ...ENTROPY_CRISES,
-    ...APOTHEOSIS_EVENTS,
-    ...EXPANDED_INTERVENTIONS,
-    ...EXPANDED_PATH_INTERVENTIONS,
-    ...EXPANDED_DOMINANT_INTERVENTIONS,
-    ...EVENT_CHAINS,
+  private traits: Trait[] = C.traits;
+  private events: PathEvent[] = [
+    ...(applyEraCeiling(applyInterventionCopy(C.events as any)) as PathEvent[]),
+    ...(ENTROPY_CRISES as unknown as PathEvent[]),
+    ...(APOTHEOSIS_EVENTS as unknown as PathEvent[]),
+    ...(EXPANDED_INTERVENTIONS as unknown as PathEvent[]),
+    ...(EXPANDED_PATH_INTERVENTIONS as unknown as PathEvent[]),
+    ...(EXPANDED_DOMINANT_INTERVENTIONS as unknown as PathEvent[]),
+    ...(EVENT_CHAINS as unknown as PathEvent[]),
   ];
-  private machineUpgrades: any[] = balancedMachineUpgrades(C.machine_upgrades);
-  private universeUpgrades: any[] = balancedUniverseUpgrades(
-    C.universe_upgrades,
-  );
-  private axiomUpgrades: any[] = balancedAxiomUpgrades(C.axiom_upgrades);
-  private directives: any[] = balancedDirectives(C.directives);
-  private matrices: any[] = C.breeding_matrices;
-  private mutations: any[] = C.mutations;
-  private traitsMap: Map<string, any>;
-  private mutationsMap: Map<string, any>;
-  private directivesMap: Map<string, any>;
-  private matricesMap: Map<string, any>;
-  private eventsMap: Map<string, any>;
-  private machineUpgradesMap: Map<string, any>;
-  private universeUpgradesMap: Map<string, any>;
-  private axiomUpgradesMap: Map<string, any>;
-  private eventsByEra: Map<number, any[]> = new Map();
+  private machineUpgrades: UpgradeDefinition[] = balancedMachineUpgrades(
+    C.machine_upgrades as any[],
+  ) as UpgradeDefinition[];
+  private universeUpgrades: UpgradeDefinition[] = balancedUniverseUpgrades(
+    C.universe_upgrades as any[],
+  ) as UpgradeDefinition[];
+  private axiomUpgrades: UpgradeDefinition[] = balancedAxiomUpgrades(
+    C.axiom_upgrades as any[],
+  ) as UpgradeDefinition[];
+  private directives: DirectiveDefinition[] = balancedDirectives(
+    C.directives as any[],
+  ) as DirectiveDefinition[];
+  private matrices: BreedingMatrixDefinition[] = C.breeding_matrices;
+  private mutations: MutationDefinition[] = C.mutations;
+  private traitsMap: Map<string, Trait>;
+  private mutationsMap: Map<string, MutationDefinition>;
+  private directivesMap: Map<string, DirectiveDefinition>;
+  private matricesMap: Map<string, BreedingMatrixDefinition>;
+  private eventsMap: Map<string, PathEvent>;
+  private machineUpgradesMap: Map<string, UpgradeDefinition>;
+  private universeUpgradesMap: Map<string, UpgradeDefinition>;
+  private axiomUpgradesMap: Map<string, UpgradeDefinition>;
+  private eventsByEra: Map<number, PathEvent[]> = new Map();
   constructor(options: EngineOptions = {}) {
     this.traitsMap = new Map(this.traits.map((t) => [t.id, t]));
     this.mutationsMap = new Map(this.mutations.map((m) => [m.id, m]));
@@ -547,14 +550,14 @@ export class GameEngine {
     const event = this.eventsMap.get(id) ?? null;
     return event ? this.localizeEvent(event) : null;
   }
-  private localizeEvent(event: any) {
+  private localizeEvent(event: PathEvent): PathEvent {
     const copy: LocalizedEvent | undefined = eventCopy(String(event.id));
     if (!copy) return event;
     return {
       ...event,
       title: copy.title,
       body: copy.body,
-      choices: (event.choices ?? []).map((choice: any, index: number) => {
+      choices: (event.choices ?? []).map((choice: EventChoice, index: number) => {
         const localized = copy.choices[index];
         if (!localized) return choice;
         return {
@@ -577,7 +580,8 @@ export class GameEngine {
   private traitName(id: string) {
     return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
   }
-  private upgradeName(definition: any) {
+  private upgradeName(definition: UpgradeDefinition | { id: string; name: string } | null) {
+    if (!definition) return "";
     return upgradeCopy(String(definition.id))?.name ?? definition.name;
   }
   private objectiveTitle(directiveId: string) {
@@ -647,6 +651,7 @@ export class GameEngine {
   purchaseUpgrade(layer: Layer, id: string) {
     if (!this.canPurchaseUpgrade(layer, id)) return false;
     const d = this.upgradeById(layer, id);
+    if (!d) return false;
     const cost = this.upgradeCost(layer, id);
     this.spendCurrency(String(d.currency), cost);
     this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
@@ -682,13 +687,13 @@ export class GameEngine {
   machineInsight() {
     return Progression.machineInsight(this.state);
   }
-  availableDirectives() {
+  availableDirectives(): DirectiveDefinition[] {
     const offerIds = this.state.machine.runBuild.directiveOfferIds;
-    return this.directives.filter((d: any) => offerIds.includes(d.id));
+    return this.directives.filter((d) => offerIds.includes(d.id));
   }
-  availableMatrices() {
+  availableMatrices(): BreedingMatrixDefinition[] {
     const knownIds = this.state.meta.progression.knownBreedingMatrices;
-    return this.matrices.filter((d: any) => knownIds.includes(d.id));
+    return this.matrices.filter((d) => knownIds.includes(d.id));
   }
   selectDirective(id: string) {
     const r = this.state.machine.runBuild;
@@ -1004,7 +1009,7 @@ export class GameEngine {
       this.emit();
     }
   }
-  previewEventChoiceEffects(choice: any) {
+  previewEventChoiceEffects(choice: EventChoice) {
     const civ = this.state.civilization;
     if (!civ) return {};
     const effects = structuredClone(
@@ -1396,7 +1401,7 @@ export class GameEngine {
   }
   private recordRunStatistics(
     civ: Civilization,
-    details: { depth: number; grade: string; objectiveCompleted: boolean },
+    details: { depth: number; grade: HarvestGrade | string; objectiveCompleted: boolean },
   ) {
     const p = this.state.meta.progression;
     p.maxDevelopment = Math.max(p.maxDevelopment, civ.development);
@@ -1541,7 +1546,7 @@ export class GameEngine {
     this.emit();
     return rewards;
   }
-  private finishTerminalRun(civ: Civilization, chaotic: boolean, details: any) {
+  private finishTerminalRun(civ: Civilization, chaotic: boolean, details: HarvestDetails) {
     const zero = { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 };
     this.recordRunStatistics(civ, details);
     this.state.machine.civilizationsTotal++;
@@ -1672,7 +1677,7 @@ export class GameEngine {
     return true;
   }
   convergenceInput(): ConvergenceInput {
-    const axioms = this.catalog("axiom").map((definition: any) => ({
+    const axioms = this.catalog("axiom").map((definition) => ({
       id: String(definition.id),
       level: this.upgradeLevel("axiom", String(definition.id)),
       maxLevel: Number(definition.max_level),
@@ -1932,7 +1937,7 @@ export class GameEngine {
     }
     return selected;
   }
-  private eventEligible(e: any, civ: Civilization) {
+  private eventEligible(e: PathEvent, civ: Civilization) {
     const r = e.requirements ?? {};
     if (r.scheduled_only) return false;
     if (!CivilizationPaths.eventIsEligible(e, civ)) return false;

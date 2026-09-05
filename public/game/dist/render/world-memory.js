@@ -15,13 +15,43 @@ export function worldMemorySignature(value) {
 // nearest settlement centre rather than landing wherever the hash pointed.
 function anchorX(anchor01, worldWidth, settlements) {
     const target = Math.max(0, Math.min(worldWidth, anchor01 * worldWidth));
-    if (!settlements.length)
+    const len = settlements.length;
+    if (!len)
         return target;
-    // One scan rather than a copy and a sort: this runs per mark and per scar, and the scar halos run
-    // on the dynamic layer. A strict `<` keeps the first settlement in layout order when two tie,
-    // which is what the stable sort it replaces did.
+    if (len === 1)
+        return settlements[0].centerX;
+    let sorted = true;
+    for (let i = 1; i < len; i++) {
+        if (settlements[i].centerX < settlements[i - 1].centerX) {
+            sorted = false;
+            break;
+        }
+    }
+    if (sorted) {
+        let low = 0, high = len - 1;
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            if (settlements[mid].centerX < target)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+        let best = settlements[0];
+        let bestDist = Number.POSITIVE_INFINITY;
+        if (high >= 0) {
+            best = settlements[high];
+            bestDist = Math.abs(best.centerX - target);
+        }
+        if (low < len) {
+            const candidate = settlements[low];
+            const dist = Math.abs(candidate.centerX - target);
+            if (dist < bestDist)
+                best = candidate;
+        }
+        return best.centerX;
+    }
     let best = settlements[0], bestDistance = Math.abs(best.centerX - target);
-    for (let i = 1; i < settlements.length; i++) {
+    for (let i = 1; i < len; i++) {
         const settlement = settlements[i], distance = Math.abs(settlement.centerX - target);
         if (distance < bestDistance) {
             best = settlement;
