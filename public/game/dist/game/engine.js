@@ -884,7 +884,7 @@ export class GameEngine {
                 rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
             };
         const bonuses = this.runtimeBonuses();
-        const quality = evaluateHarvestQuality(civ, chaotic);
+        const quality = evaluateHarvestQuality(civ);
         const objectiveCompleted = quality.grade !== "premature" && evaluateDirectiveObjective(civ);
         const applied = applyHarvestQuality(calculateHarvest(civ, chaotic, bonuses), quality, {
             collapsed: chaotic,

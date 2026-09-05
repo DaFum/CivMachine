@@ -287,7 +287,7 @@ test('campaign: every Harvest Grade boundary pays a Cultivation Credit', () => {
     civ.eventChoices = 5;
     civ.era = 2;
     civ.development = band.minDepth * 80;
-    const quality = evaluateHarvestQuality(civ, false);
+    const quality = evaluateHarvestQuality(civ);
     assert.equal(quality.credits, band.credits);
   }
   assert.equal(DEPTH_BANDS[DEPTH_BANDS.length - 1].credits, DEPTH_CREDIT_CAP, 'SINGULAR is the credit cap');
