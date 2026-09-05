@@ -1182,8 +1182,9 @@ function cosmeticAgents<T>(agents: ReadonlyArray<T>, fraction: number): Readonly
 // never fewer fractures, beacons, landmarks, scars or construction cues.
 function drawInhabitants(surface: DrawSurface, scene: WorldScene, snapshot: ReturnType<typeof worldSnapshot>, presentation: ReturnType<typeof worldPresentation>, ground: number, animationTime: number, view: WorldBand, agentFraction: number, reducedMotion: boolean): void {
   const { settlements, plan, species } = scene;
-  const maxPedestrians = Math.ceil(plan.pedestrians.length * Math.max(0, agentFraction));
-  for (let i = 0; i < maxPedestrians && i < plan.pedestrians.length; i++) {
+  const totalPedestrians = plan.pedestrians.length;
+  const maxPedestrians = Math.min(totalPedestrians, Math.ceil(totalPedestrians * Math.max(0, agentFraction)));
+  for (let i = 0; i < maxPedestrians; i++) {
     const pedestrian = plan.pedestrians[i]!;
     const settlement = settlements[pedestrian.settlementIndex];
     if (!settlement) continue;
@@ -1204,8 +1205,9 @@ function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnTy
   const worldWidth = snapshot.worldWidth;
 
   // Road traffic.
-  const maxVehicles = Math.ceil(plan.vehicles.length * Math.max(0, agentFraction));
-  for (let i = 0; i < maxVehicles && i < plan.vehicles.length; i++) {
+  const totalVehicles = plan.vehicles.length;
+  const maxVehicles = Math.min(totalVehicles, Math.ceil(totalVehicles * Math.max(0, agentFraction)));
+  for (let i = 0; i < maxVehicles; i++) {
     const vehicle = plan.vehicles[i]!;
     const travel = reducedMotion ? vehicle.phase : (vehicle.phase + animationTime * .00002 * vehicle.speed) % 1;
     const x = vehicle.fromX + (vehicle.toX - vehicle.fromX) * travel;
@@ -1222,8 +1224,9 @@ function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnTy
   }
 
   // Air corridors.
-  const maxAircraft = Math.ceil(plan.aircraft.length * Math.max(0, agentFraction));
-  for (let i = 0; i < maxAircraft && i < plan.aircraft.length; i++) {
+  const totalAircraft = plan.aircraft.length;
+  const maxAircraft = Math.min(totalAircraft, Math.ceil(totalAircraft * Math.max(0, agentFraction)));
+  for (let i = 0; i < maxAircraft; i++) {
     const aircraft = plan.aircraft[i]!;
     const travel = reducedMotion ? aircraft.phase : (aircraft.phase + animationTime * .00032 * aircraft.speed) % 1;
     const x = aircraft.fromX + (aircraft.toX - aircraft.fromX) * travel;
@@ -1233,8 +1236,9 @@ function drawTraffic(surface: DrawSurface, scene: WorldScene, snapshot: ReturnTy
     surface.fillStyle(0xffffff, .82).fillCircle(x, y, 1.5);
   }
 
-  const maxOrbital = Math.ceil(plan.orbital.length * Math.max(0, agentFraction));
-  for (let i = 0; i < maxOrbital && i < plan.orbital.length; i++) {
+  const totalOrbital = plan.orbital.length;
+  const maxOrbital = Math.min(totalOrbital, Math.ceil(totalOrbital * Math.max(0, agentFraction)));
+  for (let i = 0; i < maxOrbital; i++) {
     const orbital = plan.orbital[i]!;
     const x = ((orbital.phase + animationTime * .000003 * (1 + orbital.speed)) % 1) * worldWidth;
     if (x < view.from - 24 || x > view.to) continue;

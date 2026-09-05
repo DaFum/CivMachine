@@ -143,7 +143,7 @@ export class CachedCanvasSurface {
         }
         this.context.beginPath();
         this.context.moveTo(points[0][0], points[0][1]);
-        for (let i = 1; i < points.length; i++)
+        for (let i = 1, len = points.length; i < len; i++)
             this.context.lineTo(points[i][0], points[i][1]);
         this.context.closePath();
         this.context.fill();
@@ -211,7 +211,7 @@ export class CachedCanvasSurface {
             return this;
         this.context.beginPath();
         this.context.moveTo(points[0][0], points[0][1]);
-        for (let i = 1; i < points.length; i++)
+        for (let i = 1, len = points.length; i < len; i++)
             this.context.lineTo(points[i][0], points[i][1]);
         this.context.stroke();
         return this;

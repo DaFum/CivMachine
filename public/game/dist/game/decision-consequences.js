@@ -10,7 +10,8 @@ function transitions(before, after) {
         result.era = { from: before.era, to: after.era };
     if (before.dominantPath !== after.dominantPath)
         result.dominantPath = { from: before.dominantPath, to: after.dominantPath };
-    const addedEndgame = after.endgameStates.find(id => !before.endgameStates.includes(id));
+    const beforeEndgames = new Set(before.endgameStates);
+    const addedEndgame = after.endgameStates.find(id => !beforeEndgames.has(id));
     if (addedEndgame)
         result.endgameStateAdded = addedEndgame;
     if (before.entropyBand !== after.entropyBand)
