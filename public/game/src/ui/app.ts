@@ -220,6 +220,9 @@ function renderCivilization(worldHud:HTMLElement,worldStatusDock:HTMLElement,civ
   if(worldStatusDock){
     replaceIfChanged(worldStatusDock,`<div class="world-status-strip${focusClass(vm,'.world-status-strip')}"><div class="status-group"><span title="${esc(abbreviationTitle('ERA'))}">ERA <b data-live="world-era">${esc(eraLabel(c.era))}</b></span><span title="${esc(abbreviationTitle('DEV'))}">DEV <b data-live="world-development">${c.development.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('STB'))}">STB <b data-live="world-stability">${c.stats.stability.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('SAN'))}">SAN <b data-live="world-sanity">${c.stats.sanity.toFixed(0)}</b></span></div><div class="status-group"><span title="${esc(abbreviationTitle('AWR'))}">AWR <b data-live="world-awareness">${c.stats.awareness.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ATT'))}">ATT <b data-live="world-attention">${c.stats.attention.toFixed(0)}</b></span><span title="${esc(abbreviationTitle('ENT'))}">ENT <b data-live="world-entropy">${vm.tactical.entropy.toFixed(0)}</b></span></div><div class="status-group cascade-group urgency-${esc(vm.harvest.urgency.state)}"><span>CASCADE <b data-live="strip-cascade">${vm.tactical.secondsToCascade.toFixed(0)}s</b></span><span class="strip-call" data-live="strip-call">${esc(urgencyShort(vm.harvest))}</span></div></div>`);
   }
+  panelElementCache.delete(civPanels);
+  if(worldStatusDock)worldElementCache.delete(worldStatusDock);
+  worldElementCache.delete(worldHud);
   const eventCard=event?`<section class="panel intervention situation-card situation-banner severity-${esc(vm.situation.severity)}${focusClass(vm,'.intervention')}" role="status" aria-live="polite"><div class="panel-kicker">${esc(t.situationHeading)} // ${esc(event.probed?t.currentInterventionProbed:t.currentIntervention)}</div><h2>${esc(event.title)}</h2><details data-disclosure="situation-details"${disclosureAttr('situation-details')}><summary>${esc(t.situationDetailsSummary)}</summary><p class="event-body">${esc(event.body)}</p><div class="situation-cause-advice"><p class="situation-cause"><span>${esc(t.why)}</span><em data-live="situation-cause">${esc(vm.situation.cause)}</em></p><p class="situation-advice"><span>${esc(t.do)}</span><em data-live="situation-advice">${esc(vm.situation.advice)}</em></p></div>${explainNote('intervention',vm.explain)}</details>${event.predictionLocked?`<div class="prediction-lock">${esc(t.predictionCoreOffline)}</div>`:''}<div class="choice-list">${event.choices.map((ch:any)=>`<button data-action="choice" data-index="${ch.index}"><b>${esc(ch.label)}</b>${ch.prediction?`<span>${esc(ch.prediction)}</span>`:''}</button>`).join('')}</div>${engine.upgradeLevel('axiom','axiom_multiple_choice')>0?`<button class="ghost" data-action="reroll">${esc(t.rerollWithParadox)}</button>`:''}</section>`:`<section class="panel intervention quiet${focusClass(vm,'.intervention')}"><div class="panel-kicker">${esc(t.currentIntervention)}</div><h2>${esc(t.monitoringCivilization)}</h2>${explainNote('intervention',vm.explain)}<p data-live="event-timer">${esc(fill(t.nextInterventionWindow,{seconds:Math.max(0,c.eventTimer).toFixed(1)}))}</p></section>`;
   const tendencies=path.tendencies.length?path.tendencies.map((entry:any)=>`<li><b>${esc(entry.name)}</b><span>${esc(entry.label)}</span></li>`).join(''):`<li><span>${esc(t.noCoherentTendency)}</span></li>`;
   const objectiveCard=vm.directiveObjective?`<details class="panel directive-objective" data-disclosure="directive-objective"${disclosureAttr('directive-objective')}><summary>${esc(t.directiveObjectiveTitle)} <small>${esc(vm.directiveObjective.completed?t.directiveObjectiveComplete:t.directiveObjectiveActive)}</small></summary>${explainNote('objective',vm.explain)}<div class="objective-progress ${vm.directiveObjective.completed?'complete':''}"><span>${esc(vm.directiveObjective.completed?t.directiveObjectiveComplete:t.directiveObjectiveActive)}</span><b>${esc(vm.directiveObjective.title)}</b><p>${esc(vm.directiveObjective.description)}</p><small>${esc(t.objectiveBonus)}</small></div></details>`:'';
@@ -248,10 +251,37 @@ function renderCivilization(worldHud:HTMLElement,worldStatusDock:HTMLElement,civ
   }
 }
 
+const panelElementCache=new WeakMap<HTMLElement,Map<string,Element|null>>();
+const worldElementCache=new WeakMap<HTMLElement,Map<string,Element|null>>();
+
+function getPanelCachedElement(parent:HTMLElement,selector:string):Element|null{
+  let cache=panelElementCache.get(parent);
+  if(!cache){cache=new Map();panelElementCache.set(parent,cache);}
+  const cached=cache.get(selector);
+  if(cached!==undefined&&(!cached||parent.contains(cached)))return cached;
+  const el=parent.querySelector(selector);
+  cache.set(selector,el);
+  return el;
+}
+
+function getWorldCachedElement(worldStatusDock:HTMLElement|null,worldHud:HTMLElement,selector:string):Element|null{
+  const root=worldStatusDock??worldHud;
+  let cache=worldElementCache.get(root);
+  if(!cache){cache=new Map();worldElementCache.set(root,cache);}
+  const cached=cache.get(selector);
+  if(cached!==undefined&&(!cached||root.contains(cached)))return cached;
+  const el=(worldStatusDock?worldStatusDock.querySelector(selector):null)??worldHud.querySelector(selector);
+  cache.set(selector,el);
+  return el;
+}
+
+
 function refreshCivilizationLive(civPanels:HTMLElement,worldHud:HTMLElement,worldStatusDock:HTMLElement,vm:any,engine:GameEngine){
   const c=vm.civilization;if(!c)return;
-  const setText=(selector:string,value:string)=>{const element=civPanels.querySelector(selector);if(element)element.textContent=value;};
-  const setWorldText=(selector:string,value:string)=>{const element=(worldStatusDock?worldStatusDock.querySelector(selector):null)??worldHud.querySelector(selector);if(element)element.textContent=value;};
+  const getPanelEl=(selector:string)=>getPanelCachedElement(civPanels,selector);
+  const getWorldEl=(selector:string)=>getWorldCachedElement(worldStatusDock,worldHud,selector);
+  const setText=(selector:string,value:string)=>{const element=getPanelEl(selector);if(element)element.textContent=value;};
+  const setWorldText=(selector:string,value:string)=>{const element=getWorldEl(selector);if(element)element.textContent=value;};
   setText('[data-live="event-timer"]',fill(text().ui.app.nextInterventionWindow,{seconds:Math.max(0,c.eventTimer).toFixed(1)}));
   setText('[data-live="era"]',eraLabel(c.era));
   setText('[data-live="year"]',fmt(c.years));
@@ -267,7 +297,7 @@ function refreshCivilizationLive(civPanels:HTMLElement,worldHud:HTMLElement,worl
   for(const entry of vm.machineReserve){
     setText(`[data-reserve-cost="${entry.id}"]`,reserveCostText(entry));
     setText(`[data-reserve-reason="${entry.id}"]`,entry.reason);
-    const button=civPanels.querySelector<HTMLButtonElement>(`[data-action="reserve"][data-id="${entry.id}"]`);
+    const button=getPanelEl(`[data-action="reserve"][data-id="${entry.id}"]`) as HTMLButtonElement|null;
     if(button)button.disabled=!entry.enabled;
   }
   setWorldText('[data-live="world-era"]',eraLabel(c.era));
@@ -289,18 +319,19 @@ function refreshCivilizationLive(civPanels:HTMLElement,worldHud:HTMLElement,worl
   setText('[data-live="overview-summary"]',`STB ${c.stats.stability.toFixed(0)} · SAN ${c.stats.sanity.toFixed(0)}`);
   setText('[data-live="harvest-grade-inline"]',gradeText(vm.harvest.controlled.grade));
   setText('[data-live="depth-inline"]',vm.harvest.depth.toFixed(1));
-  const entropyMeter=civPanels.querySelector<HTMLElement>('[data-live="entropy-meter"]');if(entropyMeter)entropyMeter.style.width=pct(vm.tactical.entropy);
-  const harvestMeter=civPanels.querySelector<HTMLElement>('[data-live="harvest-meter"]');if(harvestMeter)harvestMeter.style.width=pct(vm.harvest.bandProgress);
+  const entropyMeter=getPanelEl('[data-live="entropy-meter"]') as HTMLElement|null;if(entropyMeter)entropyMeter.style.width=pct(vm.tactical.entropy);
+  const harvestMeter=getPanelEl('[data-live="harvest-meter"]') as HTMLElement|null;if(harvestMeter)harvestMeter.style.width=pct(vm.harvest.bandProgress);
   civPanels.querySelectorAll<HTMLElement>('[data-live="harvest-call"]').forEach(el=>{el.textContent=urgencyText(vm.harvest);});
   setText('[data-live="situation-headline"]',vm.situation.headline);
   setText('[data-live="situation-cause"]',vm.situation.cause);
   setText('[data-live="situation-advice"]',vm.situation.advice);
-  const banner=civPanels.querySelector<HTMLElement>('.situation-banner');
+  const banner=getPanelEl('.situation-banner') as HTMLElement|null;
   if(banner)for(const severity of ['calm','watch','urgent','critical'])banner.classList.toggle(`severity-${severity}`,vm.situation.severity===severity);
-  const readout=civPanels.querySelector<HTMLElement>('.harvest-readout');
+  const readout=getPanelEl('.harvest-readout') as HTMLElement|null;
   if(readout)for(const state of ['building','closing','harvest','cascading'])readout.classList.toggle(`urgency-${state}`,vm.harvest.urgency.state===state);
-  civPanels.querySelectorAll<HTMLElement>('.control-pips i').forEach((pip,index)=>pip.classList.toggle('active',index<vm.tactical.controlCapacity));
-  for(const action of vm.tactical.actions){const button=civPanels.querySelector<HTMLButtonElement>(`[data-action="tactical"][data-id="${action.id}"]`);if(button)button.disabled=!action.enabled;const reason=civPanels.querySelector(`[data-tactical-reason="${action.id}"]`);if(reason)reason.textContent=action.reason;}
+  const pips=civPanels.querySelectorAll<HTMLElement>('.control-pips i');
+  pips.forEach((pip,index)=>pip.classList.toggle('active',index<vm.tactical.controlCapacity));
+  for(const action of vm.tactical.actions){const button=getPanelEl(`[data-action="tactical"][data-id="${action.id}"]`) as HTMLButtonElement|null;if(button)button.disabled=!action.enabled;const reason=getPanelEl(`[data-tactical-reason="${action.id}"]`);if(reason)reason.textContent=action.reason;}
   const liveStats=[
     ['stability',c.stats.stability,c.stats.stabilityMax],
     ['awareness',c.stats.awareness,100],
@@ -308,7 +339,7 @@ function refreshCivilizationLive(civPanels:HTMLElement,worldHud:HTMLElement,worl
     ['attention',c.stats.attention,100],
   ] as const;
   liveStats.forEach(([kind,value,max])=>{
-    const row=civPanels.querySelector(`[data-stat="${kind}"]`);
+    const row=getPanelEl(`[data-stat="${kind}"]`);
     const label=row?.querySelector('b');
     const meter=row?.querySelector<HTMLElement>('i');
     if(label)label.textContent=`${value.toFixed(1)}${max!==100?` / ${max.toFixed(0)}`:''}`;
