@@ -11,7 +11,7 @@ import { eraLabel } from '../game/engine.js';
 import { activeLocale, directiveCopy, fill, harvestGradeLabel, matrixCopy, metricName, objectiveCopy, resourceName, text } from '../data/i18n.js';
 import type { GameEngine } from '../game/engine.js';
 import type { SituationReport } from '../game/guidance.js';
-import type { Civilization, RuntimeBonuses } from '../game/types.js';
+import type { Civilization, PathEvent, RuntimeBonuses } from '../game/types.js';
 
 // The prestige threshold, in one place: the meta bar prints it, the situation line quotes it, and a
 // player comparing the two must not be shown two different numbers.
@@ -115,7 +115,7 @@ function buildConvergenceViewModel(engine: GameEngine) {
   };
 }
 
-function buildEventViewModel(engine: GameEngine, civ: Civilization | null, event: { id: string; title: string; body: string; choices?: { label: string; prediction: string }[] } | null, probed: boolean, predictionsUnlocked: boolean) {
+function buildEventViewModel(engine: GameEngine, civ: Civilization | null, event: PathEvent | null, probed: boolean, predictionsUnlocked: boolean) {
   if (!event) return null;
   return {
     id: event.id,

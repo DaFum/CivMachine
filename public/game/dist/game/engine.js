@@ -11,7 +11,7 @@ import { CivilizationPaths } from "./paths.js";
 import { applyWorldMemory } from "./world-memory.js";
 import { parseSaveText } from "./save-migration.js";
 import { Progression, nextSystemPreviews, visibleUpgradeEntries, } from "./progression.js";
-import { ERA_IDS, ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
+import { ERA_IDS, ERA_YEAR_THRESHOLDS, RESOURCE_KEYS, SAVE_VERSION, SeededRng, calculateHarvest, createCivilizationTemplate, createNewState, eraForYears, mixSeed, multiverseAxiomAward, universeResidueAward, upgradeCost, } from "./rules.js";
 import { buildInterventionPool, chooseWeightedIntervention, eventDelayWindow, interventionExhausted, recentEventIds, recordRecentIntervention, } from "./intervention-scheduler.js";
 import { buildDecisionFeedback, captureDecisionSnapshot, } from "./decision-feedback.js";
 import { advancePressure, pressureYears } from "./pressure.js";
@@ -75,29 +75,6 @@ const LOCALE_KEY = "reality_consumption_engine_locale";
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
 const C = CONTENT;
-function mixSeed(value) {
-    let mixed = value >>> 0 || 0x52434531;
-    mixed = Math.imul(mixed ^ (mixed >>> 16), 0x7feb352d);
-    mixed = Math.imul(mixed ^ (mixed >>> 15), 0x846ca68b);
-    return (mixed ^ (mixed >>> 16)) >>> 0 || 0x6d2b79f5;
-}
-class SeededRng {
-    constructor(seed) {
-        this.state = seed >>> 0 || 0x6d2b79f5;
-    }
-    next() {
-        let t = (this.state += 0x6d2b79f5);
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    }
-    range(min, max) {
-        return min + (max - min) * this.next();
-    }
-    int(min, max) {
-        return Math.floor(this.range(min, max + 1));
-    }
-}
 const RUNTIME_BONUS_MAP = {
     development_mult: "developmentMult",
     causal_mass_mult: "causal_massMult",
@@ -453,6 +430,8 @@ export class GameEngine {
         return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
     }
     upgradeName(definition) {
+        if (!definition)
+            return "";
         return upgradeCopy(String(definition.id))?.name ?? definition.name;
     }
     objectiveTitle(directiveId) {
@@ -518,6 +497,8 @@ export class GameEngine {
         if (!this.canPurchaseUpgrade(layer, id))
             return false;
         const d = this.upgradeById(layer, id);
+        if (!d)
+            return false;
         const cost = this.upgradeCost(layer, id);
         this.spendCurrency(String(d.currency), cost);
         this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
