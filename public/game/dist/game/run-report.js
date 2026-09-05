@@ -2,7 +2,7 @@ import { civilizationDramaPhase, dramaPhaseLabel } from './drama.js';
 import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from './harvest-quality.js';
 import { ventStabilityCost } from './tactical-actions.js';
 // The first band that pays a Cultivation Credit, and therefore the one a Premature run is short of.
-const ESTABLISHED_BAND = DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1];
+const ESTABLISHED_BAND = DEPTH_BANDS[1];
 import { RESOURCE_KEYS } from './rules.js';
 import { eraName, fill, harvestGradeLabel, text } from '../data/i18n.js';
 // What a finished run says about itself. Two halves:

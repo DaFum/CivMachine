@@ -55,7 +55,13 @@ function entropyBand(value) {
 // draws it as a meter next to the Entropy meter, so the two competing clocks -- how much time is
 // left and how much yield is still coming -- are read side by side.
 function depthBandProgress(depth) {
-    const current = [...DEPTH_BANDS].reverse().find(band => depth >= band.minDepth) ?? DEPTH_BANDS[0];
+    let current = DEPTH_BANDS[0];
+    for (let i = DEPTH_BANDS.length - 1; i >= 0; i--) {
+        if (depth >= DEPTH_BANDS[i].minDepth) {
+            current = DEPTH_BANDS[i];
+            break;
+        }
+    }
     const upcoming = DEPTH_BANDS.find(band => band.minDepth > depth);
     if (!upcoming)
         return 100;
