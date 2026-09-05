@@ -884,7 +884,7 @@ export class GameEngine {
                 rewards: { causal_mass: 0, cognition: 0, paradox: 0, existence: 0 },
             };
         const bonuses = this.runtimeBonuses();
-        const quality = evaluateHarvestQuality(civ, chaotic);
+        const quality = evaluateHarvestQuality(civ);
         const objectiveCompleted = quality.grade !== "premature" && evaluateDirectiveObjective(civ);
         const applied = applyHarvestQuality(calculateHarvest(civ, chaotic, bonuses), quality, {
             collapsed: chaotic,
@@ -992,8 +992,14 @@ export class GameEngine {
     }
     useRunIntervention(id) {
         const civ = this.state.civilization;
+        const definition = runInterventionById(id);
+        if (!civ || !definition) {
+            this.lastActionFailure = text().reports.engine.unknownMachineIntervention;
+            this.emit();
+            return false;
+        }
         const view = this.runInterventions().find((entry) => entry.id === id);
-        if (!civ || !view) {
+        if (!view) {
             this.lastActionFailure = text().reports.engine.unknownMachineIntervention;
             this.emit();
             return false;
@@ -1003,7 +1009,6 @@ export class GameEngine {
             this.emit();
             return false;
         }
-        const definition = runInterventionById(id);
         const before = captureDecisionSnapshot(civ);
         this.spendCurrency(definition.currency, view.cost);
         const label = applyRunIntervention(civ, { ...definition, label: view.label });

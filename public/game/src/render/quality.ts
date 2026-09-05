@@ -43,8 +43,6 @@ export function dynamicFrameIntervalMs(tier: RenderQualityTier, averageCostMs: n
 
 export function qualityFactors(tier: RenderQualityTier): QualityFactors { return FACTORS[tier]; }
 
-function average(values: ReadonlyArray<number>): number { return values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : 0; }
-
 /**
  * Renderer-local, and deliberately so: the tier is never written to `GameState`, never touches
  * `simulationSpeed`, and only ever sheds cosmetics. Degrading takes 30 consecutive hot frames and

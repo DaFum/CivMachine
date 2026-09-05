@@ -154,7 +154,7 @@ export class Progression {
     const copy=storage==='knownDirectives'?directiveCopy(id):storage==='knownBreedingMatrices'?matrixCopy(id):upgradeCopy(id);
     return copy?.name??id.replaceAll('_',' ').toUpperCase();
   }
-  private static refreshKnown(state:GameState,system:string,rules:Readonly<Record<string,OptionRule>>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; for(const [id,rule] of Object.entries(rules)){ if(known.includes(id))continue; if(this.machineInsight(state)<rule.insight)continue; if(rule.universes!==undefined&&state.meta.universesTotal<rule.universes)continue; known.push(id); this.announce(state,`option:${id}`,fill(text().reports.progression.newOptionUnlocked,{name:this.optionName(storage,id)}),out); } }
+  private static refreshKnown(state:GameState,system:string,rules:Readonly<Record<string,OptionRule>>,storage:'knownDirectives'|'knownBreedingMatrices'|'knownAxioms',out:string[]){ if(!this.systemUnlocked(state,system))return; const known=state.meta.progression[storage]; const knownSet=new Set(known); for(const [id,rule] of Object.entries(rules)){ if(knownSet.has(id))continue; if(this.machineInsight(state)<rule.insight)continue; if(rule.universes!==undefined&&state.meta.universesTotal<rule.universes)continue; known.push(id); knownSet.add(id); this.announce(state,`option:${id}`,fill(text().reports.progression.newOptionUnlocked,{name:this.optionName(storage,id)}),out); } }
   /**
    * The permanent capabilities Machine Insight buys outright.
    *

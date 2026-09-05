@@ -3,7 +3,7 @@ import { cultivationDepth, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCAL
 import { ventStabilityCost } from './tactical-actions.js';
 
 // The first band that pays a Cultivation Credit, and therefore the one a Premature run is short of.
-const ESTABLISHED_BAND = DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1]!;
+const ESTABLISHED_BAND = DEPTH_BANDS[1]!;
 import { RESOURCE_KEYS } from './rules.js';
 import { eraName, fill, harvestGradeLabel, text } from '../data/i18n.js';
 import type {

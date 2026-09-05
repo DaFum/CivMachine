@@ -97,7 +97,7 @@ export function depthBand(depth: number): HarvestGrade {
   return grade;
 }
 
-export function evaluateHarvestQuality(civ: Civilization, _chaotic = false): HarvestQuality {
+export function evaluateHarvestQuality(civ: Civilization): HarvestQuality {
   const depth = cultivationDepth(civ);
   const grade = civ.eventChoices < 3 || civ.era <= 0 ? 'premature' : depthBand(depth);
   if (grade === 'premature') return { grade, multiplier: PREMATURE_MULTIPLIER, credits: 0, depth };

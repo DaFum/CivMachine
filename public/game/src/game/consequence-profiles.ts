@@ -49,13 +49,24 @@ const CONSEQUENCE_PROFILES_BY_ID = new Map<string, ConsequenceProfile>(
   CONSEQUENCE_PROFILES.map(profile => [profile.id, profile])
 );
 
+const CONSEQUENCE_PROFILES_BY_EVENT_ID = new Map<string, ConsequenceProfile[]>();
+for (const profile of CONSEQUENCE_PROFILES) {
+  let list = CONSEQUENCE_PROFILES_BY_EVENT_ID.get(profile.eventId);
+  if (!list) {
+    list = [];
+    CONSEQUENCE_PROFILES_BY_EVENT_ID.set(profile.eventId, list);
+  }
+  list.push(profile);
+}
+
 export function consequenceProfileById(id: string): ConsequenceProfile | null {
   return CONSEQUENCE_PROFILES_BY_ID.get(id) ?? null;
 }
 
 export function consequenceProfileFor(eventId: string, additions: ReadonlyArray<DecisionAddition>): ConsequenceProfile | null {
-  return CONSEQUENCE_PROFILES.find(profile => {
-    if (profile.eventId !== eventId) return false;
+  const candidates = CONSEQUENCE_PROFILES_BY_EVENT_ID.get(eventId);
+  if (!candidates) return null;
+  return candidates.find(profile => {
     if (!profile.requiresAddition) return true;
     return additions.some(addition => addition.kind === profile.requiresAddition!.kind && addition.label === profile.requiresAddition!.label);
   }) ?? null;

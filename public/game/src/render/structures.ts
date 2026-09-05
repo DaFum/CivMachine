@@ -173,6 +173,147 @@ function solid(surface: DrawSurface, left: number, top: number, width: number, h
   if (roofLight) surface.lineStyle(1, roof, .4).line(left, top, left + width, top);
 }
 
+function drawFarm(surface: DrawSurface, structure: Structure, left: number, groundY: number, width: number, height: number, litColor: number, darkColor: number, roofColor: number, baseColor: number, accent: number, laneAlphaShift: number, detail: number): void {
+  const shedHeight = height * .3;
+  solid(surface, left, groundY - shedHeight, width, shedHeight, mixColor(litColor, 0x5c7040, .38), mixColor(darkColor, 0x33401f, .34), roofColor, laneAlphaShift, false);
+  surface.fillStyle(mixColor(baseColor, 0x2b3520, .42), laneAlphaShift).fillTriangle(left - width * .14, groundY - shedHeight, structure.x, groundY - height * .58, left + width * 1.14, groundY - shedHeight);
+  surface.lineStyle(1, tint(mixColor(accent, 0x8ee66b, .6), .25), .3).line(left - width * .14, groundY - shedHeight, structure.x, groundY - height * .58);
+  for (let row = 0; row < 4; row++) surface.lineStyle(1, mixColor(accent, 0x7fbf62, .55), .2 * detail).line(left - width * .34, groundY + 3 + row * 4, left + width * 1.34, groundY + 3 + row * 4);
+}
+
+function drawIndustry(surface: DrawSurface, structure: Structure, left: number, top: number, groundY: number, width: number, height: number, baseColor: number, litColor: number, darkColor: number, roofColor: number, lightColor: number, lightLevel: number, laneAlphaShift: number, detail: number): void {
+  const bodyHeight = height * .56;
+  solid(surface, left, groundY - bodyHeight, width * .78, bodyHeight, shade(litColor, .3), shade(darkColor, .25), roofColor, laneAlphaShift, false);
+  surface.fillStyle(shade(darkColor, .4), laneAlphaShift).fillRect(left + width * .78, groundY - bodyHeight * .74, width * .22, bodyHeight * .74);
+  for (let stack = 0; stack < 2; stack++) {
+    const stackX = left + width * (.24 + stack * .46);
+    surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(stackX, top, width * .16, height);
+    const heat = mixColor(lightColor, 0xff5a22, .35);
+    surface.fillRadialGlow(stackX + width * .08, top - height * .06, 0, width * .34, [
+      { offset: 0, color: heat, alpha: .22 + lightLevel * .14 },
+      { offset: 1, color: heat, alpha: 0 },
+    ]);
+    surface.fillStyle(0x8f9aa6, .08 * detail).fillCircle(stackX + width * .08 + width * .12, top - height * .18, width * .3);
+  }
+  surface.fillStyle(mixColor(lightColor, 0xff5a22, .28), (.16 + lightLevel * .2) * detail).fillRect(left + width * .1, groundY - bodyHeight * .3, width * .5, bodyHeight * .1);
+}
+
+function drawTemple(surface: DrawSurface, structure: Structure, left: number, top: number, groundY: number, width: number, height: number, baseColor: number, litColor: number, darkColor: number, roofColor: number, accent: number, emblem: number, lightLevel: number, laneAlphaShift: number): void {
+  const bodyHeight = height * .7;
+  solid(surface, left, groundY - bodyHeight, width, bodyHeight, mixColor(litColor, accent, .22), mixColor(darkColor, accent, .1), roofColor, laneAlphaShift, true);
+  surface.fillStyle(mixColor(baseColor, accent, .5), laneAlphaShift).fillRect(left + width * .16, top, width * .68, height * .3);
+  surface.fillRadialGlow(structure.x, top - emblem * .1, 0, emblem * .34, [
+    { offset: 0, color: accent, alpha: .2 + lightLevel * .14 },
+    { offset: .4, color: accent, alpha: .06 },
+    { offset: 1, color: accent, alpha: 0 },
+  ]);
+  surface.fillStyle(accent, .42).fillCircle(structure.x, top - emblem * .1, emblem * .15);
+  surface.lineStyle(1.5, accent, .5).line(structure.x, top - emblem * .4, structure.x, top - emblem * .1);
+}
+
+function drawAcademy(surface: DrawSurface, left: number, top: number, groundY: number, width: number, height: number, litColor: number, darkColor: number, roofColor: number, accent: number, lightLevel: number, laneAlphaShift: number, detail: number): void {
+  solid(surface, left, top, width, height, mixColor(litColor, accent, .12), darkColor, roofColor, laneAlphaShift, true);
+  surface.lineStyle(1, accent, .42).strokeRect(left + width * .12, top + height * .12, width * .76, height * .5);
+  surface.fillStyle(accent, (.05 + lightLevel * .08) * detail).fillRect(left + width * .12, top + height * .12, width * .76, height * .5);
+  for (let column = 0; column < 3; column++) surface.lineStyle(1.4, accent, .32 * detail).line(left + width * (.2 + column * .3), groundY - height * .3, left + width * (.2 + column * .3), groundY);
+}
+
+function drawReactor(surface: DrawSurface, structure: Structure, left: number, groundY: number, width: number, height: number, litColor: number, darkColor: number, roofColor: number, accent: number, emblem: number, lightLevel: number, laneAlphaShift: number): void {
+  const bodyHeight = height * .48;
+  const coreY = groundY - bodyHeight - emblem * .18;
+  solid(surface, left, groundY - bodyHeight, width, bodyHeight, litColor, darkColor, roofColor, laneAlphaShift, true);
+  surface.fillRadialGlow(structure.x, coreY, 0, emblem * (.7 + lightLevel * .25), [
+    { offset: 0, color: accent, alpha: .32 + lightLevel * .14 },
+    { offset: .4, color: accent, alpha: .12 },
+    { offset: 1, color: accent, alpha: 0 },
+  ]);
+  surface.fillStyle(mixColor(darkColor, accent, .45), .95).fillCircle(structure.x, coreY, emblem * .3);
+  surface.fillStyle(tint(accent, .35), .72).fillCircle(structure.x, coreY, emblem * .15);
+  surface.lineStyle(2, accent, .5).strokeCircle(structure.x, coreY, emblem * .38);
+  surface.lineStyle(1, accent, .3).strokeCircle(structure.x, coreY, emblem * .52);
+}
+
+function drawSpaceport(surface: DrawSurface, structure: Structure, left: number, top: number, groundY: number, width: number, height: number, litColor: number, darkColor: number, roofColor: number, accent: number, emblem: number, lightColor: number, lightLevel: number, laneAlphaShift: number): void {
+  const apron = height * .2;
+  solid(surface, left, groundY - apron, width * 1.3, apron, litColor, darkColor, roofColor, laneAlphaShift, true);
+  surface.lineStyle(2, accent, .55).line(structure.x, groundY - apron, structure.x, top);
+  surface.lineStyle(1.2, accent, .28).line(left + width * .1, groundY - apron, structure.x, top + height * .32);
+  surface.lineStyle(1.2, accent, .28).line(left + width * 1.2, groundY - apron, structure.x, top + height * .32);
+  surface.fillStyle(accent, .26).fillTriangle(structure.x - width * .18, top, structure.x, top - height * .3, structure.x + width * .18, top);
+  const pad = mixColor(lightColor, accent, .3);
+  surface.fillRadialGlow(structure.x, groundY - apron * .4, 0, emblem * .9, [
+    { offset: 0, color: pad, alpha: .3 + lightLevel * .22 },
+    { offset: 1, color: pad, alpha: 0 },
+  ]);
+}
+
+function drawOrbitalAnchor(surface: DrawSurface, structure: Structure, top: number, groundY: number, width: number, height: number, baseColor: number, accent: number, emblem: number, lightLevel: number, laneAlphaShift: number): void {
+  const anchorTop = top - height * .34;
+  const footHalf = width * .3;
+  const tipHalf = width * .12;
+  const shaftColor = mixColor(baseColor, accent, .16);
+  const taper = (y: number): number => footHalf + (tipHalf - footHalf) * Math.max(0, Math.min(1, (groundY - y) / Math.max(1, groundY - anchorTop)));
+  const split = (half: number): number => half * (SIDE_SPLIT * 2 - 1);
+  surface.fillStyle(shaftColor, laneAlphaShift).fillPoly([
+    [structure.x - footHalf, groundY], [structure.x - tipHalf, anchorTop],
+    [structure.x + split(tipHalf), anchorTop], [structure.x + split(footHalf), groundY],
+  ]);
+  surface.fillStyle(shade(shaftColor, .45), laneAlphaShift).fillPoly([
+    [structure.x + split(footHalf), groundY], [structure.x + split(tipHalf), anchorTop],
+    [structure.x + tipHalf, anchorTop], [structure.x + footHalf, groundY],
+  ]);
+  for (const side of [-1, 1]) {
+    surface.fillStyle(shade(shaftColor, .58), laneAlphaShift)
+      .fillTriangle(structure.x + side * footHalf, groundY, structure.x + side * footHalf, groundY - height * .16, structure.x + side * width * .62, groundY);
+  }
+  surface.lineStyle(1.2, accent, .45).line(structure.x, top - height * .52, structure.x, groundY);
+  for (let band = 0; band < 5; band++) {
+    const y = anchorTop + band * height * .27;
+    const half = taper(y);
+    surface.fillStyle(shade(shaftColor, .3), .8).fillRect(structure.x - half, y, half * 2, 2);
+  }
+  for (let ring = 0; ring < 3; ring++) surface.lineStyle(1, accent, .2).strokeCircle(structure.x, top - height * .06 + ring * height * .3, width * (.5 - ring * .12));
+  surface.fillRadialGlow(structure.x, top - height * .06, 0, emblem * .8, [
+    { offset: 0, color: accent, alpha: .12 + lightLevel * .1 },
+    { offset: 1, color: accent, alpha: 0 },
+  ]);
+}
+
+function drawMonument(surface: DrawSurface, structure: Structure, left: number, top: number, groundY: number, width: number, height: number, baseColor: number, litColor: number, accent: number, emblem: number, laneAlphaShift: number): void {
+  const capY = top + height * .16;
+  const shaftFoot = width * .42;
+  const shaftHead = width * .29;
+  const stone = mixColor(litColor, accent, .16);
+  surface.fillStyle(stone, laneAlphaShift).fillPoly([
+    [structure.x - shaftFoot, groundY - height * .07], [structure.x - shaftHead, capY],
+    [structure.x, capY], [structure.x, groundY - height * .07],
+  ]);
+  surface.fillStyle(shade(mixColor(baseColor, accent, .16), .4), laneAlphaShift).fillPoly([
+    [structure.x, groundY - height * .07], [structure.x, capY],
+    [structure.x + shaftHead, capY], [structure.x + shaftFoot, groundY - height * .07],
+  ]);
+  surface.fillStyle(tint(stone, .18), laneAlphaShift).fillTriangle(structure.x - shaftHead, capY, structure.x, top, structure.x + shaftHead, capY);
+  surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(left + width * .1, groundY - height * .09, width * .8, height * .09);
+  surface.fillStyle(shade(baseColor, .34), laneAlphaShift).fillRect(left + width * .22, groundY - height * .13, width * .56, height * .045);
+  surface.lineStyle(1.4, accent, .45).strokeCircle(structure.x, top - emblem * .22, emblem * .18);
+}
+
+function drawDefaultStructure(surface: DrawSurface, structure: Structure, left: number, top: number, groundY: number, width: number, height: number, baseColor: number, litColor: number, darkColor: number, roofColor: number, accent: number, laneAlphaShift: number, detail: number): void {
+  const stepped = height > 90 && structure.level >= 3;
+  const shaftHeight = stepped ? height * .72 : height;
+  solid(surface, left, groundY - shaftHeight, width, shaftHeight, litColor, darkColor, roofColor, laneAlphaShift, true);
+  if (stepped) {
+    const inset = width * .16;
+    solid(surface, left + inset, top, width - inset * 2, height - shaftHeight, tint(litColor, .04), shade(darkColor, .08), roofColor, laneAlphaShift, true);
+  }
+  surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(left - width * .05, groundY - Math.max(3, height * .05), width * 1.1, Math.max(3, height * .05));
+  surface.lineStyle(1, shade(roofColor, .2), .22).strokeRect(left, groundY - shaftHeight, width, shaftHeight);
+  if (structure.level >= 4 && detail > .6) {
+    surface.fillStyle(darkColor, laneAlphaShift).fillRect(left + width * .2, top - height * .06, width * .24, height * .06);
+    surface.lineStyle(1, accent, .4).line(left + width * .74, top, left + width * .74, top - height * .14);
+  }
+}
+
 export function drawStructure(surface: DrawSurface, structure: Structure, baseGroundY: number, bodyColor: number, accent: number, windowColor: number, seed: number, style: StructureStyle = {}): void {
   const lane = structure.depthLane || 'mid';
   const groundY = structureEffectiveGround(baseGroundY, lane);
@@ -203,182 +344,33 @@ export function drawStructure(surface: DrawSurface, structure: Structure, baseGr
   surface.fillStyle(0x020509, .34 * detail).fillRect(left - width * 0.12, groundY - 2, width * 1.24, 4);
 
   switch (structure.kind) {
-    case 'farm': {
-      // Low, horizontal and organic: a long shed under a broad roof with worked ground around it.
-      const shedHeight = height * .3;
-      solid(surface, left, groundY - shedHeight, width, shedHeight, mixColor(litColor, 0x5c7040, .38), mixColor(darkColor, 0x33401f, .34), roofColor, laneAlphaShift, false);
-      surface.fillStyle(mixColor(baseColor, 0x2b3520, .42), laneAlphaShift).fillTriangle(left - width * .14, groundY - shedHeight, structure.x, groundY - height * .58, left + width * 1.14, groundY - shedHeight);
-      surface.lineStyle(1, tint(mixColor(accent, 0x8ee66b, .6), .25), .3).line(left - width * .14, groundY - shedHeight, structure.x, groundY - height * .58);
-      for (let row = 0; row < 4; row++) surface.lineStyle(1, mixColor(accent, 0x7fbf62, .55), .2 * detail).line(left - width * .34, groundY + 3 + row * 4, left + width * 1.34, groundY + 3 + row * 4);
+    case 'farm':
+      drawFarm(surface, structure, left, groundY, width, height, litColor, darkColor, roofColor, baseColor, accent, laneAlphaShift, detail);
       break;
-    }
-    case 'industry': {
-      // Heavy dark mass, chimney silhouette, warm emission. The body is deliberately the darkest
-      // solid in the settlement, so an industrial edge reads as one even in a screenshot.
-      const bodyHeight = height * .56;
-      solid(surface, left, groundY - bodyHeight, width * .78, bodyHeight, shade(litColor, .3), shade(darkColor, .25), roofColor, laneAlphaShift, false);
-      surface.fillStyle(shade(darkColor, .4), laneAlphaShift).fillRect(left + width * .78, groundY - bodyHeight * .74, width * .22, bodyHeight * .74);
-      for (let stack = 0; stack < 2; stack++) {
-        const stackX = left + width * (.24 + stack * .46);
-        surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(stackX, top, width * .16, height);
-        // Hotter than the rest of the city, but the same light: the shared colour pushed toward the
-        // red end rather than a warm hex of its own.
-        const heat = mixColor(lightColor, 0xff5a22, .35);
-        surface.fillRadialGlow(stackX + width * .08, top - height * .06, 0, width * .34, [
-          { offset: 0, color: heat, alpha: .22 + lightLevel * .14 },
-          { offset: 1, color: heat, alpha: 0 },
-        ]);
-        surface.fillStyle(0x8f9aa6, .08 * detail).fillCircle(stackX + width * .08 + width * .12, top - height * .18, width * .3);
-      }
-      surface.fillStyle(mixColor(lightColor, 0xff5a22, .28), (.16 + lightLevel * .2) * detail).fillRect(left + width * .1, groundY - bodyHeight * .3, width * .5, bodyHeight * .1);
+    case 'industry':
+      drawIndustry(surface, structure, left, top, groundY, width, height, baseColor, litColor, darkColor, roofColor, lightColor, lightLevel, laneAlphaShift, detail);
       break;
-    }
-    case 'temple': {
-      // Clean geometry crowned with accent light: the only kind whose crown leaves the silhouette.
-      const bodyHeight = height * .7;
-      solid(surface, left, groundY - bodyHeight, width, bodyHeight, mixColor(litColor, accent, .22), mixColor(darkColor, accent, .1), roofColor, laneAlphaShift, true);
-      surface.fillStyle(mixColor(baseColor, accent, .5), laneAlphaShift).fillRect(left + width * .16, top, width * .68, height * .3);
-      // Tight enough to read as a lit crown on the building. A wide one turned every temple in the
-      // world into a pale disc behind the skyline that read as a second moon.
-      surface.fillRadialGlow(structure.x, top - emblem * .1, 0, emblem * .34, [
-        { offset: 0, color: accent, alpha: .2 + lightLevel * .14 },
-        { offset: .4, color: accent, alpha: .06 },
-        { offset: 1, color: accent, alpha: 0 },
-      ]);
-      surface.fillStyle(accent, .42).fillCircle(structure.x, top - emblem * .1, emblem * .15);
-      surface.lineStyle(1.5, accent, .5).line(structure.x, top - emblem * .4, structure.x, top - emblem * .1);
+    case 'temple':
+      drawTemple(surface, structure, left, top, groundY, width, height, baseColor, litColor, darkColor, roofColor, accent, emblem, lightLevel, laneAlphaShift);
       break;
-    }
-    case 'academy': {
-      // Restrained luminous framing over a colonnade: institutional, not industrial.
-      solid(surface, left, top, width, height, mixColor(litColor, accent, .12), darkColor, roofColor, laneAlphaShift, true);
-      surface.lineStyle(1, accent, .42).strokeRect(left + width * .12, top + height * .12, width * .76, height * .5);
-      surface.fillStyle(accent, (.05 + lightLevel * .08) * detail).fillRect(left + width * .12, top + height * .12, width * .76, height * .5);
-      for (let column = 0; column < 3; column++) surface.lineStyle(1.4, accent, .32 * detail).line(left + width * (.2 + column * .3), groundY - height * .3, left + width * (.2 + column * .3), groundY);
+    case 'academy':
+      drawAcademy(surface, left, top, groundY, width, height, litColor, darkColor, roofColor, accent, lightLevel, laneAlphaShift, detail);
       break;
-    }
-    case 'reactor': {
-      // A containment block with a genuine core: the glow is the light source, the block is what it
-      // lights, and the ring is the only hard edge.
-      const bodyHeight = height * .48;
-      const coreY = groundY - bodyHeight - emblem * .18;
-      solid(surface, left, groundY - bodyHeight, width, bodyHeight, litColor, darkColor, roofColor, laneAlphaShift, true);
-      // The core sits *on* its containment block rather than floating above it, and it is a piece of
-      // machinery with a lit centre -- not a disc bright enough to read as a second moon.
-      surface.fillRadialGlow(structure.x, coreY, 0, emblem * (.7 + lightLevel * .25), [
-        { offset: 0, color: accent, alpha: .32 + lightLevel * .14 },
-        { offset: .4, color: accent, alpha: .12 },
-        { offset: 1, color: accent, alpha: 0 },
-      ]);
-      surface.fillStyle(mixColor(darkColor, accent, .45), .95).fillCircle(structure.x, coreY, emblem * .3);
-      surface.fillStyle(tint(accent, .35), .72).fillCircle(structure.x, coreY, emblem * .15);
-      surface.lineStyle(2, accent, .5).strokeCircle(structure.x, coreY, emblem * .38);
-      surface.lineStyle(1, accent, .3).strokeCircle(structure.x, coreY, emblem * .52);
+    case 'reactor':
+      drawReactor(surface, structure, left, groundY, width, height, litColor, darkColor, roofColor, accent, emblem, lightLevel, laneAlphaShift);
       break;
-    }
-    case 'spaceport': {
-      // Strong horizontal base, a mast, guy lines and pad illumination lying on the apron.
-      const apron = height * .2;
-      solid(surface, left, groundY - apron, width * 1.3, apron, litColor, darkColor, roofColor, laneAlphaShift, true);
-      surface.lineStyle(2, accent, .55).line(structure.x, groundY - apron, structure.x, top);
-      surface.lineStyle(1.2, accent, .28).line(left + width * .1, groundY - apron, structure.x, top + height * .32);
-      surface.lineStyle(1.2, accent, .28).line(left + width * 1.2, groundY - apron, structure.x, top + height * .32);
-      surface.fillStyle(accent, .26).fillTriangle(structure.x - width * .18, top, structure.x, top - height * .3, structure.x + width * .18, top);
-      // Pad floods: the city's own light with a touch of the path's accent in it, never a yellow of
-      // its own -- a spaceport lit differently from the street below it reads as a separate world.
-      const pad = mixColor(lightColor, accent, .3);
-      surface.fillRadialGlow(structure.x, groundY - apron * .4, 0, emblem * .9, [
-        { offset: 0, color: pad, alpha: .3 + lightLevel * .22 },
-        { offset: 1, color: pad, alpha: 0 },
-      ]);
+    case 'spaceport':
+      drawSpaceport(surface, structure, left, top, groundY, width, height, litColor, darkColor, roofColor, accent, emblem, lightColor, lightLevel, laneAlphaShift);
       break;
-    }
-    case 'orbital_anchor': {
-      // A dramatic vertical, and the emphasis is on *vertical*: the tether leaves the frame, the
-      // rings hold it and the buttressed foot carries it. A constant-width shaft made the drama out
-      // of a 12 px hairline running the height of the frame -- it read as a scratch on the glass, not
-      // as the thing a civilization built to reach orbit. The taper is what gives it a base.
-      const anchorTop = top - height * .34;
-      const footHalf = width * .3;
-      const tipHalf = width * .12;
-      // The mass stays the city's own material; only the bands, the rings and the tether light
-      // carry the accent. At a .4 mix the shaft was the palest thing in the frame and a phone-sized
-      // viewport became one bright wedge with a city behind it.
-      const shaftColor = mixColor(baseColor, accent, .16);
-      const taper = (y: number): number => footHalf + (tipHalf - footHalf) * Math.max(0, Math.min(1, (groundY - y) / Math.max(1, groundY - anchorTop)));
-      // Lit and shadowed plane of the same tapering solid, split on the world's one light direction.
-      const split = (half: number): number => half * (SIDE_SPLIT * 2 - 1);
-      surface.fillStyle(shaftColor, laneAlphaShift).fillPoly([
-        [structure.x - footHalf, groundY], [structure.x - tipHalf, anchorTop],
-        [structure.x + split(tipHalf), anchorTop], [structure.x + split(footHalf), groundY],
-      ]);
-      surface.fillStyle(shade(shaftColor, .45), laneAlphaShift).fillPoly([
-        [structure.x + split(footHalf), groundY], [structure.x + split(tipHalf), anchorTop],
-        [structure.x + tipHalf, anchorTop], [structure.x + footHalf, groundY],
-      ]);
-      // The buttresses the foot stands on, so the tether meets the ground instead of ending at it.
-      for (const side of [-1, 1]) {
-        surface.fillStyle(shade(shaftColor, .58), laneAlphaShift)
-          .fillTriangle(structure.x + side * footHalf, groundY, structure.x + side * footHalf, groundY - height * .16, structure.x + side * width * .62, groundY);
-      }
-      surface.lineStyle(1.2, accent, .45).line(structure.x, top - height * .52, structure.x, groundY);
-      // Segment bands up the tether, each one as wide as the shaft is there.
-      for (let band = 0; band < 5; band++) {
-        const y = anchorTop + band * height * .27;
-        const half = taper(y);
-        surface.fillStyle(shade(shaftColor, .3), .8).fillRect(structure.x - half, y, half * 2, 2);
-      }
-      for (let ring = 0; ring < 3; ring++) surface.lineStyle(1, accent, .2).strokeCircle(structure.x, top - height * .06 + ring * height * .3, width * (.5 - ring * .12));
-      surface.fillRadialGlow(structure.x, top - height * .06, 0, emblem * .8, [
-        { offset: 0, color: accent, alpha: .12 + lightLevel * .1 },
-        { offset: 1, color: accent, alpha: 0 },
-      ]);
+    case 'orbital_anchor':
+      drawOrbitalAnchor(surface, structure, top, groundY, width, height, baseColor, accent, emblem, lightLevel, laneAlphaShift);
       break;
-    }
-    case 'monument': {
-      // An obelisk on a stepped plinth, not a needle. Drawn as a full-height triangle a monument was
-      // the most repeated shape in a stage-4 world -- a row of identical spikes standing between the
-      // towers -- so it is built the way a monument is: a base wide enough to read as masonry, a
-      // shaft that tapers only slightly, and a lit cap where the silhouette ends.
-      const capY = top + height * .16;
-      const shaftFoot = width * .42;
-      const shaftHead = width * .29;
-      const stone = mixColor(litColor, accent, .16);
-      surface.fillStyle(stone, laneAlphaShift).fillPoly([
-        [structure.x - shaftFoot, groundY - height * .07], [structure.x - shaftHead, capY],
-        [structure.x, capY], [structure.x, groundY - height * .07],
-      ]);
-      surface.fillStyle(shade(mixColor(baseColor, accent, .16), .4), laneAlphaShift).fillPoly([
-        [structure.x, groundY - height * .07], [structure.x, capY],
-        [structure.x + shaftHead, capY], [structure.x + shaftFoot, groundY - height * .07],
-      ]);
-      // The pyramidion, and the plinth the whole thing stands on.
-      surface.fillStyle(tint(stone, .18), laneAlphaShift).fillTriangle(structure.x - shaftHead, capY, structure.x, top, structure.x + shaftHead, capY);
-      surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(left + width * .1, groundY - height * .09, width * .8, height * .09);
-      surface.fillStyle(shade(baseColor, .34), laneAlphaShift).fillRect(left + width * .22, groundY - height * .13, width * .56, height * .045);
-      surface.lineStyle(1.4, accent, .45).strokeCircle(structure.x, top - emblem * .22, emblem * .18);
+    case 'monument':
+      drawMonument(surface, structure, left, top, groundY, width, height, baseColor, litColor, accent, emblem, laneAlphaShift);
       break;
-    }
-    default: {
-      // Dwellings and offices: the bulk of any skyline, so this is where the setbacks, plinths and
-      // roof furniture live. A tall one steps in as it rises rather than ending in a flat slab.
-      const stepped = height > 90 && structure.level >= 3;
-      const shaftHeight = stepped ? height * .72 : height;
-      solid(surface, left, groundY - shaftHeight, width, shaftHeight, litColor, darkColor, roofColor, laneAlphaShift, true);
-      if (stepped) {
-        const inset = width * .16;
-        solid(surface, left + inset, top, width - inset * 2, height - shaftHeight, tint(litColor, .04), shade(darkColor, .08), roofColor, laneAlphaShift, true);
-      }
-      // Plinth: a slightly wider, darker base tying the shaft to the ground plane.
-      surface.fillStyle(shade(baseColor, .5), laneAlphaShift).fillRect(left - width * .05, groundY - Math.max(3, height * .05), width * 1.1, Math.max(3, height * .05));
-      surface.lineStyle(1, shade(roofColor, .2), .22).strokeRect(left, groundY - shaftHeight, width, shaftHeight);
-      if (structure.level >= 4 && detail > .6) {
-        // Roof furniture, aligned to the lit face so it reads as part of the same solid.
-        surface.fillStyle(darkColor, laneAlphaShift).fillRect(left + width * .2, top - height * .06, width * .24, height * .06);
-        surface.lineStyle(1, accent, .4).line(left + width * .74, top, left + width * .74, top - height * .14);
-      }
+    default:
+      drawDefaultStructure(surface, structure, left, top, groundY, width, height, baseColor, litColor, darkColor, roofColor, accent, laneAlphaShift, detail);
       break;
-    }
   }
 
   // The dominant path's own way of ending a building. Restricted to the tall civic and residential

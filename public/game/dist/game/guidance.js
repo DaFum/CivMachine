@@ -2,7 +2,7 @@ import { DEPTH_BANDS, DEPTH_CREDIT_CAP } from './harvest-quality.js';
 import { fill, harvestGradeLabel, text } from '../data/i18n.js';
 // Both numbers below are balance constants the guidance quotes, so it reads them rather than
 // restating them: the Established boundary has already moved once, and the credit cap with it.
-const ESTABLISHED_DEPTH = (DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1]).minDepth;
+const ESTABLISHED_DEPTH = DEPTH_BANDS[1].minDepth;
 // Every number that reaches a sentence goes through one of these. The ladder is documented as total,
 // which has to include the formatting: a single raw interpolation is all it takes to print `NaN` at
 // the player, and these sentences are the surface that is supposed to make the panels checkable.

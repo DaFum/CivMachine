@@ -5,7 +5,7 @@ import { fill, harvestGradeLabel, text } from '../data/i18n.js';
 
 // Both numbers below are balance constants the guidance quotes, so it reads them rather than
 // restating them: the Established boundary has already moved once, and the credit cap with it.
-const ESTABLISHED_DEPTH = (DEPTH_BANDS.find(band => band.grade === 'established') ?? DEPTH_BANDS[1]!).minDepth;
+const ESTABLISHED_DEPTH = DEPTH_BANDS[1]!.minDepth;
 
 // The one-line answer to "what is happening and why". It is a priority ladder over the run's live
 // state, not a script: the highest-severity condition that currently holds wins, and every sentence
