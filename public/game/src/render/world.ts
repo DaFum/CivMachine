@@ -1,6 +1,5 @@
 import type { GameEngine } from '../game/engine.js';
-import type { Civilization, DecisionFeedback } from '../game/types.js';
-import { CivilizationPaths } from '../game/paths.js';
+import type { Civilization } from '../game/types.js';
 import { civilizationDramaPhase } from '../game/drama.js';
 import { applyQualityToLiveSample, liveWorldSample, worldSnapshot } from './world-model.js';
 import { dynamicFrameIntervalMs, qualityFactors, RenderQualityController, type RenderQualityTier } from './quality.js';
@@ -1509,7 +1508,7 @@ class WorldRenderer {
   private feedbackSequence = 0;
   private feedbackStartTime = 0;
 
-  constructor(private host: HTMLElement, private onContextRestoredCallback?: () => void) {
+  constructor(host: HTMLElement, private onContextRestoredCallback?: () => void) {
     this.staticCanvas = document.createElement('canvas');
     this.sceneryCanvas = document.createElement('canvas');
     this.dynamicCanvas = document.createElement('canvas');

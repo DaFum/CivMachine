@@ -1,6 +1,6 @@
 import type { GameEngine } from '../game/engine.js';
 import { currencyName, eraLabel } from '../game/engine.js';
-import { endgameStateLabel, fill, harvestGradeLabel, institutionName, milestoneGroupLabel, resourceName, text } from '../data/i18n.js';
+import { endgameStateLabel, fill, harvestGradeLabel, institutionName, milestoneGroupLabel, text } from '../data/i18n.js';
 import { buildViewModel, civilizationRenderKey } from './view-model.js';
 import { CivilizationPaths } from '../game/paths.js';
 import { esc, fmt, pct } from './format.js';

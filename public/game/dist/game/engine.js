@@ -452,7 +452,7 @@ export class GameEngine {
     traitName(id) {
         return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
     }
-    upgradeName(layer, definition) {
+    upgradeName(definition) {
         return upgradeCopy(String(definition.id))?.name ?? definition.name;
     }
     objectiveTitle(directiveId) {
@@ -522,7 +522,7 @@ export class GameEngine {
         this.spendCurrency(String(d.currency), cost);
         this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
         this.post(fill(text().reports.engine.modificationAuthorized, {
-            name: this.upgradeName(layer, d),
+            name: this.upgradeName(d),
             level: this.levels(layer)[id],
         }));
         if (layer === "axiom")

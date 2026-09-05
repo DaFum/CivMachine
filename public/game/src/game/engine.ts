@@ -577,7 +577,7 @@ export class GameEngine {
   private traitName(id: string) {
     return traitCopy(id)?.name ?? this.traitsMap.get(id)?.name ?? id;
   }
-  private upgradeName(layer: Layer, definition: any) {
+  private upgradeName(definition: any) {
     return upgradeCopy(String(definition.id))?.name ?? definition.name;
   }
   private objectiveTitle(directiveId: string) {
@@ -652,7 +652,7 @@ export class GameEngine {
     this.levels(layer)[id] = this.upgradeLevel(layer, id) + 1;
     this.post(
       fill(text().reports.engine.modificationAuthorized, {
-        name: this.upgradeName(layer, d),
+        name: this.upgradeName(d),
         level: this.levels(layer)[id],
       }),
     );

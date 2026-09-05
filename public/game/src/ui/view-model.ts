@@ -182,7 +182,6 @@ function buildHarvestViewModel(engine: GameEngine, civ: Civilization | null, con
 // The live "what is happening and why" line. Everything it needs was already computed for the rails
 // above, so building it costs a function call rather than a second pass over the run.
 function buildSituation(
-  engine: GameEngine,
   civ: Civilization | null,
   tactical: ReturnType<typeof buildTacticalViewModel>,
   harvest: ReturnType<typeof buildHarvestViewModel>,
@@ -342,7 +341,7 @@ export function buildViewModel(engine: GameEngine) {
   const tactical = buildTacticalViewModel(engine, civ, bonuses);
   const harvest = buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth);
   const situation = buildSituation(
-    engine, civ, tactical, harvest,
+    civ, tactical, harvest,
     event,
     activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null,
     convergenceTargetDepth,
