@@ -173,7 +173,7 @@ function buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, b
 }
 // The live "what is happening and why" line. Everything it needs was already computed for the rails
 // above, so building it costs a function call rather than a second pass over the run.
-function buildSituation(engine, civ, tactical, harvest, event, objective, convergenceTargetDepth, machine) {
+function buildSituation(civ, tactical, harvest, event, objective, convergenceTargetDepth, machine) {
     if (!civ || !tactical || !harvest)
         return machineSituation(machine);
     return civilizationSituation({
@@ -308,7 +308,7 @@ export function buildViewModel(engine) {
     // the rails render, so neither can drift from the other and neither is computed twice.
     const tactical = buildTacticalViewModel(engine, civ, bonuses);
     const harvest = buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth);
-    const situation = buildSituation(engine, civ, tactical, harvest, event, activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null, convergenceTargetDepth, buildMachineSituationInput(state, engine, directiveRequiredNow, machineUpgradeEntries, openMilestone?.title ?? ''));
+    const situation = buildSituation(civ, tactical, harvest, event, activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null, convergenceTargetDepth, buildMachineSituationInput(state, engine, directiveRequiredNow, machineUpgradeEntries, openMilestone?.title ?? ''));
     return {
         phase: state.phase,
         machineInsight: engine.machineInsight(),
