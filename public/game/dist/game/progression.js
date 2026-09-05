@@ -137,14 +137,15 @@ export class Progression {
         return copy?.name ?? id.replaceAll('_', ' ').toUpperCase();
     }
     static refreshKnown(state, system, rules, storage, out) { if (!this.systemUnlocked(state, system))
-        return; const known = state.meta.progression[storage]; for (const [id, rule] of Object.entries(rules)) {
-        if (known.includes(id))
+        return; const known = state.meta.progression[storage]; const knownSet = new Set(known); for (const [id, rule] of Object.entries(rules)) {
+        if (knownSet.has(id))
             continue;
         if (this.machineInsight(state) < rule.insight)
             continue;
         if (rule.universes !== undefined && state.meta.universesTotal < rule.universes)
             continue;
         known.push(id);
+        knownSet.add(id);
         this.announce(state, `option:${id}`, fill(text().reports.progression.newOptionUnlocked, { name: this.optionName(storage, id) }), out);
     } }
     /**

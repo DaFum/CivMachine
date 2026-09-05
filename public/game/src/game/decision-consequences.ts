@@ -10,7 +10,8 @@ function transitions(before: DecisionSnapshot, after: DecisionSnapshot): Decisio
   if (before.dramaPhaseId !== after.dramaPhaseId) result.dramaPhase = { from: before.dramaPhaseId, to: after.dramaPhaseId };
   if (before.era !== after.era) result.era = { from: before.era, to: after.era };
   if (before.dominantPath !== after.dominantPath) result.dominantPath = { from: before.dominantPath, to: after.dominantPath };
-  const addedEndgame = after.endgameStates.find(id => !before.endgameStates.includes(id));
+  const beforeEndgames = new Set(before.endgameStates);
+  const addedEndgame = after.endgameStates.find(id => !beforeEndgames.has(id));
   if (addedEndgame) result.endgameStateAdded = addedEndgame;
   if (before.entropyBand !== after.entropyBand) result.entropyBand = { from: before.entropyBand, to: after.entropyBand };
   return result;

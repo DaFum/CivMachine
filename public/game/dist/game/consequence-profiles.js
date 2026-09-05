@@ -29,13 +29,23 @@ export const CONSEQUENCE_PROFILES = [
     { id: 'apotheosis:recursive_audit', eventId: 'apotheosis_recursive_audit', tags: ['apotheosis_contact', 'surveillance', 'reality_damage'], significance: 'turning_point', impactVariant: 'recursive-audit', scar: { domain: 'reality', motif: 'recursive_audit_breach', strength: 3 } },
 ];
 const CONSEQUENCE_PROFILES_BY_ID = new Map(CONSEQUENCE_PROFILES.map(profile => [profile.id, profile]));
+const CONSEQUENCE_PROFILES_BY_EVENT_ID = new Map();
+for (const profile of CONSEQUENCE_PROFILES) {
+    let list = CONSEQUENCE_PROFILES_BY_EVENT_ID.get(profile.eventId);
+    if (!list) {
+        list = [];
+        CONSEQUENCE_PROFILES_BY_EVENT_ID.set(profile.eventId, list);
+    }
+    list.push(profile);
+}
 export function consequenceProfileById(id) {
     return CONSEQUENCE_PROFILES_BY_ID.get(id) ?? null;
 }
 export function consequenceProfileFor(eventId, additions) {
-    return CONSEQUENCE_PROFILES.find(profile => {
-        if (profile.eventId !== eventId)
-            return false;
+    const candidates = CONSEQUENCE_PROFILES_BY_EVENT_ID.get(eventId);
+    if (!candidates)
+        return null;
+    return candidates.find(profile => {
         if (!profile.requiresAddition)
             return true;
         return additions.some(addition => addition.kind === profile.requiresAddition.kind && addition.label === profile.requiresAddition.label);

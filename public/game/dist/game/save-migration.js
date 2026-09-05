@@ -25,6 +25,7 @@ export const SAVE_MIGRATIONS = [
     // migration contract exists to prevent.
     { from: 4, to: 5, id: 'v4_to_v5_simulation_speed_from_insight', apply: raw => grandfatherSimulationSpeed(raw) },
 ];
+const SAVE_MIGRATIONS_BY_FROM = new Map(SAVE_MIGRATIONS.map(step => [step.from, step]));
 export function legacySimulationSpeed(temporalInjectorLevel) {
     const level = Math.max(0, Math.trunc(Number(temporalInjectorLevel) || 0));
     return level >= 3 ? 4 : level >= 1 ? 2 : 1;
@@ -338,7 +339,7 @@ export function migrateSaveState(input) {
     let raw = input;
     if (!ahead) {
         for (let version = fromVersion; version < SAVE_VERSION; version++) {
-            const step = SAVE_MIGRATIONS.find(candidate => candidate.from === version);
+            const step = SAVE_MIGRATIONS_BY_FROM.get(version);
             if (!step)
                 break;
             const next = step.apply(raw);
