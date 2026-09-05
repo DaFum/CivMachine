@@ -1857,6 +1857,16 @@ test('an unaffordable run intervention changes nothing', () => {
   assert.equal(engine.state.machine.currencies.causal_mass, 10);
 });
 
+test('useRunIntervention handles missing civilization and missing definition separately', () => {
+  const engine = freshEngine();
+  assert.equal(engine.useRunIntervention('containment_pulse'), false);
+  assert.equal(engine.lastActionFailure, 'Start a civilization first.');
+
+  engine.startCivilization(422);
+  assert.equal(engine.useRunIntervention('nonexistent_intervention'), false);
+  assert.equal(engine.lastActionFailure, 'Unknown Machine intervention.');
+});
+
 test('run interventions stay locked behind their Insight gates', () => {
   const engine = freshEngine();
   engine.state.machine.currencies.causal_mass = 100_000;
