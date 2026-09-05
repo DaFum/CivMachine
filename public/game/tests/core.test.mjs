@@ -1864,7 +1864,7 @@ test('useRunIntervention handles missing civilization and missing definition sep
 
   engine.startCivilization(422);
   assert.equal(engine.useRunIntervention('nonexistent_intervention'), false);
-  assert.equal(engine.lastActionFailure, 'Unknown Machine intervention.');
+  assert.equal(engine.lastActionFailure, 'Unknown machine intervention.');
 });
 
 test('run interventions stay locked behind their Insight gates', () => {
