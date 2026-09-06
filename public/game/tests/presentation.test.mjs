@@ -2403,20 +2403,24 @@ test('isDisclosureOpen and setDisclosureOpen manage disclosure state', () => {
   assert.equal(isDisclosureOpen(id), false);
 });
 
-test('bindDisclosureListener attaches listener to document', () => {
+test('bindDisclosureListener attaches listener to document in capture mode', () => {
   let toggleHandler = null;
+  let capturedUseCapture = null;
   const mockDoc = {
-    addEventListener: (event, handler) => {
-      if (event === 'toggle') toggleHandler = handler;
+    addEventListener: (event, handler, useCapture) => {
+      if (event === 'toggle') {
+        toggleHandler = handler;
+        capturedUseCapture = useCapture;
+      }
     },
   };
   bindDisclosureListener(mockDoc);
   assert.equal(mockDoc.__disclosureListenerBound, true);
   assert.ok(toggleHandler);
+  assert.equal(capturedUseCapture, true, 'toggle listener must be registered in capture mode');
 
   // Calling again shouldn't re-bind
   let reBound = false;
-  const origAdd = mockDoc.addEventListener;
   mockDoc.addEventListener = () => { reBound = true; };
   bindDisclosureListener(mockDoc);
   assert.equal(reBound, false);
