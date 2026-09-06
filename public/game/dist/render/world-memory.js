@@ -11,22 +11,24 @@ export function worldMemorySignature(value) {
     const scars = memory.scars.map(scar => `${scar.domain}:${scar.motif}:${scar.strength}:${scar.anchor01.toFixed(4)}:${scar.evolution}`).sort();
     return `${marks.join(';')}|${scars.join(';')}`;
 }
+function isSettlementsSorted(settlements) {
+    const len = settlements.length;
+    for (let i = 1; i < len; i++) {
+        if (settlements[i].centerX < settlements[i - 1].centerX) {
+            return false;
+        }
+    }
+    return true;
+}
 // A mark belongs to the civilization, not to empty ground, so its deterministic anchor snaps to the
 // nearest settlement centre rather than landing wherever the hash pointed.
-function anchorX(anchor01, worldWidth, settlements) {
+function anchorX(anchor01, worldWidth, settlements, sorted = isSettlementsSorted(settlements)) {
     const target = Math.max(0, Math.min(worldWidth, anchor01 * worldWidth));
     const len = settlements.length;
     if (!len)
         return target;
     if (len === 1)
         return settlements[0].centerX;
-    let sorted = true;
-    for (let i = 1; i < len; i++) {
-        if (settlements[i].centerX < settlements[i - 1].centerX) {
-            sorted = false;
-            break;
-        }
-    }
     if (sorted) {
         let low = 0, high = len - 1;
         while (low <= high) {
@@ -141,13 +143,14 @@ function drawScar(surface, scar, x, ground, accent) {
 /** Persistent geometry, so it belongs on the cached scenery layer that scrolls 1:1 with the world. */
 export function drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlements, accent, view) {
     const memory = sanitizeWorldMemory(civ.visualMemory);
+    const sorted = isSettlementsSorted(settlements);
     for (const mark of memory.marks) {
-        const x = anchorX(mark.anchor01, worldWidth, settlements);
+        const x = anchorX(mark.anchor01, worldWidth, settlements, sorted);
         if (visible(x, view))
             drawMark(surface, mark, x, ground, accent);
     }
     for (const scar of memory.scars) {
-        const x = anchorX(scar.anchor01, worldWidth, settlements);
+        const x = anchorX(scar.anchor01, worldWidth, settlements, sorted);
         if (visible(x, view, 120))
             drawScar(surface, scar, x, ground, accent);
     }
@@ -155,9 +158,10 @@ export function drawWorldMemoryScenery(surface, civ, worldWidth, ground, settlem
 /** The only animated part of memory: a slow halo over scars, so the geometry itself stays cached. */
 export function drawWorldMemoryAccents(surface, civ, worldWidth, ground, settlements, accent, view, time, reducedMotion) {
     const memory = sanitizeWorldMemory(civ.visualMemory);
+    const sorted = isSettlementsSorted(settlements);
     const pulse = reducedMotion ? 1 : .65 + Math.sin(time * .002) * .35;
     for (const scar of memory.scars) {
-        const x = anchorX(scar.anchor01, worldWidth, settlements);
+        const x = anchorX(scar.anchor01, worldWidth, settlements, sorted);
         if (!visible(x, view, 120))
             continue;
         if (scar.domain === 'reality')

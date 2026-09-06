@@ -344,7 +344,7 @@ const AUDITED_SOURCE_FILES = [
   'data/expanded-interventions.ts', 'data/expanded-path-interventions.ts', 'data/help-topics.ts', 'data/i18n.ts',
   'data/intervention-copy.ts',
   'data/localization.ts',
-  'game/consequence-profiles.ts', 'game/convergence.ts', 'game/decision-consequences.ts', 'game/decision-feedback.ts',
+  'game/consequence-profiles.ts', 'game/content-validation.ts', 'game/convergence.ts', 'game/decision-consequences.ts', 'game/decision-feedback.ts',
   'game/development.ts', 'game/drama.ts', 'game/effects.ts', 'game/engine.ts', 'game/guidance.ts', 'game/harvest-quality.ts',
   'game/intervention-scheduler.ts', 'game/lore.ts', 'game/milestones.ts', 'game/paths.ts', 'game/pressure.ts',
   'game/progression.ts', 'game/rules.ts', 'game/run-directives.ts', 'game/run-interventions.ts', 'game/run-report.ts',

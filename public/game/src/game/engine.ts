@@ -132,6 +132,7 @@ import {
   balancedMachineUpgrades,
   balancedUniverseUpgrades,
 } from "./upgrade-balance.js";
+import { validateGameContent, type GameContent } from "./content-validation.js";
 import type { SaveMigrationReport } from "./save-migration.js";
 import type {
   BreedingMatrixDefinition,
@@ -208,18 +209,7 @@ const LOCALE_KEY = "reality_consumption_engine_locale";
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
 
-interface GameContent {
-  traits: Trait[];
-  events: PathEvent[];
-  machine_upgrades: UpgradeDefinition[];
-  universe_upgrades: UpgradeDefinition[];
-  axiom_upgrades: UpgradeDefinition[];
-  directives: DirectiveDefinition[];
-  breeding_matrices: BreedingMatrixDefinition[];
-  mutations: MutationDefinition[];
-  [key: string]: unknown;
-}
-const C = CONTENT as unknown as GameContent;
+const C = validateGameContent(CONTENT);
 
 export interface EngineOptions {
   storage?: StorageLike;
@@ -254,7 +244,7 @@ export class GameEngine {
   private feedbackSequence = 0;
   private traits: Trait[] = C.traits;
   private events: PathEvent[] = [
-    ...(applyEraCeiling(applyInterventionCopy(C.events as any)) as PathEvent[]),
+    ...applyEraCeiling(applyInterventionCopy(C.events)),
     ...(ENTROPY_CRISES as unknown as PathEvent[]),
     ...(APOTHEOSIS_EVENTS as unknown as PathEvent[]),
     ...(EXPANDED_INTERVENTIONS as unknown as PathEvent[]),
@@ -263,17 +253,17 @@ export class GameEngine {
     ...(EVENT_CHAINS as unknown as PathEvent[]),
   ];
   private machineUpgrades: UpgradeDefinition[] = balancedMachineUpgrades(
-    C.machine_upgrades as any[],
+    C.machine_upgrades,
   ) as UpgradeDefinition[];
   private universeUpgrades: UpgradeDefinition[] = balancedUniverseUpgrades(
-    C.universe_upgrades as any[],
+    C.universe_upgrades,
   ) as UpgradeDefinition[];
   private axiomUpgrades: UpgradeDefinition[] = balancedAxiomUpgrades(
-    C.axiom_upgrades as any[],
-  ) as UpgradeDefinition[];
+    C.axiom_upgrades,
+  );
   private directives: DirectiveDefinition[] = balancedDirectives(
-    C.directives as any[],
-  ) as DirectiveDefinition[];
+    C.directives,
+  );
   private matrices: BreedingMatrixDefinition[] = C.breeding_matrices;
   private mutations: MutationDefinition[] = C.mutations;
   private traitsMap: Map<string, Trait>;
