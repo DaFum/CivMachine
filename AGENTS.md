@@ -1,7 +1,7 @@
 # CivMachine — Agent Instructions
 
 Scoped rules live next to the code they govern: `app/`, `public/game/dist/`, `public/game/tests/`,
-and `public/game/src/{data,game,render}/` each carry their own `AGENTS.md`.
+and `public/game/src/{data,game,render,ui}/` each carry their own `AGENTS.md`.
 
 ## The build step you must not forget
 
