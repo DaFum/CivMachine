@@ -42,6 +42,7 @@ const APP_ASSETS = [
   '/game/dist/data/expanded-interventions.js',
   '/game/dist/data/expanded-path-interventions.js',
   '/game/dist/game/consequence-profiles.js',
+  '/game/dist/game/content-validation.js',
   '/game/dist/game/decision-consequences.js',
   '/game/dist/game/decision-feedback.js',
   '/game/dist/game/drama.js',

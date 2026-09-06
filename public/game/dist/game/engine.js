@@ -26,6 +26,7 @@ import { MILESTONE_CATALOG, completedMilestoneCount } from "./milestones.js";
 import { buildRunReport, recordRunTrace } from "./run-report.js";
 import { acknowledgeStep, advanceTutorial, liveTutorialFacts, newTutorialState, normalizeTutorialState, recordTutorialFact, tutorialView, } from "./tutorial.js";
 import { balancedAxiomUpgrades, balancedDirectives, balancedMachineUpgrades, balancedUniverseUpgrades, } from "./upgrade-balance.js";
+import { validateGameContent } from "./content-validation.js";
 // The era identifiers in upper case, derived from the one ordered list in `rules.ts` rather than
 // spelled out a second time here. Everything read on screen goes through `eraLabel`.
 export const ERA_NAMES = ERA_IDS.map((id) => id.toUpperCase());
@@ -74,35 +75,6 @@ const LOCALE_KEY = "reality_consumption_engine_locale";
 // A save that had to be migrated, repaired or refused is copied here verbatim before anything
 // overwrites the live slot, so a loader bug costs a player nothing they cannot get back.
 export const SAVE_BACKUP_KEY = `${SAVE_KEY}_backup`;
-function isPlainObject(value) {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function validateGameContent(raw) {
-    const obj = isPlainObject(raw) ? raw : {};
-    return {
-        ...obj,
-        traits: Array.isArray(obj.traits) ? obj.traits : [],
-        events: Array.isArray(obj.events) ? obj.events : [],
-        machine_upgrades: Array.isArray(obj.machine_upgrades)
-            ? obj.machine_upgrades
-            : [],
-        universe_upgrades: Array.isArray(obj.universe_upgrades)
-            ? obj.universe_upgrades
-            : [],
-        axiom_upgrades: Array.isArray(obj.axiom_upgrades)
-            ? obj.axiom_upgrades
-            : [],
-        directives: Array.isArray(obj.directives)
-            ? obj.directives
-            : [],
-        breeding_matrices: Array.isArray(obj.breeding_matrices)
-            ? obj.breeding_matrices
-            : [],
-        mutations: Array.isArray(obj.mutations)
-            ? obj.mutations
-            : [],
-    };
-}
 const C = validateGameContent(CONTENT);
 const RUNTIME_BONUS_MAP = {
     development_mult: "developmentMult",
