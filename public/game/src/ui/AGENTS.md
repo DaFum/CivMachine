@@ -6,11 +6,15 @@ binds event listeners, and manages live resource/cost refreshes. Pure view trans
 
 ## Structural Keys vs. Live Refreshes
 
-DOM panels rebuild only when `civilizationRenderKey` in `view-model.ts` changes. This key tracks
-structural state changes — era shifts, path selections, intervention choices, directives, and active locale.
-**It must never include continuously changing numbers** (e.g. ticks, exact resource balances, reserve costs,
-or harvest yields) to avoid tearing down and rebuilding the DOM on every tick. Continuously changing text
-and meters are written through direct DOM queries in `updateLiveRefreshes` in `app.ts`.
+The civilization panel column rebuilds only when `civilizationRenderKey` in `view-model.ts` changes
+(guarding `renderCivilization` in `app.ts`). Other UI surfaces — the resource bar, metadata dock,
+Machine view, victory view, logs, and tutorial overlay — update through independent paths.
+
+`civilizationRenderKey` tracks structural state changes (era shifts, path selections, intervention choices,
+directives, and active locale). **It must never include continuously changing numbers** (e.g. ticks,
+exact resource balances, reserve costs, or harvest yields) to avoid tearing down and rebuilding the DOM on
+every tick. Continuously changing text and meters are written through direct DOM queries in
+`refreshCivilizationLive` in `app.ts`.
 
 ## Disclosure State
 
@@ -26,5 +30,9 @@ and post-run reports respectively. UI presentation reads state (`state.tutorial`
 
 ## Localization
 
-All player-facing UI text reads from `data/i18n.ts` via `text()`. UI components must read localized copy
-at render time rather than caching localized strings in module-level constants, ensuring seamless language switching.
+Player-facing UI copy reads from `data/i18n.ts` via `text()` at render time, ensuring seamless language switching.
+Keep the standard exceptions in mind:
+- **Write-time records**: `machine.lastRunReport` and run `history` keep the language they were written in.
+- **Canonical names**: Events, interventions, upgrades, directives, paths, traits, mutations, and lore word lists
+  remain in English across all locales.
+- **Structural IDs vs. Copy**: IDs are structure and must never be translated.
