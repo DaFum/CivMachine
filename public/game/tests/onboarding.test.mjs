@@ -6,6 +6,7 @@ import { buildViewModel, civilizationRenderKey } from '../dist/ui/view-model.js'
 import {
   TUTORIAL_STEPS, acknowledgeStep, advanceTutorial, newTutorialState,
   normalizeTutorialState, recordTutorialFact, tutorialView,
+  tutorialStepById, stepCleared, currentStep, liveTutorialFacts,
 } from '../dist/game/tutorial.js';
 import {
   REPORT_TIMELINE_ENTRIES, TRACE_BASE_INTERVAL_SECONDS, TRACE_MAX_SAMPLES,
@@ -83,6 +84,53 @@ test('every step answers what, where and why, and names an action when it waits 
   // player is never asked to act before they have been told what the game is.
   assert.equal(TUTORIAL_STEPS[0].requires, '');
   assert.equal(TUTORIAL_STEPS[1].requires, 'run_started');
+});
+
+test('tutorialStepById returns matching step for valid ID and null for invalid ID', () => {
+  assert.equal(tutorialStepById('overview')?.title, 'You are the Machine');
+  assert.equal(tutorialStepById('harvest')?.id, 'harvest');
+  assert.equal(tutorialStepById('non_existent_step_id'), null);
+  assert.equal(tutorialStepById(''), null);
+});
+
+test('stepCleared correctly evaluates fact-gated vs acknowledge-gated steps', () => {
+  const state = newTutorialState('active');
+  const factGatedStep = TUTORIAL_STEPS.find(s => s.requires !== '');
+  const ackGatedStep = TUTORIAL_STEPS.find(s => s.requires === '');
+
+  assert.equal(stepCleared(state, factGatedStep), false);
+  assert.equal(stepCleared(state, ackGatedStep), false);
+
+  state.observed.push(factGatedStep.requires);
+  state.acknowledged.push(ackGatedStep.id);
+
+  assert.equal(stepCleared(state, factGatedStep), true);
+  assert.equal(stepCleared(state, ackGatedStep), true);
+});
+
+test('currentStep returns active step or null depending on tutorial state', () => {
+  const state = newTutorialState('active');
+  state.stepId = 'world_read';
+  assert.equal(currentStep(state)?.id, 'world_read');
+
+  state.stepId = '';
+  assert.equal(currentStep(state)?.id, 'overview');
+
+  state.status = 'skipped';
+  assert.equal(currentStep(state), null);
+
+  state.status = 'completed';
+  assert.equal(currentStep(state), null);
+});
+
+test('liveTutorialFacts derives facts correctly from civilization state', () => {
+  assert.deepEqual(liveTutorialFacts(null), []);
+
+  const emptyCiv = { eventChoices: 0, tactical: { actionUsage: {} } };
+  assert.deepEqual(liveTutorialFacts(emptyCiv), ['run_started']);
+
+  const activeCiv = { eventChoices: 2, tactical: { actionUsage: { probe: 1 } } };
+  assert.deepEqual(liveTutorialFacts(activeCiv), ['run_started', 'intervention_resolved', 'tactical_used']);
 });
 
 test('a fact clears its step and an acknowledge-only step cannot be cleared by one', () => {

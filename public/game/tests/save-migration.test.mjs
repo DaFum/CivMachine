@@ -392,6 +392,63 @@ test('a storage that rejects writes says so once and keeps the game running', ()
   assert.equal(engine.state.saveVersion, SAVE_VERSION);
 });
 
+test('storage read error in load and restoreLocale fall back safely', () => {
+  const engine = new GameEngine({
+    storage: {
+      getItem: key => { throw new Error(`Read error on ${key}`); },
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  });
+  assert.equal(engine.load(), null);
+  assert.ok(engine.state);
+  assert.equal(engine.locale(), 'en');
+});
+
+test('storage read error in restoreBackup handles error gracefully and returns false', () => {
+  const engine = new GameEngine({
+    storage: {
+      getItem: key => {
+        if (key === SAVE_BACKUP_KEY) throw new Error('Read error on backup');
+        return null;
+      },
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  });
+  assert.equal(engine.restoreBackup(), false);
+});
+
+test('writeBackup silently catches storage write errors when saving', () => {
+  const stored = JSON.stringify({ ...progressedState(), saveVersion: 3 });
+  const engine = new GameEngine({
+    storage: {
+      getItem: key => (key === SAVE_KEY ? stored : null),
+      setItem: (key) => {
+        if (key === SAVE_BACKUP_KEY) throw new Error('QuotaExceededError on backup');
+      },
+      removeItem: () => {},
+    },
+  });
+  assert.equal(engine.saveMigration.status, 'migrated');
+  assert.doesNotThrow(() => engine.save());
+});
+
+test('setLocale silently catches storage write errors and updates locale in memory', () => {
+  const engine = new GameEngine({
+    storage: {
+      getItem: () => null,
+      setItem: () => { throw new Error('Private mode storage error'); },
+      removeItem: () => {},
+    },
+  });
+  const success = engine.setLocale('de');
+  assert.equal(success, true);
+  assert.equal(engine.locale(), 'de');
+  // Reset locale back to 'en' for subsequent tests
+  engine.setLocale('en');
+});
+
 test('an in-progress run keeps playing across a migrating load', () => {
   const stored = JSON.stringify({ ...progressedState(), saveVersion: 2 });
   const engine = engineOn(storageWith({ [SAVE_KEY]: stored }));

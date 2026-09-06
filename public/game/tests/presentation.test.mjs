@@ -18,6 +18,8 @@ import { structureKindsForEra, drawStructure, drawBanner, bannerGeometry, settle
 import { agentPlan, agentPlanTotal } from '../dist/render/agents.js';
 import { MAX_ROUTE_FLOW_MARKS, MAX_TRADE_ROUTES, ROAD_LANES, ROAD_TOP_OFFSET, ROUTE_MAX_BOW, ROUTE_STEP, roadbedHeight, roadLaneOffset, routeFlowMarks, routeOffsetAt, routePointAt, routePolyline, tradeRoutes } from '../dist/render/routes.js';
 import { ConstructionTracker, CONSTRUCTION_MS, CONSTRUCTION_REDUCED_MS, MAX_CONCURRENT_BUILDS } from '../dist/render/construction.js';
+import { fmt, pct, duration } from '../dist/ui/format.js';
+import { isDisclosureOpen, setDisclosureOpen, bindDisclosureListener } from '../dist/ui/disclosure.js';
 import { RenderQualityController, qualityFactors, dynamicFrameIntervalMs, DYNAMIC_FRAME_MS, DYNAMIC_FRAME_MS_SMOOTH, REDUCED_MOTION_FRAME_MS } from '../dist/render/quality.js';
 import { applyQualityToLiveSample, MAX_PARTICLES, MAX_HAZE_BANDS, MAX_FRACTURES, MAX_BEACONS } from '../dist/render/world-model.js';
 import { worldMemorySignature } from '../dist/render/world-memory.js';
@@ -2351,6 +2353,96 @@ test('the substrate is deterministic, lit from one direction and bounded in its 
   assert.deepEqual(ridgePoints({ from: 200, to: 400 }, first.worldWidth, 500, SHELF_STEP, 20, 400, civ.seed, .38)
     .filter(([x]) => x >= 300 && x <= 350),
     profile.filter(([x]) => x >= 300 && x <= 350), 'the ridge sampler moved with the band');
+});
+
+test('fmt formats numbers with boundary values and non-finite inputs', () => {
+  assert.equal(fmt(0), '0');
+  assert.equal(fmt(999), '999');
+  assert.equal(fmt(1000), '1.0K');
+  assert.equal(fmt(1234), '1.2K');
+  assert.equal(fmt(999999), '1000.0K');
+  assert.equal(fmt(1000000), '1.00M');
+  assert.equal(fmt(2500000), '2.50M');
+  assert.equal(fmt(-1000), '-1.0K');
+  assert.equal(fmt(-1000000), '-1.00M');
+  assert.ok(fmt(Infinity).includes('M'));
+  assert.ok(fmt(-Infinity).includes('M'));
+  assert.match(fmt(NaN), /NaN/);
+});
+
+test('pct percentage formatter handles boundary values and non-finite inputs', () => {
+  assert.equal(pct(0), '0%');
+  assert.equal(pct(50), '50%');
+  assert.equal(pct(100), '100%');
+  assert.equal(pct(-10), '0%');
+  assert.equal(pct(150), '100%');
+  assert.equal(pct(NaN), '0%');
+  assert.equal(pct(Infinity), '100%');
+  assert.equal(pct(-Infinity), '0%');
+  assert.equal(pct(25, 50), '50%');
+  assert.equal(pct(0, 0), '0%');
+});
+
+test('duration time formatter handles negative, zero, infinity, and NaN inputs', () => {
+  assert.equal(duration(0), '0s');
+  assert.equal(duration(45), '45s');
+  assert.equal(duration(60), '1m 00s');
+  assert.equal(duration(125), '2m 05s');
+  assert.equal(duration(-30), '0s');
+  assert.equal(duration(NaN), '0s');
+  assert.equal(duration(Infinity), '0s');
+  assert.equal(duration(-Infinity), '0s');
+});
+
+test('isDisclosureOpen and setDisclosureOpen manage disclosure state', () => {
+  const id = 'test-disclosure-1';
+  assert.equal(isDisclosureOpen(id), false);
+  setDisclosureOpen(id, true);
+  assert.equal(isDisclosureOpen(id), true);
+  setDisclosureOpen(id, false);
+  assert.equal(isDisclosureOpen(id), false);
+});
+
+test('bindDisclosureListener attaches listener to document in capture mode', () => {
+  let toggleHandler = null;
+  let capturedUseCapture = null;
+  const mockDoc = {
+    addEventListener: (event, handler, useCapture) => {
+      if (event === 'toggle') {
+        toggleHandler = handler;
+        capturedUseCapture = useCapture;
+      }
+    },
+  };
+  bindDisclosureListener(mockDoc);
+  assert.equal(mockDoc.__disclosureListenerBound, true);
+  assert.ok(toggleHandler);
+  assert.equal(capturedUseCapture, true, 'toggle listener must be registered in capture mode');
+
+  // Calling again shouldn't re-bind
+  let reBound = false;
+  mockDoc.addEventListener = () => { reBound = true; };
+  bindDisclosureListener(mockDoc);
+  assert.equal(reBound, false);
+
+  // Test toggle handler execution
+  const id = 'bound-disclosure-test';
+  setDisclosureOpen(id, false);
+  toggleHandler({
+    target: {
+      dataset: { disclosure: id },
+      open: true,
+    },
+  });
+  assert.equal(isDisclosureOpen(id), true);
+
+  toggleHandler({
+    target: {
+      dataset: { disclosure: id },
+      open: false,
+    },
+  });
+  assert.equal(isDisclosureOpen(id), false);
 });
 
 test('the crest stipple does not crawl when the world is scrolled', () => {
