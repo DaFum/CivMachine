@@ -88,118 +88,94 @@ function shelfHeightAt(x: number, amplitude: number, wavelength: number, seed: n
  *   elevation so the nearest, tallest step casts furthest.
  * - **A boundary that is not a vector edge.** See `MAX_DITHER_CELLS`.
  */
+function drawShelfShadows(surface: DrawSurface, presentation: Presentation, level: number, shelf: number, shelfBase: number, shelfHeight: number, plane: number, span: number, view: Band): void {
+  const colors = presentation.colors;
+  const shadowShift = -LIGHT_FROM_X * level * 1.5;
+  const mistRise = shelfHeight * .6;
+  const mistBottom = Math.min(shelfBase + 2, plane);
+  surface.fillLinearGradientRect(view.from + shadowShift, shelfBase - shelfHeight - mistRise, span, mistBottom - (shelfBase - shelfHeight - mistRise), [
+    { offset: 0, color: colors.haze, alpha: 0 },
+    { offset: 1, color: colors.haze, alpha: (.09 - shelf * .022) + presentation.sanityDistortion * .04 },
+  ], view.from, shelfBase - shelfHeight - mistRise, view.from, mistBottom);
+
+  const castDepth = Math.min(shelfHeight * .5 + level * 1.5, Math.max(2, plane - shelfBase));
+  surface.fillLinearGradientRect(view.from + shadowShift * 2, shelfBase - shelfHeight * .5, span, shelfHeight * .5 + castDepth, [
+    { offset: 0, color: shade(colors.groundNear, .5), alpha: 0 },
+    { offset: 1, color: shade(colors.groundNear, .5), alpha: .1 + level * .03 },
+  ], view.from, shelfBase - shelfHeight * .5, view.from, shelfBase + castDepth);
+}
+
+function drawShelfCrestAndContour(surface: DrawSurface, presentation: Presentation, shelf: number, shelfBase: number, shelfHeight: number, shelfPoints: Array<readonly [number, number]>, worldWidth: number, wavelength: number, shelfSeed: number, view: Band): number {
+  const colors = presentation.colors;
+  const crestColor = mixColor(colors.nearTerrain, colors.skyHorizon, .2 - shelf * .06);
+  const footColor = shade(mixColor(colors.nearTerrain, colors.groundNear, .45 + shelf * .25), shelf * .12);
+
+  surface.fillLinearGradientPoly(shelfPoints, [
+    { offset: 0, color: crestColor, alpha: .95 },
+    { offset: 1, color: footColor, alpha: .95 },
+  ], view.from, shelfBase - shelfHeight, view.from, shelfBase + 6);
+
+  const contour: Array<readonly [number, number]> = [];
+  const firstContour = Math.max(0, Math.floor(view.from / CONTOUR_STEP) - 1);
+  for (let cell = firstContour; cell * CONTOUR_STEP <= view.to + CONTOUR_STEP; cell++) {
+    const x = cell * CONTOUR_STEP;
+    if (x > worldWidth) break;
+    contour.push([x, shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed) * .46]);
+  }
+  if (contour.length > 1) {
+    surface.lineStyle(1, mixColor(footColor, colors.skyHorizon, .3), .07 + (SHELF_COUNT - shelf) * .015).strokePoly(contour);
+  }
+
+  surface.lineStyle(1, mixColor(colors.skyHorizon, colors.groundNear, .35 + shelf * .2), .2 - shelf * .045)
+    .strokePoly(shelfPoints.slice(1, -1).map(([x, y]) => [x + LIGHT_FROM_X * .5, y + LIGHT_FROM_Y * .5] as const));
+
+  return crestColor;
+}
+
+function drawShelfStipple(surface: DrawSurface, crestColor: number, shelfBase: number, shelfHeight: number, wavelength: number, shelfSeed: number, worldWidth: number, span: number, nominalSpan: number, view: Band): void {
+  const rows = Math.max(1, Math.min(3, Math.floor(shelfHeight / DITHER_CELL)));
+  const nominalColumns = Math.max(1, Math.floor(Math.max(span, nominalSpan) / DITHER_CELL));
+  const stride = Math.max(1, Math.ceil((nominalColumns * rows) / MAX_DITHER_CELLS));
+  const firstCell = Math.max(0, Math.floor(view.from / DITHER_CELL));
+  const lastCell = Math.min(Math.floor(worldWidth / DITHER_CELL), Math.ceil(view.to / DITHER_CELL));
+  let drawn = 0;
+  for (let cell = firstCell; cell <= lastCell && drawn < MAX_DITHER_CELLS; cell++) {
+    const x = cell * DITHER_CELL;
+    for (let row = 0; row < rows && drawn < MAX_DITHER_CELLS; row++) {
+      if ((cell + row) % stride !== 0) continue;
+      const crestY = shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed);
+      const y = crestY - (row + 1) * DITHER_CELL;
+      const coverage = 1 - row / rows;
+      if (bayerThreshold(cell, Math.floor(y / DITHER_CELL)) > coverage) continue;
+      surface.fillStyle(crestColor, .5).fillRect(x, y, DITHER_CELL, DITHER_CELL);
+      drawn++;
+    }
+  }
+}
+
 export function drawGroundShelves(surface: DrawSurface, presentation: Presentation, seed: number, worldWidth: number, horizon: number, plane: number, view: Band, nominalSpan: number): void {
   const span = view.to - view.from;
   if (span <= 0) return;
-  const colors = presentation.colors;
-  // The band that actually shows. This used to be measured to the bottom of the frame, and the
-  // bottom of the frame is not where this layer ends: the scenery layer paints the settlement plane
-  // over it opaquely from `plane` down, so two of the three shelves stood entirely underneath an
-  // opaque fill -- their crests, their mist and their fills were emitted on every scrolled pixel and
-  // nobody ever saw them. The ground between the ridge feet and the city is a ninth of the viewport,
-  // and that is the space the shelves have to compose in.
   const top = horizon + 12;
   const shelfSpan = plane - top;
   if (shelfSpan <= 6) return;
 
-  // The stipple is spent on the nearest shelf only -- the one closest to the eye, with the most
-  // contrast against the plane behind it -- and its share is decided before the loop, so the count
-  // cannot grow with the number of shelves or with the width of the world.
   const stippleShelf = SHELF_COUNT - 1;
 
   for (let shelf = 0; shelf < SHELF_COUNT; shelf++) {
-    // Bases spread across the visible band and relief scaled to it, so the composition is the same
-    // on a phone as on a desktop instead of the nearer steps falling out of the frame.
     const shelfBase = top + shelfSpan * (.3 + shelf * .3);
     const shelfHeight = Math.max(4, shelfSpan * (.42 + shelf * .16));
     const wavelength = 520 - shelf * 150;
     const shelfSeed = seed * 23 + shelf * 71;
     const shelfPoints = ridgePoints(view, worldWidth, shelfBase, SHELF_STEP, shelfHeight, wavelength, shelfSeed, .38);
     if (shelfPoints.length <= 2) continue;
-    // Elevation level: the near shelf stands highest above the plane behind it, so it casts furthest.
     const level = 1 + shelf;
 
-    // The mist the shelf stands in, laid down first so the crest rises out of it -- offset *away*
-    // from the light, so the pooled shadow sits on the shaded side of the crest rather than
-    // symmetrically under it.
-    const shadowShift = -LIGHT_FROM_X * level * 1.5;
-    const mistRise = shelfHeight * .6;
-    // Clamped to the plane, like the cast band below: nothing this pass paints may reach under the
-    // settlement ground, or it is emitted on every scrolled pixel for nobody.
-    const mistBottom = Math.min(shelfBase + 2, plane);
-    surface.fillLinearGradientRect(view.from + shadowShift, shelfBase - shelfHeight - mistRise, span, mistBottom - (shelfBase - shelfHeight - mistRise), [
-      { offset: 0, color: colors.haze, alpha: 0 },
-      { offset: 1, color: colors.haze, alpha: (.09 - shelf * .022) + presentation.sanityDistortion * .04 },
-    ], view.from, shelfBase - shelfHeight - mistRise, view.from, mistBottom);
-    // And the shadow the step itself casts onto the ground behind it: the same band again, darker
-    // and offset further, which is what separates "there is mist here" from "something stands here".
-    const castDepth = Math.min(shelfHeight * .5 + level * 1.5, Math.max(2, plane - shelfBase));
-    surface.fillLinearGradientRect(view.from + shadowShift * 2, shelfBase - shelfHeight * .5, span, shelfHeight * .5 + castDepth, [
-      { offset: 0, color: shade(colors.groundNear, .5), alpha: 0 },
-      { offset: 1, color: shade(colors.groundNear, .5), alpha: .1 + level * .03 },
-    ], view.from, shelfBase - shelfHeight * .5, view.from, shelfBase + castDepth);
+    drawShelfShadows(surface, presentation, level, shelf, shelfBase, shelfHeight, plane, span, view);
+    const crestColor = drawShelfCrestAndContour(surface, presentation, shelf, shelfBase, shelfHeight, shelfPoints, worldWidth, wavelength, shelfSeed, view);
 
-    const crestColor = mixColor(colors.nearTerrain, colors.skyHorizon, .2 - shelf * .06);
-    const footColor = shade(mixColor(colors.nearTerrain, colors.groundNear, .45 + shelf * .25), shelf * .12);
-    surface.fillLinearGradientPoly(shelfPoints, [
-      { offset: 0, color: crestColor, alpha: .95 },
-      { offset: 1, color: footColor, alpha: .95 },
-    ], view.from, shelfBase - shelfHeight, view.from, shelfBase + 6);
-
-    // The contour inside the form, on its own coarse lattice.
-    const contour: Array<readonly [number, number]> = [];
-    const firstContour = Math.max(0, Math.floor(view.from / CONTOUR_STEP) - 1);
-    for (let cell = firstContour; cell * CONTOUR_STEP <= view.to + CONTOUR_STEP; cell++) {
-      const x = cell * CONTOUR_STEP;
-      if (x > worldWidth) break;
-      // At .46 of the local relief: high enough to follow the crest's shape, low enough that it
-      // never reads as a second, fainter crest.
-      contour.push([x, shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed) * .46]);
-    }
-    if (contour.length > 1) {
-      surface.lineStyle(1, mixColor(footColor, colors.skyHorizon, .3), .07 + (SHELF_COUNT - shelf) * .015).strokePoly(contour);
-    }
-
-    // The crest catching the light, displaced *toward* it: the lit edge of the step. This is the
-    // whole of what turns a graded band into receding ground, and the offset is what says the light
-    // has a direction rather than being ambient.
-    surface.lineStyle(1, mixColor(colors.skyHorizon, colors.groundNear, .35 + shelf * .2), .2 - shelf * .045)
-      .strokePoly(shelfPoints.slice(1, -1).map(([x, y]) => [x + LIGHT_FROM_X * .5, y + LIGHT_FROM_Y * .5] as const));
-
-    if (shelf !== stippleShelf) continue;
-    // The crest dissolve: cells above the crest, kept or dropped by the ordered threshold against a
-    // coverage that falls off with height, so the edge breaks up into a raster that thins upward
-    // instead of ending on a line.
-    //
-    // Both halves of the selection are anchored in **world** coordinates, and the difference
-    // matters more than it looks. Quantizing a cell's x to the lattice is not enough: walking the
-    // stride from `view.from` picks the columns *relative to the viewport*, so a scroll of one cell
-    // moves every chosen column by one cell -- and this layer repaints on every scrolled pixel, so
-    // the stipple would crawl along a ridge that is itself world-anchored. The comb below runs on
-    // absolute lattice indices instead, and its period comes from `nominalSpan` -- the band's width
-    // before it is clipped at the world's ends -- so the period is a function of the viewport, which
-    // changes only on a resize, and never of where the player has scrolled to.
-    const rows = Math.max(1, Math.min(3, Math.floor(shelfHeight / DITHER_CELL)));
-    const nominalColumns = Math.max(1, Math.floor(Math.max(span, nominalSpan) / DITHER_CELL));
-    const stride = Math.max(1, Math.ceil((nominalColumns * rows) / MAX_DITHER_CELLS));
-    const firstCell = Math.max(0, Math.floor(view.from / DITHER_CELL));
-    const lastCell = Math.min(Math.floor(worldWidth / DITHER_CELL), Math.ceil(view.to / DITHER_CELL));
-    let drawn = 0;
-    for (let cell = firstCell; cell <= lastCell && drawn < MAX_DITHER_CELLS; cell++) {
-      const x = cell * DITHER_CELL;
-      for (let row = 0; row < rows && drawn < MAX_DITHER_CELLS; row++) {
-        // One diagonal comb through the lattice: a cell belongs to it or it does not, whatever band
-        // it is asked for. The row skew keeps the three rows from all choosing the same columns.
-        if ((cell + row) % stride !== 0) continue;
-        const crestY = shelfBase - shelfHeightAt(x, shelfHeight, wavelength, shelfSeed);
-        const y = crestY - (row + 1) * DITHER_CELL;
-        // Coverage: near solid against the crest, thinning to a third at the top of the band, so no
-        // row of the comb is spent on cells the threshold can never keep.
-        const coverage = 1 - row / rows;
-        if (bayerThreshold(cell, Math.floor(y / DITHER_CELL)) > coverage) continue;
-        surface.fillStyle(crestColor, .5).fillRect(x, y, DITHER_CELL, DITHER_CELL);
-        drawn++;
-      }
+    if (shelf === stippleShelf) {
+      drawShelfStipple(surface, crestColor, shelfBase, shelfHeight, wavelength, shelfSeed, worldWidth, span, nominalSpan, view);
     }
   }
 }

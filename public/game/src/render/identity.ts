@@ -176,30 +176,9 @@ function leadingAffinityPath(state: Civilization['pathState'] | undefined): stri
  * to each motif. `ambientLoopFraction` comes from adaptive quality: at 0 the marks are still drawn,
  * they simply stop moving -- a slow device loses the animation, never the identity.
  */
-export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: {from:number;to:number}, tier: IdentityTier, ambientLoopFraction = 1): void {
-  // Read the saved path state directly. This runs on every dynamic frame, and `CivilizationPaths.ensure`
-  // normalizes -- that is, writes to -- the civilization it is handed, which the renderer must never do.
-  const state = civ.pathState;
-  const path = state?.dominantPath || leadingAffinityPath(state);
-  if (!path || tier < 1) return;
-  // Every motif scatters a handful of marks across the whole world. Each is small, so one slack
-  // covers them all, and the guard keeps the dominant path from being the one thing still painted
-  // world-wide on the layer that repaints every frame.
-  const shows = (x: number): boolean => x >= view.from - MOTIF_SLACK && x <= view.to + MOTIF_SLACK;
-  // Stride rather than truncate, so a thinned tier-1 motif still spans the world instead of
-  // crowding into its first half.
-  const step = tier <= 1 ? 2 : 1;
-  const alpha = (base: number): number => Math.min(1, base * (tier <= 1 ? .7 : tier >= 3 ? 1.15 : 1));
-  const detailed = tier >= 3;
-  const loop = ambientLoopFraction > 0 ? time : 0;
-  // Each path moves in its own way, not merely in its own colour. A pulse that travels along a chain
-  // is a different civilization from one that breathes, or from one that refuses to move at all --
-  // and at `ambientLoopFraction` 0 every one of them freezes without losing its geometry.
-  const wave = (period: number, offset: number): number => loop === 0 ? .7 : .5 + .5 * Math.sin(loop / period + offset);
+function drawPrimaryPathAmbience(path: string, surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, accent: number, shows: (x: number) => boolean, step: number, alpha: (base: number) => number, detailed: boolean, loop: number, wave: (period: number, offset: number) => number): boolean {
   switch (path) {
     case 'machine_faith':
-      // Ritual sequence: the shrine lights come up one after another along the world, like a liturgy
-      // being said down the length of the civilization.
       for (let i = 0; i < 8; i += step) {
         const x = worldWidth * (.08 + i * .12);
         if (!shows(x)) continue;
@@ -209,18 +188,16 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         surface.fillStyle(accent, alpha(.28 + rite * .32)).fillCircle(x, litY, 3 + rite * 2);
         if (detailed) surface.lineStyle(1, accent, alpha(.14 + rite * .16)).strokeCircle(x, litY, 9 + rite * 4);
       }
-      break;
+      return true;
     case 'collective_mind': {
       const points = Array.from({ length: 12 }, (_, i) => ({ x: worldWidth * (.05 + hash01(civ.seed + i) * .9), y: ground - 40 - hash01(i * 17) * 100 }))
         .filter((_, i) => i % step === 0);
       surface.lineStyle(1, accent, alpha(.22));
-      // A segment survives if either end shows, or the chain would break at the band edge.
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1]!, b = points[i]!;
         if (!shows(a.x) && !shows(b.x)) continue;
         surface.line(a.x, a.y, b.x, b.y);
       }
-      // One pulse travelling the chain, so the nodes read as synchronized rather than as dots.
       const head = loop === 0 ? .35 : ((loop / 3200) % 1);
       for (const [index, point] of points.entries()) if (shows(point.x)) {
         const distance = Math.abs(index / Math.max(1, points.length - 1) - head);
@@ -228,10 +205,9 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         surface.fillStyle(accent, alpha(.36 + carry * .5)).fillCircle(point.x, point.y, 2.6 + carry * 2.4);
         if (detailed) surface.lineStyle(1, accent, alpha(.14 + carry * .22)).strokeCircle(point.x, point.y, 7 + carry * 5);
       }
-      break;
+      return true;
     }
     case 'temporal_dominion':
-      // Chronal echo: every ring carries a second, offset copy of itself a beat behind.
       for (let i = 0; i < 7; i += step) {
         const x = worldWidth * (.1 + i * .13); const y = height * .22 + (i % 2) * 30;
         if (!shows(x)) continue;
@@ -241,7 +217,7 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         surface.lineStyle(1, accent, alpha(.45)).line(x, y, x + Math.cos(loop * .001 + i) * 10, y + Math.sin(loop * .001 + i) * 10);
         if (detailed) surface.lineStyle(1, accent, alpha(.2)).strokeCircle(x, y, 19 + i * 2);
       }
-      break;
+      return true;
     case 'reality_engineering':
       for (let i = 0; i < 9; i += step) {
         const x = worldWidth * (.08 + i * .105); const y = ground - 50 - (i % 3) * 35;
@@ -249,9 +225,8 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         surface.lineStyle(2, accent, alpha(.3)).line(x - 12, y + 12, x, y - 12).line(x, y - 12, x + 12, y + 12).line(x + 12, y + 12, x - 12, y + 12);
         if (detailed) surface.lineStyle(1, accent, alpha(.2)).line(x - 6, y + 12, x + 6, y + 12);
       }
-      break;
+      return true;
     case 'biological_transcendence':
-      // Living light: the growths breathe, each on its own slow cycle.
       for (let i = 0; i < 18; i += step) {
         const x = worldWidth * hash01(civ.seed + i * 13); if (!shows(x)) continue;
         const breath = wave(1400, hash01(i * 7) * 6);
@@ -259,9 +234,15 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         surface.fillStyle(accent, alpha(.09 + breath * .1)).fillCircle(x, y, (8 + hash01(i) * 14) * (.85 + breath * .25));
         if (detailed) surface.lineStyle(1, accent, alpha(.16)).line(x, ground - 6, x, y);
       }
-      break;
+      return true;
+    default:
+      return false;
+  }
+}
+
+function drawSecondaryPathAmbience(path: string, surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, accent: number, shows: (x: number) => boolean, step: number, alpha: (base: number) => number, detailed: boolean, loop: number, wave: (period: number, offset: number) => number): void {
+  switch (path) {
     case 'cosmic_resistance':
-      // Warning lighting sweeping along the defensive line, one emplacement at a time.
       for (let i = 0; i < 12; i += step) {
         const x = worldWidth * (.03 + i * .085);
         if (!shows(x)) continue;
@@ -272,8 +253,6 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'bureaucratic_singularity':
-      // Deliberately motionless. Every other path moves; ordered regularity that never changes is
-      // this one's whole character, and animating it would take that away.
       for (let i = 0; i < 10; i += step) {
         const x = worldWidth * (.06 + i * .095); const y = ground - 70 - (i % 2) * 28;
         if (!shows(x)) continue;
@@ -283,7 +262,6 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'post_mortal_civilization':
-      // Continuity halos: they never go out, they only breathe -- nothing here ends.
       for (let i = 0; i < 9; i += step) {
         const x = worldWidth * (.07 + i * .11); const y = ground - 55 - (i % 3) * 20;
         if (!shows(x)) continue;
@@ -303,7 +281,6 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
       }
       break;
     case 'recursive_simulation':
-      // Nested frames stepping outward: the recursion runs, one frame at a time.
       for (let i = 0; i < 8; i += step) {
         const x = worldWidth * (.07 + i * .115); const y = ground - 75 - (i % 2) * 35;
         if (!shows(x)) continue;
@@ -315,6 +292,25 @@ export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldW
         }
       }
       break;
+  }
+}
+
+/**
+ * Ambient path marks scattered across the world, drawn on the dynamic layer.
+ */
+export function drawPathAmbience(surface: DrawSurface, civ: Civilization, worldWidth: number, height: number, ground: number, time: number, accent: number, view: {from:number;to:number}, tier: IdentityTier, ambientLoopFraction = 1): void {
+  const state = civ.pathState;
+  const path = state?.dominantPath || leadingAffinityPath(state);
+  if (!path || tier < 1) return;
+  const shows = (x: number): boolean => x >= view.from - MOTIF_SLACK && x <= view.to + MOTIF_SLACK;
+  const step = tier <= 1 ? 2 : 1;
+  const alpha = (base: number): number => Math.min(1, base * (tier <= 1 ? .7 : tier >= 3 ? 1.15 : 1));
+  const detailed = tier >= 3;
+  const loop = ambientLoopFraction > 0 ? time : 0;
+  const wave = (period: number, offset: number): number => loop === 0 ? .7 : .5 + .5 * Math.sin(loop / period + offset);
+
+  if (!drawPrimaryPathAmbience(path, surface, civ, worldWidth, height, ground, accent, shows, step, alpha, detailed, loop, wave)) {
+    drawSecondaryPathAmbience(path, surface, civ, worldWidth, height, ground, accent, shows, step, alpha, detailed, loop, wave);
   }
 }
 
