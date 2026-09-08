@@ -14,6 +14,7 @@ import { text, tutorialStepCopy } from '../data/i18n.js';
 // build actually declares.
 export const TUTORIAL_FACTS: ReadonlyArray<TutorialFact> =
   ['run_started', 'intervention_resolved', 'tactical_used', 'harvest_completed'];
+const TUTORIAL_FACTS_SET = new Set<string>(TUTORIAL_FACTS);
 
 export interface TutorialStep {
   id: string;
@@ -194,7 +195,7 @@ export function normalizeTutorialState(state: TutorialState | null | undefined):
     acknowledged: Array.isArray(raw.acknowledged) ? raw.acknowledged.filter(id => Boolean(tutorialStepById(id))) : [],
     // Facts are filtered the same way step ids are: a fact this build no longer declares would ride
     // along in the save forever, and a step gated on a renamed one would never clear.
-    observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS.includes(fact)))] : [],
+    observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS_SET.has(fact)))] : [],
     collapsed: Boolean(raw.collapsed),
   };
 }

@@ -68,14 +68,22 @@ export function applyEffects(
       const id = String(value);
       if (!civ.institutions.includes(id)) civ.institutions.push(id);
     } else if (key === "flags_add" && Array.isArray(value)) {
+      const flagSet = new Set(civ.flags);
       for (let i = 0; i < value.length; i++) {
         const id = String(value[i]);
-        if (!civ.flags.includes(id)) civ.flags.push(id);
+        if (!flagSet.has(id)) {
+          civ.flags.push(id);
+          flagSet.add(id);
+        }
       }
     } else if (key === "institutions_add" && Array.isArray(value)) {
+      const instSet = new Set(civ.institutions);
       for (let i = 0; i < value.length; i++) {
         const id = String(value[i]);
-        if (!civ.institutions.includes(id)) civ.institutions.push(id);
+        if (!instSet.has(id)) {
+          civ.institutions.push(id);
+          instSet.add(id);
+        }
       }
     } else if (key === "trait_add") {
       const id = String(value);

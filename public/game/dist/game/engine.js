@@ -769,9 +769,13 @@ export class GameEngine {
         const pressureBefore = captureDecisionSnapshot(civ);
         const pressure = advancePressure(civ, b, dt);
         if (pressure.crises.length) {
-            for (const crisis of pressure.crises)
-                if (!civ.scheduledEvents.includes(crisis.crisisId))
+            const scheduledSet = new Set(civ.scheduledEvents);
+            for (const crisis of pressure.crises) {
+                if (!scheduledSet.has(crisis.crisisId)) {
                     civ.scheduledEvents.push(crisis.crisisId);
+                    scheduledSet.add(crisis.crisisId);
+                }
+            }
             const last = pressure.crises.at(-1);
             this.worldImpulse = buildDecisionFeedback(++this.feedbackSequence, { id: last.crisisId, title: text().reports.engine.entropyThresholdEventTitle }, { label: text().reports.engine.entropyThresholdChoiceLabel }, pressureBefore, captureDecisionSnapshot(civ));
             // The threshold that was crossed, from the pressure system that knows it -- not the Entropy the
