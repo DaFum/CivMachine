@@ -293,6 +293,24 @@ function buildMachineSituationInput(state, engine, directiveRequiredNow, machine
         runsTotal: state.machine.civilizationsTotal,
     };
 }
+function buildMetaInfoViewModel(engine) {
+    const state = engine.state;
+    return {
+        machineInsight: engine.machineInsight(),
+        civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
+        cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
+        universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
+        universesThisMultiverse: state.meta.universesThisMultiverse,
+        multiverseRequirement: 4,
+    };
+}
+function buildUpgradesViewModel(engine) {
+    return {
+        machineUpgrades: engine.visibleUpgradeEntries('machine'),
+        universeUpgrades: engine.visibleUpgradeEntries('universe'),
+        axiomUpgrades: engine.visibleUpgradeEntries('axiom'),
+    };
+}
 export function buildViewModel(engine) {
     const state = engine.state;
     const civ = state.civilization;
@@ -304,65 +322,45 @@ export function buildViewModel(engine) {
     const chaoticHarvest = civ ? engine.previewHarvestDetails(true) : null;
     const activeObjective = civ ? objectiveForDirective(civ.directiveId) : null;
     const directiveRequired = engine.systemUnlocked('directives') && state.machine.runBuild.directiveOfferIds.length > 0;
-    const convergenceIsUnlocked = engine.convergenceUnlocked();
     const convergenceTargetDepth = engine.convergenceTargetDepth();
-    const milestones = buildMilestonesViewModel(state, convergenceIsUnlocked);
-    const machineUpgradeEntries = engine.visibleUpgradeEntries('machine');
+    const milestones = buildMilestonesViewModel(state, engine.convergenceUnlocked());
+    const upgrades = buildUpgradesViewModel(engine);
     const directiveRequiredNow = directiveRequired && !state.machine.runBuild.selectedDirective;
     const openMilestone = milestones.entries.find(entry => !entry.completed);
-    // Built once and shared with the return below: the situation line reads the same two view models
-    // the rails render, so neither can drift from the other and neither is computed twice.
     const tactical = buildTacticalViewModel(engine, civ, bonuses);
     const harvest = buildHarvestViewModel(engine, civ, controlledHarvest, chaoticHarvest, bonuses, convergenceTargetDepth);
-    const situation = buildSituation(civ, tactical, harvest, event, activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null, convergenceTargetDepth, buildMachineSituationInput(state, engine, directiveRequiredNow, machineUpgradeEntries, openMilestone?.title ?? ''));
+    const situation = buildSituation(civ, tactical, harvest, event, activeObjective ? { title: activeObjective.title, completed: Boolean(controlledHarvest?.objectiveCompleted) } : null, convergenceTargetDepth, buildMachineSituationInput(state, engine, directiveRequiredNow, upgrades.machineUpgrades, openMilestone?.title ?? ''));
     return {
         phase: state.phase,
-        machineInsight: engine.machineInsight(),
+        ...buildMetaInfoViewModel(engine),
         resources: buildResourcesViewModel(engine),
         simulationSpeed: state.simulationSpeed,
         maxSimulationSpeed: engine.maxSimulationSpeed(),
         simulationSpeedOptions: engine.simulationSpeedOptions(),
-        // Which harvest resources the Machine has identified. Every surface that names a resource -- the
-        // bar, the live harvest breakdown, the run report -- reads this rather than the full key list.
         visibleResourceKeys: engine.visibleResources(),
-        civilizationsThisUniverse: state.machine.civilizationsThisUniverse,
-        cultivationCreditsThisUniverse: state.machine.cultivationCreditsThisUniverse,
-        universeRequirement: UNIVERSE_CREDIT_REQUIREMENT,
-        universesThisMultiverse: state.meta.universesThisMultiverse,
-        multiverseRequirement: 4,
         previews: engine.nextPreviews(),
         milestones,
         convergence: buildConvergenceViewModel(engine),
         victory: state.phase === 'victory' ? { record: engine.lastVictory(), convergences: state.meta.convergences } : null,
         runBuild: { ...state.machine.runBuild },
-        // Directives, matrices and upgrades all keep their rule fields and take their copy from the
-        // catalog on the way into the view, so the panels that print them never look an id up themselves.
         directives: buildDirectivesViewModel(engine),
         matrices: buildMatricesViewModel(engine),
         previewTraits: state.machine.runBuild.previewTraitIds.map((id) => ({ id, name: engine.traitById(id)?.name ?? id })),
         canStartCivilization: !directiveRequired || Boolean(state.machine.runBuild.selectedDirective),
         startReason: directiveRequired && !state.machine.runBuild.selectedDirective ? text().ui.viewModel.selectDirective : '',
         locale: activeLocale(),
-        machineUpgrades: machineUpgradeEntries,
-        universeUpgrades: engine.visibleUpgradeEntries('universe'),
-        axiomUpgrades: engine.visibleUpgradeEntries('axiom'),
+        ...upgrades,
         canConsumeUniverse: engine.canConsumeUniverse(),
         canConsumeMultiverse: engine.canConsumeMultiverse(),
         systems: buildSystemsViewModel(engine),
         event: buildEventViewModel(engine, civ, event, probed, predictionsUnlocked),
-        // Cloned so no panel can write back into the engine's copy, and re-localized on the way out: the
-        // card is a live surface, and it can still be on screen when the player switches language.
         feedback: engine.decisionFeedback ? localizeDecisionFeedback(structuredClone(engine.decisionFeedback)) : null,
         lastActionFailure: engine.lastActionFailure,
         tactical,
         harvest,
         machineReserve: civ ? engine.runInterventions() : [],
-        // The offers list localizes each objective it draws; the running one is the same objective read
-        // from the civilization instead of the draft, and it needs the same lookup.
         directiveObjective: buildDirectiveObjectiveViewModel(civ, activeObjective, controlledHarvest),
         lastHarvest: { ...state.machine.lastHarvest },
-        // The post-run account, the guided run and the explain layer. All three are presentation state,
-        // and all three are read straight from the engine so a reload resumes exactly where it stopped.
         runReport: state.machine.lastRunReport,
         tutorial: engine.tutorialView(),
         explain: engine.explainMode(),

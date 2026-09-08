@@ -66,11 +66,7 @@ const seconds = (value: number): string => (Number.isFinite(value) ? `${Math.max
 // input that may not be one.
 const count = (value: number): number => (Number.isFinite(value) ? Math.round(value) : 0);
 
-export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
-  const copy = text().guidance.civilization;
-  // The grade is an id on the way in and a word on the way out, so it is resolved once here rather
-  // than interpolated raw into the three sentences that name it.
-  const grade = harvestGradeLabel(input.grade) ?? input.grade;
+function evalCriticalSituation(input: CivilizationSituationInput, copy: any): SituationReport | null {
   if (input.entropy >= 100) {
     return { id: 'cascade', severity: 'critical', ...copy.cascade };
   }
@@ -85,18 +81,10 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
         : copy.collapse_imminent.adviceWithoutControl,
     };
   }
-  // Below the two branches that end the run and above everything else: an open decision freezes the
-  // clock, so it can wait, but a cascade or a collapse that is already underway may not be hidden
-  // behind it -- the highest severity that holds has to win.
-  if (input.pendingEventTitle) {
-    return {
-      id: 'decision_pending',
-      severity: 'watch',
-      headline: fill(copy.decision_pending.headline, { eventTitle: input.pendingEventTitle }),
-      cause: copy.decision_pending.cause,
-      advice: copy.decision_pending.advice,
-    };
-  }
+  return null;
+}
+
+function evalTerminalSituation(input: CivilizationSituationInput, copy: any): SituationReport | null {
   if (input.terminal) {
     return input.convergenceReady
       ? {
@@ -114,6 +102,10 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
         advice: fill(copy.convergence_short.advice, { secondsToCascade: seconds(input.secondsToCascade) }),
       };
   }
+  return null;
+}
+
+function evalUrgentSituation(input: CivilizationSituationInput, copy: any, grade: string): SituationReport | null {
   if (input.entropy >= 75) {
     return {
       id: 'entropy_critical',
@@ -154,6 +146,10 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       advice: copy.civilization_awareness.advice,
     };
   }
+  return null;
+}
+
+function evalWatchAndCalmSituation(input: CivilizationSituationInput, copy: any, grade: string): SituationReport {
   if (input.sanity < 35) {
     return {
       id: 'sanity_failing',
@@ -219,6 +215,29 @@ export function civilizationSituation(input: CivilizationSituationInput): Situat
       nextCredit: count(input.credits) + 1, secondsToNextCredit: seconds(input.secondsToNextCredit),
     }),
   };
+}
+
+export function civilizationSituation(input: CivilizationSituationInput): SituationReport {
+  const copy = text().guidance.civilization;
+  const grade = harvestGradeLabel(input.grade) ?? input.grade;
+  return evalCriticalSituation(input, copy)
+    ?? evalWatchAndCalmPending(input, copy)
+    ?? evalTerminalSituation(input, copy)
+    ?? evalUrgentSituation(input, copy, grade)
+    ?? evalWatchAndCalmSituation(input, copy, grade);
+}
+
+function evalWatchAndCalmPending(input: CivilizationSituationInput, copy: any): SituationReport | null {
+  if (input.pendingEventTitle) {
+    return {
+      id: 'decision_pending',
+      severity: 'watch',
+      headline: fill(copy.decision_pending.headline, { eventTitle: input.pendingEventTitle }),
+      cause: copy.decision_pending.cause,
+      advice: copy.decision_pending.advice,
+    };
+  }
+  return null;
 }
 
 export interface MachineSituationInput {

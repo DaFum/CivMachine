@@ -13,11 +13,7 @@ const seconds = (value) => (Number.isFinite(value) ? `${Math.max(0, Math.round(v
 // Credits are counted, so the plural has to agree with the number that was printed, not with a raw
 // input that may not be one.
 const count = (value) => (Number.isFinite(value) ? Math.round(value) : 0);
-export function civilizationSituation(input) {
-    const copy = text().guidance.civilization;
-    // The grade is an id on the way in and a word on the way out, so it is resolved once here rather
-    // than interpolated raw into the three sentences that name it.
-    const grade = harvestGradeLabel(input.grade) ?? input.grade;
+function evalCriticalSituation(input, copy) {
     if (input.entropy >= 100) {
         return { id: 'cascade', severity: 'critical', ...copy.cascade };
     }
@@ -32,18 +28,9 @@ export function civilizationSituation(input) {
                 : copy.collapse_imminent.adviceWithoutControl,
         };
     }
-    // Below the two branches that end the run and above everything else: an open decision freezes the
-    // clock, so it can wait, but a cascade or a collapse that is already underway may not be hidden
-    // behind it -- the highest severity that holds has to win.
-    if (input.pendingEventTitle) {
-        return {
-            id: 'decision_pending',
-            severity: 'watch',
-            headline: fill(copy.decision_pending.headline, { eventTitle: input.pendingEventTitle }),
-            cause: copy.decision_pending.cause,
-            advice: copy.decision_pending.advice,
-        };
-    }
+    return null;
+}
+function evalTerminalSituation(input, copy) {
     if (input.terminal) {
         return input.convergenceReady
             ? {
@@ -61,6 +48,9 @@ export function civilizationSituation(input) {
                 advice: fill(copy.convergence_short.advice, { secondsToCascade: seconds(input.secondsToCascade) }),
             };
     }
+    return null;
+}
+function evalUrgentSituation(input, copy, grade) {
     if (input.entropy >= 75) {
         return {
             id: 'entropy_critical',
@@ -100,6 +90,9 @@ export function civilizationSituation(input) {
             advice: copy.civilization_awareness.advice,
         };
     }
+    return null;
+}
+function evalWatchAndCalmSituation(input, copy, grade) {
     if (input.sanity < 35) {
         return {
             id: 'sanity_failing',
@@ -164,6 +157,27 @@ export function civilizationSituation(input) {
             nextCredit: count(input.credits) + 1, secondsToNextCredit: seconds(input.secondsToNextCredit),
         }),
     };
+}
+export function civilizationSituation(input) {
+    const copy = text().guidance.civilization;
+    const grade = harvestGradeLabel(input.grade) ?? input.grade;
+    return evalCriticalSituation(input, copy)
+        ?? evalWatchAndCalmPending(input, copy)
+        ?? evalTerminalSituation(input, copy)
+        ?? evalUrgentSituation(input, copy, grade)
+        ?? evalWatchAndCalmSituation(input, copy, grade);
+}
+function evalWatchAndCalmPending(input, copy) {
+    if (input.pendingEventTitle) {
+        return {
+            id: 'decision_pending',
+            severity: 'watch',
+            headline: fill(copy.decision_pending.headline, { eventTitle: input.pendingEventTitle }),
+            cause: copy.decision_pending.cause,
+            advice: copy.decision_pending.advice,
+        };
+    }
+    return null;
 }
 export function machineSituation(input) {
     const copy = text().guidance.machine;

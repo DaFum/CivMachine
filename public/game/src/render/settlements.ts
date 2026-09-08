@@ -177,19 +177,83 @@ function districtPlots(count: number, rank: number, seed: number): Array<{ u: nu
   return plots;
 }
 
+function buildSettlementStructures(
+  civ: Civilization,
+  count: number,
+  index: number,
+  settlementClass: SettlementClass,
+  rank: number,
+  stage: number,
+  centerX: number,
+  radius: number,
+  globalIndex: number,
+  scale: number,
+  widthScale: number,
+  heightScale: number,
+  skylineBudget: number,
+  allowed: ReadonlySet<StructureKind>,
+): { structures: Structure[]; nextGlobalIndex: number } {
+  const structures: Structure[] = [];
+  const plots = districtPlots(count, rank, civ.seed * 3 + index * 29);
+  let gIndex = globalIndex;
+
+  for (let i = 0; i < count; i++) {
+    const plot = plots[i]!;
+    const level = stage === 0
+      ? (hash01(civ.seed * 37 + gIndex * 7) < .82 ? 0 : 1)
+      : Math.min(6, Math.max(1, stage - 1 + Math.trunc(civ.development / 180) + civ.era + Math.trunc(hash01(civ.seed * 13 + gIndex * 19) * 1.6)));
+
+    const laneVal = hash01(civ.seed * 41 + gIndex * 17) * .78 + (plot.district === 'core' ? .11 : plot.district === 'edge' ? (hash01(gIndex * 13) < .5 ? 0 : .22) : .11);
+    const depthLane: DepthLane = laneVal < 0.28 ? 'back' : laneVal > 0.72 ? 'front' : 'mid';
+    const laneScale = depthLane === 'back' ? 0.85 : depthLane === 'front' ? 1.12 : 1.0;
+
+    const distFromCenter = Math.abs(plot.u - .5) * 2;
+
+    let classScale = 1.0;
+    if (settlementClass === 'camp') classScale = 0.5;
+    else if (settlementClass === 'village') classScale = 0.7;
+    else if (settlementClass === 'town') classScale = 0.9;
+    else if (settlementClass === 'city') classScale = 1.15;
+    else if (settlementClass === 'metropolis') classScale = 1.35;
+    else if (settlementClass === 'arcology') classScale = distFromCenter < 0.25 ? 1.85 : 0.85;
+
+    const dominance = plot.coreOfCluster ? (plot.district === 'core' ? 1.45 : 1.22) : .92 + hash01(civ.seed * 61 + gIndex * 23) * .2;
+    const heightDensityMult = Math.max(0.42, (1.25 - distFromCenter * 0.62) * classScale * dominance);
+
+    const baseWidth = (14 + hash01(civ.seed * 17 + gIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * widthScale;
+    const baseHeight = (26 + hash01(civ.seed * 53 + gIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * heightScale;
+    const kind = kindFor(i, count, settlementClass, stage, civ.seed + index * 101, allowed, distFromCenter);
+    const kindProfile = kind === 'farm' ? .4 : kind === 'industry' ? .72 : kind === 'monument' ? .58 : 1;
+    const structureHeight = Math.max(18, skylineCompress(baseHeight * kindProfile, skylineBudget));
+    const slender = kind === 'orbital_anchor' || kind === 'spaceport';
+    const width = slender ? baseWidth : Math.max(baseWidth, structureHeight / MAX_STRUCTURE_ASPECT);
+
+    structures.push({
+      id: `s${index}:${i}`,
+      x: centerX - radius + radius * 2 * plot.u,
+      width, height: structureHeight,
+      kind,
+      level,
+      depthLane,
+      district: plot.district,
+      lightPhase: hash01(civ.seed * 97 + gIndex * 31),
+    });
+    gIndex++;
+  }
+
+  const laneWeight: Record<DepthLane, number> = { back: 0, mid: 1, front: 2 };
+  structures.sort((a, b) => (laneWeight[a.depthLane || 'mid'] - laneWeight[b.depthLane || 'mid']) || (a.x - b.x));
+  return { structures, nextGlobalIndex: gIndex };
+}
+
 export function settlementLayout(civ: Civilization, worldWidth: number, height: number, snapshot: Snapshot): Settlement[] {
   const stage = snapshot.stage;
   const sizes = settlementSizes(civ, snapshot);
   const roster = factionRoster(civ);
   const scale = [.24, .46, .7, .96, 1.28][stage] ?? .24;
   const viewportWidth = worldWidth / worldWidthMultiplier(civ);
-  // Two scales, not one. A narrow viewport needs *wider* structures -- a 14 px tower is a hairline on
-  // a phone -- but the same multiplier applied to height filled a portrait screen with skyline and
-  // left no sky, no ridges and no atmosphere at all. Height shrinks where width grows.
   const widthScale = viewportWidth < 800 ? 1.25 : (viewportWidth < 1200 ? 1.12 : 1.0);
   const heightScale = viewportWidth < 800 ? .74 : (viewportWidth < 1200 ? .88 : 1.0);
-  // And a hard skyline budget from the aspect ratio, so the tallest structure can never eat the sky:
-  // a portrait viewport keeps well over half its height above the roofline.
   const aspect = viewportWidth / Math.max(1, height);
   const skylineBudget = height * (aspect < 1 ? .40 : aspect < 1.5 ? .52 : .62);
   const allowed = new Set<StructureKind>(structureKindsForEra(civ.era, stage));
@@ -200,72 +264,16 @@ export function settlementLayout(civ: Civilization, worldWidth: number, height: 
     const count = sizes[index]!;
     const settlementClass = settlementClassFor(count, stage, civ.era);
     const rank = CLASS_ORDER.indexOf(settlementClass);
-    // Settlements reach nearer the world edges than they used to: at full scroll the last quarter of
-    // a stage-4 world was empty ground, because nothing was ever placed past 94% of its width.
     const centerX = Math.max(0, Math.min(worldWidth, worldWidth * (.045 + (index + .5) / sizes.length * .915) + (hash01(civ.seed * 11 + index * 23) - .5) * worldWidth * .035));
-    // Bounded by the room a settlement actually has. Without the slot term nine settlements on a
-    // phone-sized world each claimed a radius wider than the gap to their neighbour, and the whole
-    // world became one continuous wall of buildings with no gaps, no outskirts and no silhouette.
     const slot = worldWidth * .915 / sizes.length;
     const radius = Math.max(24, Math.min(worldWidth * .18, Math.max(0, slot - worldWidth * .035) * .46, 20 + count * (7 + stage * 2.6)));
-    const structures: Structure[] = [];
-    const plots = districtPlots(count, rank, civ.seed * 3 + index * 29);
-    for (let i = 0; i < count; i++) {
-      const plot = plots[i]!;
-      const level = stage === 0
-        ? (hash01(civ.seed * 37 + globalIndex * 7) < .82 ? 0 : 1)
-        : Math.min(6, Math.max(1, stage - 1 + Math.trunc(civ.development / 180) + civ.era + Math.trunc(hash01(civ.seed * 13 + globalIndex * 19) * 1.6)));
 
-      // Deterministic depth lane, nudged by where the plot stands: the outskirts sit further back or
-      // further forward than the core, which is what keeps a skyline from collapsing onto one line.
-      const laneVal = hash01(civ.seed * 41 + globalIndex * 17) * .78 + (plot.district === 'core' ? .11 : plot.district === 'edge' ? (hash01(globalIndex * 13) < .5 ? 0 : .22) : .11);
-      const depthLane: DepthLane = laneVal < 0.28 ? 'back' : laneVal > 0.72 ? 'front' : 'mid';
-      const laneScale = depthLane === 'back' ? 0.85 : depthLane === 'front' ? 1.12 : 1.0;
+    const { structures, nextGlobalIndex } = buildSettlementStructures(
+      civ, count, index, settlementClass, rank, stage,
+      centerX, radius, globalIndex, scale, widthScale, heightScale, skylineBudget, allowed,
+    );
+    globalIndex = nextGlobalIndex;
 
-      const distFromCenter = Math.abs(plot.u - .5) * 2;
-
-      let classScale = 1.0;
-      if (settlementClass === 'camp') classScale = 0.5;
-      else if (settlementClass === 'village') classScale = 0.7;
-      else if (settlementClass === 'town') classScale = 0.9;
-      else if (settlementClass === 'city') classScale = 1.15;
-      else if (settlementClass === 'metropolis') classScale = 1.35;
-      else if (settlementClass === 'arcology') classScale = distFromCenter < 0.25 ? 1.85 : 0.85;
-
-      // Skyline hierarchy: tall in the core, falling away to the outskirts, with one dominant
-      // structure per neighbourhood so each district reads as a place rather than as a queue.
-      const dominance = plot.coreOfCluster ? (plot.district === 'core' ? 1.45 : 1.22) : .92 + hash01(civ.seed * 61 + globalIndex * 23) * .2;
-      const heightDensityMult = Math.max(0.42, (1.25 - distFromCenter * 0.62) * classScale * dominance);
-
-      const baseWidth = (14 + hash01(civ.seed * 17 + globalIndex * 29) * 30 + level * 3) * (stage === 0 ? .7 : 1 + stage * .08) * laneScale * widthScale;
-      const baseHeight = (26 + hash01(civ.seed * 53 + globalIndex * 13) * 120 + level * 22) * scale * heightDensityMult * laneScale * heightScale;
-      const kind = kindFor(i, count, settlementClass, stage, civ.seed + index * 101, allowed, distFromCenter);
-      // Profile by use, so a class is legible from its silhouette alone: farms lie along the ground,
-      // industry keeps a heavy low mass under its chimneys, a monument is a landmark rather than a
-      // second tower, and only the civic and residential structures compete for the skyline.
-      const kindProfile = kind === 'farm' ? .4 : kind === 'industry' ? .72 : kind === 'monument' ? .58 : 1;
-      const structureHeight = Math.max(18, skylineCompress(baseHeight * kindProfile, skylineBudget));
-      // The footprint the height implies. A tether and a mast are meant to be slender, so they keep
-      // their own proportion; everything else widens rather than standing as a hairline slab.
-      const slender = kind === 'orbital_anchor' || kind === 'spaceport';
-      const width = slender ? baseWidth : Math.max(baseWidth, structureHeight / MAX_STRUCTURE_ASPECT);
-
-      structures.push({
-        id: `s${index}:${i}`,
-        x: centerX - radius + radius * 2 * plot.u,
-        width, height: structureHeight,
-        kind,
-        level,
-        depthLane,
-        district: plot.district,
-        lightPhase: hash01(civ.seed * 97 + globalIndex * 31),
-      });
-      globalIndex++;
-    }
-
-    // Sort structures deterministically by depth lane (back -> mid -> front) so front buildings overlap back buildings cleanly
-    const laneWeight: Record<DepthLane, number> = { back: 0, mid: 1, front: 2 };
-    structures.sort((a, b) => (laneWeight[a.depthLane || 'mid'] - laneWeight[b.depthLane || 'mid']) || (a.x - b.x));
     settlements.push({ id: `s${index}`, centerX, radius, settlementClass, factionIndex: -1, structures, lightPhase: hash01(civ.seed * 71 + index * 137) });
   }
 
