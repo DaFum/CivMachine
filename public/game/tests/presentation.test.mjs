@@ -2394,6 +2394,16 @@ test('duration time formatter handles negative, zero, infinity, and NaN inputs',
   assert.equal(duration(-Infinity), '0s');
 });
 
+test('sanitizeHTML prevents XSS and DOM clobbering bypasses', async () => {
+  const source = await readFile(new URL('../src/ui/app.ts', import.meta.url), 'utf8');
+  assert.match(source, /function sanitizeHTML/);
+  assert.match(source, /querySelectorAll\.call\(body,\s*'\*'\)/, 'must collect elements upfront via querySelectorAll to prevent TreeWalker state corruption');
+  assert.match(source, /Attr\.prototype/, 'must access attribute properties via Attr.prototype descriptor');
+  assert.match(source, /FORBIDDEN_TAGS/, 'must enforce forbidden tags');
+  assert.match(source, /javascript:/);
+  assert.match(source, /vbscript:/);
+});
+
 test('isDisclosureOpen and setDisclosureOpen manage disclosure state', () => {
   const id = 'test-disclosure-1';
   assert.equal(isDisclosureOpen(id), false);

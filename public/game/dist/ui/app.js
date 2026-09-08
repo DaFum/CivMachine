@@ -30,39 +30,55 @@ function card(title, body, cls = '') { return `<section class="panel ${cls}"><h3
 function collapsedCard(id, title, status, body, cls = '') { return `<details class="panel ${cls}" data-disclosure="${esc(id)}"${disclosureAttr(id)}><summary><span>${title}</span>${status ? `<small>${status}</small>` : ''}</summary>${body}</details>`; }
 function sanitizeHTML(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
-    let node = walker.nextNode();
-    const toRemove = [];
+    const bodyGetter = Object.getOwnPropertyDescriptor(Document.prototype, 'body').get;
+    const body = (bodyGetter.call(doc) ?? doc.body);
+    if (!body)
+        return '';
+    const elements = Array.from(Element.prototype.querySelectorAll.call(body, '*'));
     const tagNameGetter = Object.getOwnPropertyDescriptor(Element.prototype, 'tagName').get;
     const attributesGetter = Object.getOwnPropertyDescriptor(Element.prototype, 'attributes').get;
     const removeAttribute = Element.prototype.removeAttribute;
-    while (node) {
-        const tagName = tagNameGetter.call(node);
-        if (tagName === 'SCRIPT' || tagName === 'IFRAME' || tagName === 'OBJECT' || tagName === 'EMBED') {
+    const removeElement = Element.prototype.remove;
+    const attrNameGetter = Object.getOwnPropertyDescriptor(Attr.prototype, 'name').get;
+    const attrValueGetter = Object.getOwnPropertyDescriptor(Attr.prototype, 'value').get;
+    const innerHTMLGetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML').get;
+    const FORBIDDEN_TAGS = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'STYLE', 'LINK', 'META', 'BASE', 'TEMPLATE', 'FORM']);
+    const toRemove = [];
+    for (const node of elements) {
+        const tagName = tagNameGetter.call(node).toUpperCase();
+        if (FORBIDDEN_TAGS.has(tagName)) {
             toRemove.push(node);
         }
         else {
             const attributes = attributesGetter.call(node);
-            for (const attr of Array.from(attributes)) {
-                if (attr.name.toLowerCase().startsWith('on')) {
-                    removeAttribute.call(node, attr.name);
-                    continue;
-                }
-                // Check for javascript: using anchor parsing to resolve protocols
-                if (attr.value) {
-                    const tempAnchor = document.createElement('a');
-                    tempAnchor.href = attr.value;
-                    if (tempAnchor.protocol === 'javascript:') {
-                        removeAttribute.call(node, attr.name);
+            if (attributes) {
+                for (const attr of Array.from(attributes)) {
+                    const name = attrNameGetter.call(attr).toLowerCase();
+                    const val = attrValueGetter.call(attr);
+                    if (name.startsWith('on')) {
+                        removeAttribute.call(node, name);
+                        continue;
+                    }
+                    if (val) {
+                        const normalizedVal = val.replace(/[\x00-\x20\s]/g, '').toLowerCase();
+                        if (normalizedVal.startsWith('javascript:') || normalizedVal.startsWith('vbscript:') || normalizedVal.startsWith('data:text/html')) {
+                            removeAttribute.call(node, name);
+                        }
+                        else {
+                            const tempAnchor = document.createElement('a');
+                            tempAnchor.href = val;
+                            if (tempAnchor.protocol === 'javascript:' || tempAnchor.protocol === 'vbscript:') {
+                                removeAttribute.call(node, name);
+                            }
+                        }
                     }
                 }
             }
         }
-        node = walker.nextNode();
     }
     for (const el of toRemove)
-        el.remove();
-    return doc.body.innerHTML;
+        removeElement.call(el);
+    return innerHTMLGetter.call(body);
 }
 function replaceIfChanged(element, html) {
     const sanitized = sanitizeHTML(html);
