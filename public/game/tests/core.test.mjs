@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNewState, calculateHarvest, upgradeCost, eraForYears, multiverseAxiomAward, universeResidueAward, ERA_YEAR_THRESHOLDS, SAVE_VERSION } from '../dist/game/rules.js';
 import { CivilizationPaths, PATH_IDS, SUCCESSION_MAX } from '../dist/game/paths.js';
-import { Progression, progressionRulesForLayer } from '../dist/game/progression.js';
+import { Progression, progressionRulesForLayer, systemRequirementText, systemRequirementValue } from '../dist/game/progression.js';
 import { clampStats } from '../dist/game/effects.js';
 import { GameEngine, ERA_NAMES } from '../dist/game/engine.js';
 import { CONTENT } from '../dist/data/content.generated.js';
@@ -22,12 +22,13 @@ import {
 } from '../dist/game/intervention-scheduler.js';
 import { buildDecisionFeedback, captureDecisionSnapshot } from '../dist/game/decision-feedback.js';
 import { advancePressure, cascadeDecay, entropyRate, pressureMultiplier, pressureYears, secondsToCascade } from '../dist/game/pressure.js';
-import { calculateCultivationCredits, cultivationDepth, depthBand, depthForCredit, depthYieldMultiplier, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
+import { applyHarvestQuality, calculateCultivationCredits, cultivationDepth, depthBand, depthForCredit, depthYieldMultiplier, endgameStatesReached, evaluateHarvestQuality, harvestUrgency, reachableRunSeconds, DEPTH_BANDS, DEPTH_CREDIT_CAP, DEPTH_DEVELOPMENT_SCALE, HARVEST_GRADE_LABELS } from '../dist/game/harvest-quality.js';
 import { developmentGrowthPerSecond, entropyDrag, ENTROPY_DRAG_MAX } from '../dist/game/development.js';
 import { buildDirectiveOffers, evaluateDirectiveObjective, objectiveForDirective } from '../dist/game/run-directives.js';
-import { balancedAxiomUpgrades, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
-import { TACTICAL_ACTIONS, VENT_COST_ESCALATION, VENT_PARADOX_BASE, VENT_PARADOX_PER_ERA, VENT_STABILITY_COST, accelerateEntropyCost, maxSimulationSpeed, tacticalRisk, ventStabilityCost } from '../dist/game/tactical-actions.js';
-import { runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
+import { balancedAxiomUpgrades, balancedDirectives, balancedMachineUpgrades, balancedUniverseUpgrades } from '../dist/game/upgrade-balance.js';
+import { TACTICAL_ACTIONS, VENT_COST_ESCALATION, VENT_PARADOX_BASE, VENT_PARADOX_PER_ERA, VENT_STABILITY_COST, accelerateEntropyCost, applyTacticalAction, clampSimulationSpeed, maxSimulationSpeed, probeControlCost, tacticalRisk, ventStabilityCost } from '../dist/game/tactical-actions.js';
+import { applyRunIntervention, runInterventionById, runInterventionCost, runInterventionUses, RUN_INTERVENTIONS } from '../dist/game/run-interventions.js';
+import { factionProfile } from '../dist/game/lore.js';
 import { MILESTONE_CATALOG, completedMilestoneCount, evaluateMilestones, milestoneProgress, milestoneSnapshot } from '../dist/game/milestones.js';
 import { attentionGainPerSecond, awarenessGainPerSecond, sanityLossPerSecond, stabilityDecayPerSecond, statDrift } from '../dist/game/stat-drift.js';
 import { gradeIndex, HARVEST_GRADE_ORDER } from '../dist/game/harvest-quality.js';
@@ -36,7 +37,7 @@ import { TERMINAL_ENTROPY_MULTIPLIER } from '../dist/game/pressure.js';
 import { applyWorldMemory, emptyWorldMemory, sanitizeWorldMemory } from '../dist/game/world-memory.js';
 import { CONSEQUENCE_PROFILES, consequenceProfileFor, consequenceProfileById } from '../dist/game/consequence-profiles.js';
 import { buildDecisionConsequence } from '../dist/game/decision-consequences.js';
-import { civilizationDramaScore, civilizationDramaPhase } from '../dist/game/drama.js';
+import { civilizationDramaScore, civilizationDramaPhase, dramaPhaseLabel } from '../dist/game/drama.js';
 import { developmentStage } from '../dist/render/world-model.js';
 import { freshEngine, maximumPurchasableMachineLevels, runCivilization, safestChoiceIndex, withUpgrades } from './balance-harness.mjs';
 
@@ -2759,4 +2760,185 @@ test('clampStats enforces boundaries on civilization stats', () => {
   civ.stats.stability = 130;
   clampStats(civ);
   assert.equal(civ.stats.stability, 120);
+});
+
+test('endgameStatesReached correctly counts achieved endgame states', () => {
+  const civ1 = GameEngine.createCivilizationForTest(1);
+  assert.equal(endgameStatesReached(civ1), 0);
+
+  const civ2 = GameEngine.createCivilizationForTest(2);
+  civ2.pathState.endgameStates = ['endgame_machine_faith', 'endgame_void_communion'];
+  assert.equal(endgameStatesReached(civ2), 2);
+
+  const civ3 = GameEngine.createCivilizationForTest(3);
+  delete civ3.pathState.endgameStates;
+  civ3.pathState.endgameState = true;
+  assert.equal(endgameStatesReached(civ3), 1);
+
+  const civ4 = GameEngine.createCivilizationForTest(4);
+  delete civ4.pathState;
+  assert.equal(endgameStatesReached(civ4), 0);
+});
+
+test('systemRequirementValue retrieves current progression system requirement value', () => {
+  const state = createNewState();
+  state.meta.progression.machineInsight = 12;
+  state.meta.universesTotal = 5;
+  state.meta.multiversesConsumed = 2;
+  state.meta.progression.controlledHarvestsTotal = 8;
+  state.machine.civilizationsTotal = 15;
+
+  assert.equal(systemRequirementValue(state, 'insight'), 12);
+  assert.equal(systemRequirementValue(state, 'universes'), 5);
+  assert.equal(systemRequirementValue(state, 'multiverses'), 2);
+  assert.equal(systemRequirementValue(state, 'controlledHarvests'), 8);
+  assert.equal(systemRequirementValue(state, 'civilizations'), 15);
+});
+
+test('systemRequirementText renders requirement strings dynamically', () => {
+  const reqInsightOne = { kind: 'insight', amount: 1 };
+  const reqInsightMany = { kind: 'insight', amount: 5 };
+  const reqUniversesMany = { kind: 'universes', amount: 3 };
+
+  assert.equal(typeof systemRequirementText(reqInsightOne), 'string');
+  assert.ok(systemRequirementText(reqInsightOne).includes('1'));
+  assert.ok(systemRequirementText(reqInsightMany).includes('5'));
+  assert.ok(systemRequirementText(reqUniversesMany).includes('3'));
+});
+
+test('probeControlCost calculates Control cost based on prediction level', () => {
+  assert.equal(probeControlCost(0), 1);
+  assert.equal(probeControlCost(1), 1);
+  assert.equal(probeControlCost(2), 0);
+  assert.equal(probeControlCost(3), 0);
+  assert.equal(probeControlCost(-1), 1);
+  assert.equal(probeControlCost(Number.NaN), 1);
+});
+
+test('clampSimulationSpeed constrains speed values properly', () => {
+  assert.equal(clampSimulationSpeed(1), 1);
+  assert.equal(clampSimulationSpeed(2.8), 2);
+  assert.equal(clampSimulationSpeed(4), 4);
+  assert.equal(clampSimulationSpeed(100), 8);
+  assert.equal(clampSimulationSpeed(0), 1);
+  assert.equal(clampSimulationSpeed(-5), 1);
+  assert.equal(clampSimulationSpeed(Number.NaN), 1);
+  assert.equal(clampSimulationSpeed(Number.POSITIVE_INFINITY), 1);
+});
+
+test('balancedDirectives applies override balancing effects to directive catalog', () => {
+  const mockCatalog = [
+    { id: 'accelerated_development', name: 'Accelerated Dev', effects: { development_mult: 1.0 } },
+    { id: 'unmodified_directive', name: 'Unmodified', effects: { custom_stat: 1.0 } },
+  ];
+  const balanced = balancedDirectives(mockCatalog);
+  assert.equal(balanced.length, 2);
+  assert.equal(balanced[0].effects.development_mult, 1.15);
+  assert.equal(balanced[0].effects.attention_gain_mult, 1.4);
+  assert.equal(balanced[1].effects.custom_stat, 1.0);
+});
+
+test('dramaPhaseLabel translates narrative phase to string', () => {
+  const phase = { id: 0, name: 'emergence', label: 'Founding' };
+  const label = dramaPhaseLabel(phase);
+  assert.equal(typeof label, 'string');
+  assert.ok(label.length > 0);
+});
+
+test('applyHarvestQuality scales rewards based on harvest quality and options', () => {
+  const rawRewards = { causal_mass: 100, cognition: 50, paradox: 20, existence: 10 };
+  const quality = { grade: 'transcendent', multiplier: 2.0, credits: 3, depth: 5 };
+
+  const app1 = applyHarvestQuality(rawRewards, quality);
+  assert.equal(app1.rewardMultiplier, 2.0);
+  assert.equal(app1.rewards.causal_mass, 200);
+  assert.equal(app1.rewards.cognition, 100);
+
+  const app2 = applyHarvestQuality(rawRewards, quality, { gradeRewardMult: 1.5, objectiveMultiplier: 1.2 });
+  assert.equal(app2.rewardMultiplier, 2.0 * 1.5 * 1.2);
+  assert.equal(app2.rewards.causal_mass, Math.round(100 * (2.0 * 1.5 * 1.2)));
+
+  const prematureQuality = { grade: 'premature', multiplier: 0.2, credits: 0, depth: 0.5 };
+  const lowRawRewards = { causal_mass: 10, cognition: 0, paradox: 0, existence: 0 };
+  const appCollapsed = applyHarvestQuality(lowRawRewards, prematureQuality, { collapsed: true });
+  assert.equal(appCollapsed.rewards.causal_mass, 8);
+});
+
+test('applyRunIntervention mutates civilization stats and tracks usage', () => {
+  const civ = GameEngine.createCivilizationForTest(100);
+  civ.tactical.entropy = 50;
+  civ.stats.stability = 10;
+  civ.stats.stabilityMax = 100;
+  civ.years = 100;
+  civ.development = 50;
+
+  const pulseDef = runInterventionById('containment_pulse');
+  const labelPulse = applyRunIntervention(civ, pulseDef);
+  assert.equal(labelPulse, pulseDef.label);
+  assert.equal(civ.tactical.entropy, 25);
+  assert.equal(runInterventionUses(civ, 'containment_pulse'), 1);
+
+  const latticeDef = runInterventionById('emergency_lattice');
+  applyRunIntervention(civ, latticeDef);
+  assert.equal(civ.stats.stability, 60);
+  assert.equal(runInterventionUses(civ, 'emergency_lattice'), 1);
+
+  const graftDef = runInterventionById('temporal_graft');
+  applyRunIntervention(civ, graftDef);
+  assert.equal(civ.years, 700);
+  assert.equal(civ.development, 80);
+  assert.equal(runInterventionUses(civ, 'temporal_graft'), 1);
+});
+
+test('factionProfile calculates profile, doctrine and focus from civilization', () => {
+  const civ = GameEngine.createCivilizationForTest(200);
+  const profile1 = factionProfile(civ);
+  assert.equal(typeof profile1.name, 'string');
+  assert.equal(typeof profile1.doctrine, 'string');
+  assert.equal(typeof profile1.focus, 'string');
+
+  civ.pathState.dominantPath = 'machine_faith';
+  const profile2 = factionProfile(civ);
+  assert.ok(profile2.doctrine.length > 0);
+});
+
+test('applyTacticalAction mutates state when tactical actions are executed', () => {
+  const engine = freshEngine();
+  engine.startCivilization(300);
+  const civ = engine.state.civilization;
+  civ.stats.stability = 50;
+  civ.tactical.controlCapacity = 3;
+  civ.eventTimer = 100;
+
+  const bonuses = engine.runtimeBonuses();
+
+  // Test unavailable action returns null
+  civ.tactical.controlCapacity = 0;
+  assert.equal(applyTacticalAction(civ, 'stabilize', bonuses), null);
+
+  civ.tactical.controlCapacity = 3;
+  const outcomeStabilize = applyTacticalAction(civ, 'stabilize', bonuses);
+  assert.ok(outcomeStabilize);
+  assert.equal(outcomeStabilize.id, 'stabilize');
+  assert.equal(civ.stats.stability, 64);
+  assert.equal(civ.tactical.controlCapacity, 1);
+  assert.equal(civ.tactical.actionUsage.stabilize, 1);
+
+  civ.tactical.controlCapacity = 3;
+  const outcomeAccelerate = applyTacticalAction(civ, 'accelerate', bonuses);
+  assert.ok(outcomeAccelerate);
+  assert.equal(civ.tactical.actionUsage.accelerate, 1);
+
+  engine.forceEvent('dreams_of_gears');
+  civ.tactical.controlCapacity = 3;
+  const outcomeProbe = applyTacticalAction(civ, 'probe', bonuses);
+  assert.ok(outcomeProbe);
+  assert.equal(civ.tactical.probedEventId, 'dreams_of_gears');
+  assert.equal(civ.tactical.actionUsage.probe, 1);
+
+  civ.tactical.entropy = 40;
+  civ.tactical.controlCapacity = 3;
+  const outcomeVent = applyTacticalAction(civ, 'vent', bonuses);
+  assert.ok(outcomeVent);
+  assert.equal(civ.tactical.actionUsage.vent, 1);
 });
