@@ -45,11 +45,9 @@ export function advancePressure(civ, bonuses, deltaSeconds) {
     const after = Math.max(0, Math.min(100, before + rate * Math.max(0, deltaSeconds)));
     civ.tactical.entropy = after;
     const crises = [];
-    const triggeredSet = new Set(civ.tactical.triggeredCrises);
     for (const threshold of ENTROPY_THRESHOLDS) {
-        if (after >= threshold && !triggeredSet.has(threshold)) {
+        if (after >= threshold && !civ.tactical.triggeredCrises.includes(threshold)) {
             civ.tactical.triggeredCrises.push(threshold);
-            triggeredSet.add(threshold);
             const crisisId = ENTROPY_CRISIS_IDS[threshold];
             if (crisisId)
                 crises.push({ threshold, crisisId });
