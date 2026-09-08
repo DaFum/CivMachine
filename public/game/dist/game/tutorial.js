@@ -10,6 +10,7 @@ import { text, tutorialStepCopy } from '../data/i18n.js';
 // The facts a step may be gated on, as data, so a stored save can be filtered against the set this
 // build actually declares.
 export const TUTORIAL_FACTS = ['run_started', 'intervention_resolved', 'tactical_used', 'harvest_completed'];
+const TUTORIAL_FACTS_SET = new Set(TUTORIAL_FACTS);
 export const TUTORIAL_STEPS = [
     {
         id: 'overview',
@@ -166,7 +167,7 @@ export function normalizeTutorialState(state) {
         acknowledged: Array.isArray(raw.acknowledged) ? raw.acknowledged.filter(id => Boolean(tutorialStepById(id))) : [],
         // Facts are filtered the same way step ids are: a fact this build no longer declares would ride
         // along in the save forever, and a step gated on a renamed one would never clear.
-        observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS.includes(fact)))] : [],
+        observed: Array.isArray(raw.observed) ? [...new Set(raw.observed.filter(fact => TUTORIAL_FACTS_SET.has(fact)))] : [],
         collapsed: Boolean(raw.collapsed),
     };
 }
